@@ -283,7 +283,8 @@ class ProductionStarter:
     ):
         self.project_root = Path(__file__).parent
         self.backend_dir = self.project_root / "backend"
-        self.frontend_dir = self.project_root / "frontend"
+        # TeachDo 新仓库以 teachdo-frontend 作为唯一前端入口
+        self.frontend_dir = self.project_root / "teachdo-frontend"
         self.dist_dir = self.frontend_dir / "dist"
         self.logs_dir = self.project_root / "logs"
 
@@ -364,8 +365,8 @@ class ProductionStarter:
             },
         }
 
-        # Vite config 默认固定为 127.0.0.1:5173；这里通过 CLI 参数显式传入，避免误导/漂移
-        self.frontend_port = int(os.environ.get("FRONTEND_PORT", "5173"))
+        # teachdo-frontend/vite.config.ts 默认端口为 3000；这里通过 CLI 参数显式传入，避免误导/漂移
+        self.frontend_port = int(os.environ.get("FRONTEND_PORT", "3000"))
         self.frontend_host = "127.0.0.1"
 
         self.processes: Dict[str, subprocess.Popen] = {}

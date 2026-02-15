@@ -308,11 +308,11 @@
 - [x] 2. 修正忽略规则（在新仓库中执行）：
   - [x] 确认根目录 `.gitignore` 未忽略 `/teachdo-frontend`
   - [x] （可选）补充忽略：`.run/`、`.kilocode/`（如不希望提交 IDE/工具配置目录）
-- [ ] 3. 修改 `start.py`：前端目录从 `frontend/` 切换为 `teachdo-frontend/`。
+- [x] 3. 修改 `start.py`：前端目录从 `frontend/` 切换为 `teachdo-frontend/`。
   - 同步统一端口：`teachdo-frontend/vite.config.ts` 当前 `server.port=3000`，因此 `start.py` 默认 `FRONTEND_PORT` 也应调整为 `3000`（保留环境变量覆盖能力）。
-- [ ] 4. 为 `teachdo-frontend/vite.config.ts` 增加 dev proxy：
+- [x] 4. 为 `teachdo-frontend/vite.config.ts` 增加 dev proxy：
   - `/api` -> `http://127.0.0.1:6800`，rewrite 去掉 `/api` 前缀。
-- [ ] 5. TeachDo 前端服务层与 API 基址统一（为后续 C/D 阶段铺路）：
+- [x] 5. TeachDo 前端服务层与 API 基址统一（为后续 C/D 阶段铺路）：
   - 将 `teachdo-frontend/src/services/aiService.ts` 统一改为 `BASE_API='/api'`（不依赖 `VITE_API_BASE`、不写死 `http://localhost:6800`）。
   - 抽一个可复用的 SSE 解析工具（按 `5.6.1` 规则），供大纲与 PPT 两处共用，避免各写一套导致解析边界不一致。
   - DoD：

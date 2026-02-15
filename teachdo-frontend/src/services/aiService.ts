@@ -1,4 +1,5 @@
 import type { CourseGroup, CourseUnit, LessonPlan, Presentation, PPTTemplate, ChatMessage } from "#root/types";
+import { SseParser, stripJsonCodeFence } from "@/utils/sse";
 
 /**
  * AI Service Layer - TeachDo x ai2ppt Integration
@@ -8,19 +9,9 @@ import type { CourseGroup, CourseUnit, LessonPlan, Presentation, PPTTemplate, Ch
  * No client-side API keys are used.
  */
 
-// Safe access to environment variable to prevent runtime errors if import.meta.env is undefined
-const getBackendUrl = () => {
-  try {
-    if (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_API_BASE) {
-      return import.meta.env.VITE_API_BASE;
-    }
-  } catch {
-    // 忽略环境变量读取错误，保持兜底地址
-  }
-  return "http://localhost:6800";
-};
-
-const BACKEND_URL = getBackendUrl();
+// 统一走相对路径 /api（开发：Vite proxy；生产：Nginx 反代）
+const BASE_API = "/api";
+const apiUrl = (path: string) => `${BASE_API}${path.startsWith("/") ? path : `/${path}`}`;
 
 // Fallback Mock Templates (Updated to Solid Colors)
 export const MOCK_TEMPLATES: PPTTemplate[] = [
@@ -43,7 +34,7 @@ const checkBackend = async () => {
   try {
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 2000); // 2s timeout
-    const res = await fetch(`${BACKEND_URL}/healthz`, { signal: controller.signal });
+    const res = await fetch(apiUrl("/healthz"), { signal: controller.signal });
     backendStatus = { available: res.ok, timestamp: now };
   } catch {
     backendStatus = { available: false, timestamp: now };
@@ -60,7 +51,7 @@ export const aiService = {
     const available = await checkBackend();
     if (available) {
       try {
-        const res = await fetch(`${BACKEND_URL}/templates`);
+        const res = await fetch(apiUrl("/templates"));
         if (res.ok) {
           const wrapper = await res.json();
           // ai2ppt returns { data: [...], message: "Success" }
@@ -72,7 +63,7 @@ export const aiService = {
             thumbnailColor: 'bg-slate-200',
             styleDescription: t.name,
             // Construct static resource URL for cover
-            coverUrl: t.image_path ? `${BACKEND_URL}/data/${t.image_path}` : undefined,
+            coverUrl: t.image_path ? apiUrl(`/data/${t.image_path}`) : undefined,
             // Store the full template object for generation
             rawTemplate: t
           }));
@@ -93,7 +84,7 @@ export const aiService = {
     const available = await checkBackend();
     if (!available) throw new Error("Backend service is offline. Cannot generate outline.");
 
-    const response = await fetch(`${BACKEND_URL}/tools/aippt_outline`, {
+    const response = await fetch(apiUrl("/tools/aippt_outline"), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -131,7 +122,7 @@ export const aiService = {
     const available = await checkBackend();
     if (!available) throw new Error("Backend service is offline. Cannot generate lesson plan.");
 
-    const response = await fetch(`${BACKEND_URL}/teachdo/lesson-plan`, {
+    const response = await fetch(apiUrl("/teachdo/lesson-plan"), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -174,7 +165,7 @@ export const aiService = {
         throw new Error("Invalid template selected (missing backend definition).");
     }
     
-    const response = await fetch(`${BACKEND_URL}/tools/aippt`, {
+    const response = await fetch(apiUrl("/tools/aippt"), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -193,42 +184,37 @@ export const aiService = {
     const decoder = new TextDecoder();
     
     const slides: any[] = [];
-    let buffer = '';
+    const parser = new SseParser();
+    let finished = false;
 
     // SSE Parser Logic
-    while (true) {
+    while (!finished) {
       const { done, value } = await reader.read();
       if (done) break;
       const chunk = decoder.decode(value, { stream: true });
-      buffer += chunk;
-      
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep incomplete line
+      const messages = parser.feed(chunk);
 
-      let currentEvent = '';
+      for (const msg of messages) {
+        const raw = msg.data.trim();
+        if (!raw) continue;
+        if (raw === "[DONE]") {
+          finished = true;
+          break;
+        }
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith(':')) continue; // skip empty or comments
+        const payload = stripJsonCodeFence(raw);
+        try {
+          const slideData = JSON.parse(payload);
+          // Map backend slide format to TeachDo simplified format
+          const eventType = msg.event || slideData?.type || "";
+          const mappedSlide = mapBackendSlideToFrontend(slideData, eventType);
 
-        if (trimmed.startsWith('event:')) {
-            currentEvent = trimmed.substring(6).trim();
-        } else if (trimmed.startsWith('data:')) {
-            const dataStr = trimmed.substring(5).trim();
-            if (dataStr === '[DONE]') break;
-            
-            try {
-              const slideData = JSON.parse(dataStr);
-              // Map backend slide format to TeachDo simplified format
-              const mappedSlide = mapBackendSlideToFrontend(slideData, currentEvent);
-              
-              if (mappedSlide) {
-                slides.push(mappedSlide);
-                onSlideGenerated?.(mappedSlide);
-              }
-            } catch (e) {
-              console.warn("Failed to parse SSE JSON chunk", e);
-            }
+          if (mappedSlide) {
+            slides.push(mappedSlide);
+            onSlideGenerated?.(mappedSlide);
+          }
+        } catch (e) {
+          console.warn("Failed to parse SSE JSON event", e, { raw });
         }
       }
     }
@@ -253,7 +239,7 @@ export const aiService = {
     const available = await checkBackend();
     if (!available) throw new Error("Backend service is offline. Please check connection.");
 
-    const response = await fetch(`${BACKEND_URL}/teachdo/assistant/chat`, {
+    const response = await fetch(apiUrl("/teachdo/assistant/chat"), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
