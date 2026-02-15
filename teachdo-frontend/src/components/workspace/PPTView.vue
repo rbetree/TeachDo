@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import type { CourseGroup, CourseUnit, Presentation, PPTTemplate } from '#root/types';
@@ -8,6 +8,8 @@ import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import type { AIPPTSlide } from '@/editor-runtime/types/AIPPT';
 import { createAipptGenerator, type ImgPoolItem } from '@/editor-runtime/aippt/aipptGenerator';
+import { useSlidesStore as useEditorSlidesStore } from '@editor/store';
+import ThumbnailSlide from '@editor/views/components/ThumbnailSlide/index.vue';
 
 interface Props {
   currentCourse: CourseGroup;
@@ -35,10 +37,76 @@ const selectedTemplate = computed(() => templates.value.find((item) => item.id =
 const slides = computed(() => presentation.value?.slides ?? []);
 const currentSlide = computed(() => slides.value[currentSlideIndex.value]);
 
+const editorSlidesStore = useEditorSlidesStore();
+const editorDocument = computed(() => props.currentUnit?.editorDocument ?? null);
+const editorSlides = computed<any[]>(() => (editorDocument.value?.slides ?? []) as any[]);
+const hasEditorSlides = computed(() => editorSlides.value.length > 0);
+const currentEditorSlide = computed<any | null>(() => editorSlides.value[currentSlideIndex.value] ?? null);
+
+const previewCanvasRef = ref<HTMLElement | null>(null);
+const previewCanvasWidth = ref(0);
+let previewResizeObserver: ResizeObserver | null = null;
+
+const mainSlideSize = computed(() => {
+  const width = previewCanvasWidth.value || 960;
+  return Math.max(360, Math.min(1400, Math.floor(width)));
+});
+
+const extractTextFromHtml = (html: string): string => {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+  } catch {
+    return String(html || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  }
+};
+
+const getEditorSlideTitle = (slide: any): string => {
+  if (!slide || !Array.isArray(slide.elements)) return t('ppt.untitled');
+
+  const candidates: { priority: number; text: string }[] = [];
+  for (const el of slide.elements) {
+    if (el?.type === 'text' && typeof el?.content === 'string') {
+      const text = extractTextFromHtml(el.content);
+      if (!text) continue;
+      const priority = el.textType === 'title' ? 0 : el.textType === 'subtitle' ? 1 : 2;
+      candidates.push({ priority, text });
+      continue;
+    }
+    if (el?.type === 'shape' && typeof el?.text?.content === 'string') {
+      const text = extractTextFromHtml(el.text.content);
+      if (!text) continue;
+      const priority = el.text.type === 'title' ? 0 : el.text.type === 'subtitle' ? 1 : 2;
+      candidates.push({ priority, text });
+    }
+  }
+
+  if (!candidates.length) return t('ppt.untitled');
+  candidates.sort((a, b) => a.priority - b.priority);
+  return candidates[0]!.text;
+};
+
+const editorSlideTitles = computed(() => editorSlides.value.map((s) => getEditorSlideTitle(s)));
+
+const previewSlideCount = computed(() => (hasEditorSlides.value ? editorSlides.value.length : slides.value.length));
+
 const advancedOpen = ref(false);
 const generateFromWebSearch = ref(true);
 const generateFromUploadedFile = ref(true);
 const includeGeneratedKb = ref(false);
+
+watch(
+  editorDocument,
+  (doc) => {
+    if (!doc) return;
+    const width = Number(doc.width || doc.viewport?.size || 960);
+    const ratio = Number(doc.viewport?.ratio || (doc.width && doc.height ? doc.height / doc.width : 0.5625));
+    if (width) editorSlidesStore.setViewportSize(width);
+    if (ratio) editorSlidesStore.setViewportRatio(ratio);
+    if (doc.theme) editorSlidesStore.setTheme(doc.theme as any);
+  },
+  { immediate: true },
+);
 
 const kbFolderIds = computed<number[]>(() => (includeGeneratedKb.value ? [0, 1] : [0]));
 const readyKbFileCount = computed(() => {
@@ -60,6 +128,15 @@ watch(
 
 const goToKnowledgeBase = () => {
   router.push({ name: 'course-tab', params: { courseId: props.currentCourse.id, tab: 'kb' } });
+};
+
+const goToEditor = () => {
+  const unit = props.currentUnit;
+  if (!unit) return;
+  router.push({
+    name: 'course-unit-ppt-editor',
+    params: { courseId: props.currentCourse.id, unitId: unit.id },
+  });
 };
 
 const mapAipptSlideToPreview = (slide: AIPPTSlide): Presentation['slides'][number] | null => {
@@ -165,13 +242,41 @@ const loadTemplates = async () => {
 
 const syncFromUnit = (unit: CourseUnit | null) => {
   presentation.value = unit?.presentation || null;
-  viewState.value = unit?.presentation ? 'PREVIEW' : 'SELECT_TEMPLATE';
+  const hasEditor = !!unit?.editorDocument && Array.isArray(unit.editorDocument.slides) && unit.editorDocument.slides.length > 0;
+  viewState.value = hasEditor || unit?.presentation ? 'PREVIEW' : 'SELECT_TEMPLATE';
   if (unit?.selectedTemplateId) {
     selectedTemplateId.value = unit.selectedTemplateId;
   }
 };
 
-onMounted(loadTemplates);
+onMounted(() => {
+  void loadTemplates();
+});
+
+watch(
+  previewCanvasRef,
+  (el) => {
+    if (previewResizeObserver) {
+      previewResizeObserver.disconnect();
+      previewResizeObserver = null;
+    }
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    previewResizeObserver = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (!rect) return;
+      previewCanvasWidth.value = rect.width;
+    });
+    previewResizeObserver.observe(el);
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  if (previewResizeObserver) {
+    previewResizeObserver.disconnect();
+    previewResizeObserver = null;
+  }
+});
 
 watch(
   () => props.currentUnit,
@@ -185,10 +290,10 @@ watch(
 );
 
 watch(
-  slides,
-  (list) => {
-    if (currentSlideIndex.value >= list.length) {
-      currentSlideIndex.value = list.length ? list.length - 1 : 0;
+  previewSlideCount,
+  (len) => {
+    if (currentSlideIndex.value >= len) {
+      currentSlideIndex.value = len ? len - 1 : 0;
     }
   },
   { immediate: true },
@@ -429,13 +534,25 @@ const handleGenerate = async () => {
 
     <div v-else class="h-full flex flex-col gap-6">
       <div class="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div class="flex items-center gap-4">
-          <div>
-            <h3 class="font-bold text-slate-800 dark:text-white">{{ t('ppt.preview_title') }}</h3>
-            <p class="text-xs text-slate-500">{{ t('ppt.slides_generated', { count: presentation?.slides.length || 0 }) }}</p>
-          </div>
-        </div>
-        <div class="flex gap-2 flex-wrap justify-end">
+	        <div class="flex items-center gap-4">
+	          <div>
+	            <h3 class="font-bold text-slate-800 dark:text-white">{{ t('ppt.preview_title') }}</h3>
+	            <p class="text-xs text-slate-500">
+	              {{ t('ppt.slides_generated', { count: hasEditorSlides ? editorSlides.length : (presentation?.slides.length || 0) }) }}
+	            </p>
+	          </div>
+	        </div>
+	        <div class="flex gap-2 flex-wrap justify-end">
+          <button
+            v-if="props.currentUnit?.editorDocument"
+            type="button"
+            :disabled="loading"
+            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-sm shadow-md transition-all flex items-center gap-2 disabled:bg-slate-300 disabled:text-slate-500"
+            @click="goToEditor"
+          >
+            <LucideIcon name="edit-3" :size="16" />
+            <span>{{ t('ppt.edit') }}</span>
+          </button>
           <button
             type="button"
             class="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
@@ -453,69 +570,105 @@ const handleGenerate = async () => {
             <span>{{ loading ? t('ppt.generating') : t('ppt.regenerate') }}</span>
           </button>
         </div>
-      </div>
+	      </div>
+	
+	      <div v-if="!hasEditorSlides && (!presentation || slides.length === 0)" class="flex-1 flex items-center justify-center bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+	        <div class="text-center opacity-40">
+	          <LucideIcon name="loader-2" :size="48" class="animate-spin mx-auto mb-4" />
+	          <p class="font-bold">{{ t('ppt.generating_content') }}</p>
+	        </div>
+	      </div>
+	
+	      <div v-else-if="hasEditorSlides" class="flex-1 flex gap-6 overflow-hidden">
+	        <div class="w-60 flex-shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto custom-scrollbar p-3 space-y-3">
+	          <button
+	            v-for="(slide, i) in editorSlides"
+	            :key="slide?.id || i"
+	            :class="['w-full text-left group transition-all', currentSlideIndex === i ? 'ring-2 ring-emerald-500 rounded-lg' : 'opacity-70 hover:opacity-100']"
+	            @click="currentSlideIndex = i"
+	          >
+	            <div class="w-full rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+	              <ThumbnailSlide :slide="slide" :size="200" />
+	            </div>
+	            <div class="flex justify-between items-center px-1 mt-1 gap-2">
+	              <span class="text-[10px] font-bold text-slate-400 shrink-0">{{ t('ppt.slide_label', { index: i + 1 }) }}</span>
+	              <span class="text-[10px] text-slate-500 line-clamp-1 min-w-0">{{ editorSlideTitles[i] }}</span>
+	            </div>
+	          </button>
+	        </div>
 
-      <div v-if="!presentation || slides.length === 0" class="flex-1 flex items-center justify-center bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-        <div class="text-center opacity-40">
-          <LucideIcon name="loader-2" :size="48" class="animate-spin mx-auto mb-4" />
-          <p class="font-bold">{{ t('ppt.generating_content') }}</p>
-        </div>
-      </div>
+	        <div class="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 overflow-hidden">
+	          <div ref="previewCanvasRef" class="flex-1 overflow-auto">
+	            <div class="min-h-full flex items-center justify-center">
+	              <div v-if="currentEditorSlide" class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl p-4">
+	                <ThumbnailSlide :slide="currentEditorSlide" :size="mainSlideSize" />
+	              </div>
+	            </div>
+	          </div>
 
-      <div v-else class="flex-1 flex gap-6 overflow-hidden">
-        <div class="w-48 flex-shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto custom-scrollbar p-3 space-y-3">
-          <button
-            v-for="(slide, i) in slides"
-            :key="i"
-            :class="['w-full text-left group transition-all', currentSlideIndex === i ? 'ring-2 ring-indigo-500 rounded-lg' : 'opacity-70 hover:opacity-100']"
-            @click="currentSlideIndex = i"
-          >
-            <div
-              :class="[
-                'aspect-video w-full rounded-lg mb-1 flex items-center justify-center text-[10px] p-2 border',
-                currentSlideIndex === i ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200' : 'bg-slate-100 dark:bg-slate-800 border-slate-200',
-              ]"
-            >
-                <div class="text-center line-clamp-2 leading-tight font-bold text-slate-700 dark:text-slate-300">{{ slide.title || t('ppt.untitled') }}</div>
-              </div>
-              <div class="flex justify-between items-center px-1">
-                <span class="text-[10px] font-bold text-slate-400">{{ t('ppt.slide_label', { index: i + 1 }) }}</span>
-              </div>
-            </button>
-          </div>
+	          <div class="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 flex-shrink-0 mt-4">
+	            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{{ t('ppt.speaker_notes') }}</h4>
+	            <p class="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">
+	              {{ currentEditorSlide?.remark || t('ppt.no_notes') }}
+	            </p>
+	          </div>
+	        </div>
+	      </div>
 
-          <div class="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 overflow-y-auto">
-          <div v-if="currentSlide" class="w-full aspect-video bg-white dark:bg-slate-900 shadow-2xl rounded-xl p-12 flex flex-col relative overflow-hidden mb-6 flex-shrink-0 transition-all duration-300">
-            <div v-if="selectedTemplate?.coverUrl" class="absolute inset-0 bg-center bg-cover opacity-5 pointer-events-none" :style="{ backgroundImage: `url(${selectedTemplate.coverUrl})` }" />
-            <div v-else class="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl opacity-20 -mr-20 -mt-20" :class="selectedTemplate?.thumbnailColor || 'bg-slate-200'" />
-            <div class="relative z-10 flex flex-col h-full">
-              <h1 class="text-4xl font-black text-slate-900 dark:text-white mb-8 leading-tight">
-                {{ currentSlide?.title }}
-              </h1>
-              <div class="flex-1">
-                <ul class="space-y-4">
-                  <li v-for="(c, idx) in currentSlide?.content || []" :key="idx" class="flex items-start text-xl text-slate-700 dark:text-slate-300">
-                    <span class="mr-4 text-indigo-500 mt-1.5">•</span>
-                    <span>{{ c }}</span>
-                  </li>
-                </ul>
-              </div>
-              <div class="mt-auto flex justify-between items-end border-t border-slate-100 dark:border-slate-800 pt-6">
-                <div class="text-sm font-bold text-slate-400 uppercase tracking-widest">TeachDo x AI2PPT</div>
-                <div class="text-sm font-bold text-slate-400">{{ currentSlideIndex + 1 }} / {{ slides.length }}</div>
-              </div>
-            </div>
-            </div>
+	      <div v-else class="flex-1 flex gap-6 overflow-hidden">
+	        <div class="w-48 flex-shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto custom-scrollbar p-3 space-y-3">
+	          <button
+	            v-for="(slide, i) in slides"
+	            :key="i"
+	            :class="['w-full text-left group transition-all', currentSlideIndex === i ? 'ring-2 ring-indigo-500 rounded-lg' : 'opacity-70 hover:opacity-100']"
+	            @click="currentSlideIndex = i"
+	          >
+	            <div
+	              :class="[
+	                'aspect-video w-full rounded-lg mb-1 flex items-center justify-center text-[10px] p-2 border',
+	                currentSlideIndex === i ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200' : 'bg-slate-100 dark:bg-slate-800 border-slate-200',
+	              ]"
+	            >
+	              <div class="text-center line-clamp-2 leading-tight font-bold text-slate-700 dark:text-slate-300">{{ slide.title || t('ppt.untitled') }}</div>
+	            </div>
+	            <div class="flex justify-between items-center px-1">
+	              <span class="text-[10px] font-bold text-slate-400">{{ t('ppt.slide_label', { index: i + 1 }) }}</span>
+	            </div>
+	          </button>
+	        </div>
 
-            <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex-shrink-0">
-              <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{{ t('ppt.speaker_notes') }}</h4>
-              <p class="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">
-                {{ currentSlide?.notes || t('ppt.no_notes') }}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+	        <div class="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 overflow-y-auto">
+	          <div v-if="currentSlide" class="w-full aspect-video bg-white dark:bg-slate-900 shadow-2xl rounded-xl p-12 flex flex-col relative overflow-hidden mb-6 flex-shrink-0 transition-all duration-300">
+	            <div v-if="selectedTemplate?.coverUrl" class="absolute inset-0 bg-center bg-cover opacity-5 pointer-events-none" :style="{ backgroundImage: `url(${selectedTemplate.coverUrl})` }" />
+	            <div v-else class="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl opacity-20 -mr-20 -mt-20" :class="selectedTemplate?.thumbnailColor || 'bg-slate-200'" />
+	            <div class="relative z-10 flex flex-col h-full">
+	              <h1 class="text-4xl font-black text-slate-900 dark:text-white mb-8 leading-tight">
+	                {{ currentSlide?.title }}
+	              </h1>
+	              <div class="flex-1">
+	                <ul class="space-y-4">
+	                  <li v-for="(c, idx) in currentSlide?.content || []" :key="idx" class="flex items-start text-xl text-slate-700 dark:text-slate-300">
+	                    <span class="mr-4 text-indigo-500 mt-1.5">•</span>
+	                    <span>{{ c }}</span>
+	                  </li>
+	                </ul>
+	              </div>
+	              <div class="mt-auto flex justify-between items-end border-t border-slate-100 dark:border-slate-800 pt-6">
+	                <div class="text-sm font-bold text-slate-400 uppercase tracking-widest">TeachDo x AI2PPT</div>
+	                <div class="text-sm font-bold text-slate-400">{{ currentSlideIndex + 1 }} / {{ slides.length }}</div>
+	              </div>
+	            </div>
+	          </div>
+
+	          <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex-shrink-0">
+	            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{{ t('ppt.speaker_notes') }}</h4>
+	            <p class="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">
+	              {{ currentSlide?.notes || t('ppt.no_notes') }}
+	            </p>
+	          </div>
+	        </div>
+	      </div>
+    </div>
   </div>
 </template>
 

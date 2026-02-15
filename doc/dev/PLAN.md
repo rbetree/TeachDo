@@ -378,9 +378,9 @@
   - [x] 以“空行分隔事件”作为解析边界（见 `5.6.1`）。
   - [x] 单条事件内拼接多行 `data:` 得到 payload。
   - [x] 兼容 ```json 围栏并做容错解析。
-- [ ] 4. 将生成结果写入单元状态，并提供进入编辑器入口（“进行编辑”）。
+- [x] 4. 将生成结果写入单元状态，并提供进入编辑器入口（“进行编辑”）。
   - [x] 生成结果写入单元状态（`presentation` + `editorDocument`）。
-  - [ ] “进行编辑”入口与路由（阶段 E）。
+  - [x] “进行编辑”入口与路由（阶段 E）。
 - [x] 5. 模板契约与生成管线对齐（沿用 ai2ppt 逻辑）：
   - [x] 模板列表：`GET /api/templates`。
   - [x] 模板详情：`GET /api/data/${templateId}.json`（包含 `slides/theme/width/height`）。
@@ -401,31 +401,32 @@
 - DoD：
   - [x] 生成过程可见增量页面增长。
   - [ ] 完成后可稳定回显、可重新生成（待联调验证）。
-  - [ ] 预览页渲染效果与编辑器一致（同一套 renderer/主题/比例）（阶段 E）。
+  - [x] 预览页渲染效果与编辑器一致（同一套 renderer/主题/比例）（阶段 E）。
 
 ### 阶段 E：编辑器独立页 + 工作台预览
-0. 工具链与依赖对齐（编辑器体量最大，需优先保证可编译）：
-- 采用策略 A（已确认）：保留 TeachDo 工具链，在 `teachdo-frontend` 内逐步引入旧编辑器依赖并修复编译问题（可能会遇到 Vite 5 -> 7 的兼容差异）。
-- 回退策略（仅当 A 卡住时启用）：将 `teachdo-frontend` 的构建工具链下调对齐旧编辑器（Vite/TS/ESLint），先确保编辑器能跑，再逐步升级。
-1. 将现有编辑器能力迁入 `teachdo-frontend/src/editor-runtime`（隔离 pinia/store/types/utils/components）。
-2. 依赖迁移（必须，来自旧 `frontend/package.json`，按实际引用增量加入）：
+- [x] 0. 工具链与依赖对齐（编辑器体量最大，需优先保证可编译）：
+  - [x] 采用策略 A（已确认）：保留 TeachDo 工具链，在 `teachdo-frontend` 内逐步引入旧编辑器依赖并修复编译问题（可能会遇到 Vite 5 -> 7 的兼容差异）。
+  - 回退策略（仅当 A 卡住时启用）：将 `teachdo-frontend` 的构建工具链下调对齐旧编辑器（Vite/TS/ESLint），先确保编辑器能跑，再逐步升级。
+  - [x] `teachdo-frontend` 已可 `npm run build` 通过（存在 Sass `@import` 弃用警告，不阻断构建）。
+- [x] 1. 将现有编辑器能力迁入 `teachdo-frontend/src/editor-runtime`（隔离 pinia/store/types/utils/components）。
+- [x] 2. 依赖迁移（必须，来自旧 `frontend/package.json`，按实际引用增量加入）：
 - 典型必需：`dexie`、`prosemirror-*`、`echarts`、`html-to-image`、`lodash`、`nanoid`、`tippy.js`、`vuedraggable`、`tinycolor2`、`svg-pathdata`、`svg-arc-to-cubic-bezier` 等。
 - 目标：编辑器路由能编译运行，且导出 PPTX 可用（依赖缺失会直接导致功能不可用）。
-3. 工作台 `PPTView` 只做“预览模式”：
+- [x] 3. 工作台 `PPTView` 只做“预览模式”：
 - 使用与编辑器相同的渲染组件（同一份 `Slide` 数据结构与主题配置）。
 - 预览布局采用“缩略图列表 + 当前页大画布”（与编辑器一致的 viewport 尺寸/比例）。
 - 提供按钮“进行编辑”，跳转到 `/course/:courseId/unit/:unitId/ppt/editor`。
-4. 独立编辑器页面：
+- [x] 4. 独立编辑器页面：
 - 全功能编辑、撤销/重做、插入元素等保持编辑器自有风格。
 - 导出仅在编辑器内完成（PPTX）。
-5. 状态回写：
+- [x] 5. 状态回写：
 - 进入编辑器时从 `CourseUnit.editorDocument` 加载，缺失则从最新生成结果初始化。
 - 退出/返回时把 editor 的 `slides/theme/viewport/title` 写回 `CourseUnit.editorDocument`，以便预览页复显。
 - 退出/保存时“产物入库”（写入 KB 索引）：将最终 slide 文本写入 `/api/kb/vectorize/text`，`file_id=gen:{courseId}:{unitId}:slides_final`，覆盖更新向量。
-- DoD：
-1. 能从工作台进入编辑器并返回。
-2. 编辑后数据可持久化到当前单元。
-3. 可导出 PPTX。
+- DoD（待联调验证）：
+  - [ ] 能从工作台进入编辑器并返回（路由与入口已接入）。
+  - [ ] 编辑后数据可持久化到当前单元（已实现 editorDocument 回写）。
+  - [ ] 可导出 PPTX（导出仅在编辑器内；需实际导出验证）。
 
 ### 阶段 F：非 PPT 标签收敛
 1. 保留 `lesson/kb/assistant` 页面与路由结构。

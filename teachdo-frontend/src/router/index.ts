@@ -5,6 +5,7 @@ import { useAppStore } from '@/stores/appStore';
 const MainLayout = () => import('@/layouts/MainLayout.vue');
 const CourseSelectionView = () => import('@/views/CourseSelectionView.vue');
 const CourseWorkspaceView = () => import('@/views/CourseWorkspaceView.vue');
+const PPTEditorView = () => import('@/views/PPTEditorView.vue');
 const AboutView = () => import('@/views/AboutView.vue');
 const SettingsView = () => import('@/views/SettingsView.vue');
 
@@ -27,6 +28,12 @@ const normalizeParam = (value: unknown): string | null => {
 };
 
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/course/:courseId/unit/:unitId/ppt/editor',
+    name: 'course-unit-ppt-editor',
+    component: PPTEditorView,
+    meta: { requiresCourse: true, requiresUnit: true },
+  },
   {
     path: '/',
     component: MainLayout,
@@ -96,6 +103,28 @@ export const createAppRouter = (pinia: Pinia) => {
       store.selectCourse(courseId);
     } else if (store.currentUnitId && !course.units.some((u) => u.id === store.currentUnitId)) {
       store.selectUnit(course.units[0]?.id ?? null);
+    }
+
+    if (to.meta.requiresUnit && to.name !== 'course-unit') {
+      const unitIdParam = normalizeParam(to.params.unitId);
+      const unitId = unitIdParam && course.units.some((u) => u.id === unitIdParam) ? unitIdParam : course.units[0]?.id;
+
+      if (!unitId) {
+        return { name: 'course', params: { courseId } };
+      }
+
+      if (store.currentUnitId !== unitId) {
+        store.selectUnit(unitId);
+      }
+
+      if (unitId !== unitIdParam) {
+        return {
+          name: to.name as string,
+          params: { ...to.params, courseId, unitId },
+          query: to.query,
+          hash: to.hash,
+        };
+      }
     }
 
     if (to.name === 'course') {

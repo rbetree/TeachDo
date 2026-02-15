@@ -6,6 +6,7 @@
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
+    "noUncheckedIndexedAccess": false,
     "moduleResolution": "bundler",
     "moduleDetection": "force",
     "isolatedModules": true,
@@ -15,6 +16,7 @@
     "types": ["vite/client", "node"],
     "paths": {
       "@/*": ["./src/*"],
+      "@editor/*": ["./src/editor-runtime/*"],
       "#root/*": ["./*"]
     },
     "noEmit": true

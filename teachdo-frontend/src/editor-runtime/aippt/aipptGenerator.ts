@@ -6,7 +6,7 @@ import type {
   PPTTextElement,
   Slide,
   TextType,
-} from "@/editor-runtime/types/slides";
+} from "@editor/types/slides";
 import type {
   AIPPTContentChartItem,
   AIPPTContentImageItem,
@@ -14,7 +14,7 @@ import type {
   AIPPTLegacyTextItem,
   AIPPTSlide,
   AnyContentItem,
-} from "@/editor-runtime/types/AIPPT";
+} from "@editor/types/AIPPT";
 
 const isChartItem = (x: any): x is AIPPTContentChartItem =>
   x && x.kind === "chart" && Array.isArray(x.labels) && Array.isArray(x.series);

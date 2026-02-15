@@ -140,7 +140,7 @@ const uploadFile = async (file: File) => {
     window.clearInterval(timer);
     uploadTimers.delete(localId);
 
-    const next = files.value.map((f) =>
+    const next: KBFile[] = files.value.map((f) =>
       f.id === localId
         ? {
             ...f,

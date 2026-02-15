@@ -18,9 +18,20 @@ export default defineConfig(() => ({
     },
   },
   plugins: [vue()],
+  css: {
+    preprocessorOptions: {
+      scss: {
+        additionalData: `
+          @import "@editor/assets/styles/variable.scss";
+          @import "@editor/assets/styles/mixin.scss";
+        `,
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(rootDir, 'src'),
+      '@editor': path.resolve(rootDir, 'src/editor-runtime'),
       '#root': path.resolve(rootDir, '.'),
     },
   },

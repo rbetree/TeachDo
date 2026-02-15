@@ -1,0 +1,298 @@
+/**
+ * 输入框组件样式
+ * 支持验证状态和错误提示
+ */
+
+/* ===== 输入框容器 ===== */
+.input-group {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+/* ===== 标签样式 ===== */
+.input-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+  
+  &.required::after {
+    content: ' *';
+    color: var(--color-error);
+  }
+}
+
+/* ===== 基础输入框样式 ===== */
+.input-field {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--border-color);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.5;
+  outline: none;
+  transition: all var(--transition-base) ease;
+  
+  &::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.6;
+  }
+  
+  &:hover:not(:disabled):not(:focus) {
+    border-color: var(--primary-color);
+  }
+  
+  &:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 4px var(--primary-light);
+  }
+  
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    background-color: var(--bg-surface-secondary);
+  }
+  
+  &:read-only {
+    background-color: var(--bg-surface-secondary);
+    cursor: default;
+  }
+}
+
+/* ===== 输入框尺寸 ===== */
+.input-sm {
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+}
+
+.input-lg {
+  padding: 16px 20px;
+  font-size: 1.125rem;
+  border-radius: var(--radius-lg);
+}
+
+/* ===== 文本域 ===== */
+textarea.input-field {
+  min-height: 100px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+/* ===== 输入框前缀/后缀图标 ===== */
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  
+  .input-field {
+    flex: 1;
+  }
+  
+  &.has-prefix .input-field {
+    padding-left: 44px;
+  }
+  
+  &.has-suffix .input-field {
+    padding-right: 44px;
+  }
+}
+
+.input-prefix,
+.input-suffix {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 100%;
+  color: var(--text-secondary);
+  pointer-events: none;
+  
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.input-prefix {
+  left: 0;
+}
+
+.input-suffix {
+  right: 0;
+}
+
+/* 可点击的后缀(如清除按钮) */
+.input-suffix.clickable {
+  pointer-events: auto;
+  cursor: pointer;
+  transition: color var(--transition-base) ease;
+  
+  &:hover {
+    color: var(--text-primary);
+  }
+}
+
+/* ===== 验证状态 ===== */
+.input-group.success {
+  .input-field {
+    border-color: var(--color-success);
+    
+    &:focus {
+      box-shadow: 0 0 0 4px var(--color-success-bg);
+    }
+  }
+  
+  .input-message {
+    color: var(--color-success);
+  }
+}
+
+.input-group.warning {
+  .input-field {
+    border-color: var(--color-warning);
+    
+    &:focus {
+      box-shadow: 0 0 0 4px var(--color-warning-bg);
+    }
+  }
+  
+  .input-message {
+    color: var(--color-warning);
+  }
+}
+
+.input-group.error {
+  .input-field {
+    border-color: var(--color-error);
+    
+    &:focus {
+      box-shadow: 0 0 0 4px var(--color-error-bg);
+    }
+  }
+  
+  .input-message {
+    color: var(--color-error);
+  }
+}
+
+/* ===== 帮助文本和错误信息 ===== */
+.input-message {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  margin-top: var(--spacing-xs);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+  
+  svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+}
+
+/* ===== 输入框组合 ===== */
+.input-addon-group {
+  display: flex;
+  align-items: stretch;
+  
+  .input-field {
+    border-radius: 0;
+    
+    &:first-child {
+      border-top-left-radius: var(--radius-lg);
+      border-bottom-left-radius: var(--radius-lg);
+    }
+    
+    &:last-child {
+      border-top-right-radius: var(--radius-lg);
+      border-bottom-right-radius: var(--radius-lg);
+    }
+    
+    &:not(:last-child) {
+      border-right: none;
+    }
+  }
+  
+  .input-addon {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background-color: var(--bg-surface-secondary);
+    border: 2px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    white-space: nowrap;
+    
+    &:first-child {
+      border-top-left-radius: var(--radius-lg);
+      border-bottom-left-radius: var(--radius-lg);
+      border-right: none;
+    }
+    
+    &:last-child {
+      border-top-right-radius: var(--radius-lg);
+      border-bottom-right-radius: var(--radius-lg);
+      border-left: none;
+    }
+  }
+}
+
+/* ===== 搜索框 ===== */
+.input-search {
+  .input-field {
+    padding-left: 44px;
+    border-radius: var(--radius-full);
+  }
+  
+  .input-prefix {
+    color: var(--text-secondary);
+  }
+}
+
+/* ===== 数字输入框 ===== */
+input[type="number"].input-field {
+  -moz-appearance: textfield;
+  
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+/* ===== 密码输入框切换按钮 ===== */
+.input-password-toggle {
+  .input-suffix {
+    pointer-events: auto;
+    cursor: pointer;
+    transition: color var(--transition-base) ease;
+    
+    &:hover {
+      color: var(--text-primary);
+    }
+  }
+}
+
+/* ===== 字符计数 ===== */
+.input-count {
+  display: flex;
+  justify-content: flex-end;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: var(--spacing-xs);
+  
+  &.limit-reached {
+    color: var(--color-error);
+  }
+}

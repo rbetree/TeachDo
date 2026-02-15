@@ -6,6 +6,8 @@ import { setupAppStore } from './stores/appStore';
 import { createAppRouter } from './router';
 import { i18n } from './i18n';
 import { toast } from './utils/toast';
+import EditorIconPlugin from '@editor/plugins/icon';
+import EditorDirectivePlugin from '@editor/plugins/directive';
 
 const app = createApp(App);
 const pinia = createPinia();
@@ -15,6 +17,8 @@ setupAppStore(pinia);
 const router = createAppRouter(pinia);
 app.use(router);
 app.use(i18n);
+app.use(EditorIconPlugin);
+app.use(EditorDirectivePlugin);
 
 app.config.errorHandler = (err, instance, info) => {
   console.error('[Vue Error]', err, info);

@@ -40,6 +40,7 @@ export interface AIPPTTransition extends AIPPTBaseSlide {
 
 export type AnyContentItem = AIPPTContentChartItem | AIPPTContentTextItem | AIPPTLegacyTextItem
 
+
 // ==============================
 // 👉 内容页：items 支持“文本项 + 图表项”
 //    同时兼容旧结构 { title, text }（无 kind 字段）
@@ -153,20 +154,28 @@ export type AIPPTSlide =
 // 类型守卫 & 运行时校验辅助
 // ==============================
 
-export function isChartItem(item: AIPPTContentItem): item is AIPPTContentChartItem {
+export function isChartItem(
+  item: AIPPTContentItem
+): item is AIPPTContentChartItem {
   return (item as any).kind === 'chart'
 }
 
-export function isImageItem(item: AIPPTContentItem): item is AIPPTContentImageItem {
+export function isImageItem(
+  item: AIPPTContentItem
+): item is AIPPTContentImageItem {
   return (item as any).kind === 'image'
 }
 
-export function isTextItem(item: AIPPTContentItem): item is AIPPTContentTextItem {
+export function isTextItem(
+  item: AIPPTContentItem
+): item is AIPPTContentTextItem {
   return (item as any).kind === 'text'
 }
 
 /** 兼容旧版：没有 kind 但具备 title/text 即视作旧文本项 */
-export function isLegacyTextItem(item: AIPPTContentItem): item is AIPPTLegacyTextItem {
+export function isLegacyTextItem(
+  item: AIPPTContentItem
+): item is AIPPTLegacyTextItem {
   const anyItem = item as any
   return (
     anyItem &&
@@ -185,10 +194,8 @@ export const SUPPORTED_CHART_TYPES = [
   'ring',
   'area',
   'radar',
-  'scatter',
+  'scatter'
 ] as const
-
 export function isSupportedChartType(t: any): t is AIPPTChartType {
   return (SUPPORTED_CHART_TYPES as readonly string[]).includes(t)
 }
-

@@ -1,0 +1,138 @@
+/**
+ * 设计系统 - Design Tokens
+ * 基于 frontend-prototype 的设计规范
+ * 支持浅色/深色主题切换
+ */
+
+/* ===== Light Theme (Default) =====
+ */
+:root {
+  /* 背景色，对应 HTML 设计中的 --bg / --surface */
+  --bg-body: #ffffff;
+  --bg-surface: #f4f4f4;
+  --bg-surface-secondary: #f4f4f4;
+  --bg-surface-hover: #ebebeb;
+  
+  /* 文字颜色，对应 --text-main / --text-sub */
+  --text-primary: #111111;
+  --text-secondary: #666666;
+  --text-tertiary: #888888;
+  
+  /* 主题色：使用纯黑作为主强调色，对齐极简设计 */
+  --primary-color: #000000;
+  --primary-hover: #111111;
+  --primary-light: rgba(0, 0, 0, 0.04);
+  --primary-color-rgb: 0, 0, 0;
+  /* 按钮文本颜色 */
+  --btn-primary-text-color: #ffffff;
+  
+  /* 边框颜色，对应 --border */
+  --border-color: #e0e0e0;
+  
+  /* 阴影：保持略克制的阴影以配合极简风格 */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 10px -2px rgb(0 0 0 / 0.08);
+  --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.12);
+  
+  /* 圆角 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+  
+  /* 间距系统 */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  
+  /* 动画时长 */
+  --transition-fast: 0.1s;
+  --transition-base: 0.2s;
+  --transition-slow: 0.3s;
+  
+  /* Z-index 层级 */
+  --z-dropdown: 1000;
+  --z-modal: 1050;
+  --z-tooltip: 1100;
+  --z-notification: 1150;
+}
+
+/* ===== Dark Theme =====
+ * 对应 HTML 设计中的 [data-theme="dark"] 配色
+ */
+[data-theme="dark"] {
+  /* 背景色 */
+  --bg-body: #050505;
+  --bg-surface: #1a1a1a;
+  --bg-surface-secondary: #1a1a1a;
+  --bg-surface-hover: #262626;
+  
+  /* 文字颜色 */
+  --text-primary: #e5e5e5;
+  --text-secondary: #888888;
+  --text-tertiary: #666666;
+  
+  /* 主题色：深色模式下以白色为主强调色 */
+  --primary-color: #ffffff;
+  --primary-hover: #f5f5f5;
+  --primary-light: rgba(255, 255, 255, 0.1);
+  --primary-color-rgb: 255, 255, 255;
+  /* 按钮文本颜色：白色背景上使用深色文字 */
+  --btn-primary-text-color: #000000;
+  
+  /* 边框颜色 */
+  --border-color: #333333;
+  
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.6), 0 2px 4px -2px rgb(0 0 0 / 0.6);
+  --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.7);
+}
+
+/* ===== 语义化颜色 ===== */
+:root {
+  /* 状态颜色 - 适配深色主题 */
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-info: #3B82F6;
+  
+  /* 状态颜色背景 */
+  --color-success-bg: #ECFDF5;
+  --color-warning-bg: #FEF3C7;
+  --color-error-bg: #FEE2E2;
+  --color-info-bg: #DBEAFE;
+}
+
+[data-theme="dark"] {
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-error: #F87171;
+  --color-info: #60A5FA;
+  
+  --color-success-bg: rgba(16, 185, 129, 0.15);
+  --color-warning-bg: rgba(245, 158, 11, 0.15);
+  --color-error-bg: rgba(239, 68, 68, 0.15);
+  --color-info-bg: rgba(59, 130, 246, 0.15);
+}
+
+/* ===== 通用过渡效果 ===== */
+* {
+  transition: background-color var(--transition-slow) ease,
+              border-color var(--transition-slow) ease,
+              color var(--transition-base) ease,
+              box-shadow var(--transition-slow) ease;
+}
+
+/* 禁用某些元素的过渡 */
+*:focus,
+*:active,
+input,
+textarea,
+select {
+  transition: none;
+}
