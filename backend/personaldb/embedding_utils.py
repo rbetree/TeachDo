@@ -227,32 +227,50 @@ class ChromaDB(object):
         return query_result
 
 
-    def delete_file_vectors(self, user_id: int, file_id: int):
+    def delete_file_vectors(self, user_id: int | str, file_id: int | str):
         """
         根据用户ID和文件ID删除对应的向量
         Args:
-            user_id (int): 用户ID
-            file_id (int): 文件ID
+            user_id (int | str): 用户ID
+            file_id (int | str): 文件ID
         Returns:
             str: "success" 表示删除成功，"fail" 表示失败
         """
         try:
-            collection_name = f"user_{user_id}"
+            user_id_str = str(user_id)
+            file_id_str = str(file_id)
+            collection_name = f"user_{user_id_str}"
             col = self.client.get_or_create_collection(collection_name)
-            col.delete(where={"file_id": file_id})
-            logger.info(f"成功删除用户 {user_id} 的文件 {file_id} 对应的向量")
+            col.delete(where={"file_id": file_id_str})
+            # 兼容旧数据：曾以 int 形式写入 file_id
+            try:
+                if file_id_str.isdigit():
+                    col.delete(where={"file_id": int(file_id_str)})
+            except Exception:
+                pass
+
+            logger.info(f"成功删除用户 {user_id_str} 的文件 {file_id_str} 对应的向量")
             return "success"
         except Exception as e:
             logger.error(f"删除用户 {user_id} 的文件 {file_id} 向量失败: {str(e)}", exc_info=True)
             return "fail"
 
-    def insert_file_vectors(self, file_name:str, user_id: int|str, file_id: int, file_type: str, url: str, folder_id: int, documents: List[str]):
+    def insert_file_vectors(
+        self,
+        file_name: str,
+        user_id: int | str,
+        file_id: int | str,
+        file_type: str,
+        url: str,
+        folder_id: int,
+        documents: List[str],
+    ):
         """
         将文件内容插入到ChromaDB中，生成并存储embedding向量
         Args:
             file_name: file_name, 文件名称
-            user_id (int): 用户ID
-            file_id (int): 文件ID
+            user_id (int | str): 用户ID
+            file_id (int | str): 文件ID
             file_type (str): 文件类型
             url (str): 文件URL
             folder_id (int): 文件夹ID
@@ -264,12 +282,24 @@ class ChromaDB(object):
         del_status = self.delete_file_vectors(user_id, file_id)
         # 然后插入新的向量
         try:
-            collection_name = f"user_{user_id}"
+            user_id_str = str(user_id)
+            file_id_str = str(file_id)
+            collection_name = f"user_{user_id_str}"
             vectors_result = self.embedder.do_embedding(texts=documents)
             vectors = vectors_result["data"]
             embeddings = [one["embedding"] for one in vectors]
-            meta = [{"file_name": file_name,"file_id": file_id, "user_id": user_id, "folder_id": folder_id, "url": url, "file_type": file_type} for _ in documents]
-            ids = [f"{file_id}_{i}" for i in range(len(documents))]
+            meta = [
+                {
+                    "file_name": file_name,
+                    "file_id": file_id_str,
+                    "user_id": user_id_str,
+                    "folder_id": int(folder_id or 0),
+                    "url": url,
+                    "file_type": file_type,
+                }
+                for _ in documents
+            ]
+            ids = [f"{file_id_str}_{i}" for i in range(len(documents))]
             col = self.client.get_or_create_collection(collection_name, metadata={"hnsw:space": "cosine"})
             col.add(
                 embeddings=embeddings,
@@ -300,16 +330,17 @@ class ChromaDB(object):
         }
         return result
 
-    def list_files_by_user(self, user_id: int) -> List[Dict[str, Any]]:
+    def list_files_by_user(self, user_id: int | str) -> List[Dict[str, Any]]:
         """
         根据用户ID列出该用户的所有文件信息
         Args:
-            user_id (int): 用户ID
+            user_id (int | str): 用户ID
         Returns:
             List[Dict[str, Any]]: 文件信息列表
         """
         try:
-            collection_name = f"user_{user_id}"
+            user_id_str = str(user_id)
+            collection_name = f"user_{user_id_str}"
             # 确认集合存在
             collections = self.list_exist_collections()
             if collection_name not in collections:
@@ -336,15 +367,16 @@ class ChromaDB(object):
                         continue
 
                     # 检查用户ID是否匹配
-                    if meta.get('user_id') == user_id:
-                        if file_id not in unique_files:
-                            unique_files[file_id] = {
-                                "file_id": file_id,
+                    if str(meta.get('user_id')) == user_id_str:
+                        file_id_key = str(file_id)
+                        if file_id_key not in unique_files:
+                            unique_files[file_id_key] = {
+                                "file_id": file_id_key,
                                 "file_name": meta.get('file_name'),
                                 "file_type": meta.get('file_type'),
                                 "url": meta.get('url'),
                                 "folder_id": meta.get('folder_id'),
-                                "user_id": meta.get('user_id')
+                                "user_id": meta.get('user_id'),
                             }
 
             return list(unique_files.values())

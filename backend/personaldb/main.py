@@ -134,7 +134,15 @@ def _get_markdown_content(file_path: str, file_name: str) -> str:
         return True, content
 
 
-def process_and_vectorize_local_file(file_name: str, temp_file_path: str, id: int, user_id: int|str, file_type: str, url: str, folder_id: int):
+def process_and_vectorize_local_file(
+    file_name: str,
+    temp_file_path: str,
+    id: int | str,
+    user_id: int | str,
+    file_type: str,
+    url: str,
+    folder_id: int,
+):
     """
     从本地文件路径处理文件、进行向量化并存储
     """
@@ -240,8 +248,8 @@ async def upload_and_vectorize_endpoint(request: Request):
     - application/json
 
     字段：
-    - userId: int
-    - fileId: int
+    - userId: int | str
+    - fileId: int | str
     - folderId: int (可选，默认0)
     - fileType: str (可选)
     - url: str (可选，与 file 互斥)
@@ -272,6 +280,9 @@ async def upload_and_vectorize_endpoint(request: Request):
             raise HTTPException(status_code=422, detail="缺少或非法参数: userId")
         if fileId is None:
             raise HTTPException(status_code=422, detail="缺少或非法参数: fileId")
+
+        userId = str(userId)
+        fileId = str(fileId)
 
         folderId = int(data.get("folderId", 0))
         fileType = data.get("fileType")
@@ -340,9 +351,9 @@ class TextVectorizeBody(BaseModel):
     其余参数均为可选，默认空/0。
     """
     content: str
-    fileId: int
+    fileId: str
     fileName: str
-    userId: Optional[int] = 0
+    userId: Optional[str] = "0"
     fileType: Optional[str] = None
     url: Optional[str] = ""
     folderId: Optional[int] = 0
@@ -363,8 +374,8 @@ def _chunk_text(text: str, max_chars: int = 1200, overlap: int = 200) -> List[st
 def process_text_content(
     file_name: str,
     text: str,
-    id: int,
-    user_id: int = 0,
+    id: str,
+    user_id: str = "0",
     file_type: Optional[str] = None,
     folder_id: int = 0,
     url: str = ""
@@ -388,7 +399,7 @@ def process_text_content(
     logger.info(f"插入文本向量：fileId={id}, userId={user_id}")
     embedding_result = chroma.insert_file_vectors(
         file_name=file_name,
-        user_id=user_id or 0,
+        user_id=user_id,
         file_id=id,
         file_type=file_type or "unknown",
         url=url or "",
@@ -399,7 +410,7 @@ def process_text_content(
     result = {
         "id": id,
         "file_name": file_name,
-        "userId": user_id or 0,
+        "userId": user_id,
         "fileType": file_type or "unknown",
         "url": url or "",
         "folderId": folder_id or 0,
@@ -425,7 +436,7 @@ def vectorize_text_endpoint(body: TextVectorizeBody):
             file_name=body.fileName,
             text=body.content,
             id=body.fileId,
-            user_id=body.userId or 0,
+            user_id=body.userId or "0",
             file_type=body.fileType,
             folder_id=body.folderId or 0,
             url=body.url or ""
@@ -435,7 +446,7 @@ def vectorize_text_endpoint(body: TextVectorizeBody):
         raise HTTPException(status_code=500, detail=f"文本向量化失败: {str(e)}")
 
 @app.get("/files/{user_id}")
-def list_user_files(user_id: int):
+def list_user_files(user_id: str):
     """
     列出指定用户的所有文件信息
     """
@@ -455,6 +466,27 @@ def list_user_files(user_id: int):
     except Exception as e:
         logger.error(f"列出用户 {user_id} 的文件失败: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"列出文件失败: {str(e)}")
+
+
+@app.delete("/files/{user_id}/{file_id}")
+def delete_user_file(user_id: str, file_id: str):
+    """
+    删除指定用户的某个文件对应的向量数据。
+    """
+    try:
+        logger.info(f"收到删除向量请求: user_id={user_id}, file_id={file_id}")
+        embedder = embedding_utils.EmbeddingModel()
+        chroma = embedding_utils.ChromaDB(embedder)
+
+        status = chroma.delete_file_vectors(user_id=user_id, file_id=file_id)
+        if status != "success":
+            raise HTTPException(status_code=500, detail="删除失败")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除向量失败: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -302,7 +302,9 @@
   - [x] 已完成一次“初始提交”（迁移基线已固定，后续改动可独立追踪）
   - [x] 已完成阶段 A（仓库与启动链路切换）
   - [x] 已完成阶段 B（工作台路由化）
-  - [ ] 下一步优先级：阶段 C0（KB 后端打底）-> 阶段 C（大纲模块重构）
+  - [x] 已完成阶段 C0（KB 后端打底：代码实现）
+  - [ ] 阶段 C0 联调/验收（按 DoD）
+  - [ ] 下一步优先级：阶段 C（大纲模块重构）-> 阶段 D（PPT 模块替换）
 
 ### 阶段 A：仓库与启动链路切换
 - [ ] 1. 创建新仓库 `teachdo`（干净历史）：
@@ -336,22 +338,23 @@
 
 ### 阶段 C0：KB 后端打底（必须先做）
 > 目标：让 KB 上传/列表/删除/产物入库成为“可用的后端能力”，并确保 KB 不可用时不会阻断 PPT 生成主链路。
-1. main_api 增加 KB BFF（前端统一以 `/api/...` 访问）：
-- `POST /kb/upload`、`GET /kb/files/{user_id}`、`POST /kb/vectorize/text`、`DELETE /kb/files/{user_id}/{file_id}`（契约见 `5.5.2`）。
-- 响应统一 `{ ok: boolean, data?: any, error?: { code, message } }`，避免前端散落判断。
-2. personaldb 适配（落盘与向量一致性）：
-- `GET /files/{user_id}`：`user_id` 改为 string。
-- `POST /vectorize/text`：`fileId/userId` 支持 string；写入 metadata 时保持 `file_id/user_id/folder_id` 一致类型（建议统一存 string）。
-- 新增 `DELETE /files/{user_id}/{file_id}`：调用 `delete_file_vectors(user_id, file_id)` 删除该文件向量。
-3. slide_agent 兼容性与过滤：
-- `KnowledgeBaseSearch` 移除 `assert PERSONAL_DB`（未配置时返回 `(False, "PERSONAL_DB 未配置，跳过知识库检索")`，不得抛异常阻断生成）。
-- 支持 `metadata.kb_folder_ids` 过滤：对 personaldb `/search` 返回的 `metadatas/documents` 同步过滤，仅保留允许的 `folder_id`。
-4. main_api `/tools/aippt` 的 KB 降级（避免误开关导致 500）：
-- 当 `PERSONAL_DB` 未配置或 personaldb `/healthz` 不可用时，强制将 `generateFromUploadedFile=false`（或至少不把 `KnowledgeBaseSearch` 加入 `search_engine`）。
-- 记录日志但不中断生成。
+- [x] 1. main_api 增加 KB BFF（前端统一以 `/api/...` 访问）：
+  - [x] `POST /kb/upload`、`GET /kb/files/{user_id}`、`POST /kb/vectorize/text`、`DELETE /kb/files/{user_id}/{file_id}`（契约见 `5.5.2`）。
+  - [x] 响应统一 `{ ok: boolean, data?: any, error?: { code, message } }`，避免前端散落判断。
+- [x] 2. personaldb 适配（落盘与向量一致性）：
+  - [x] `GET /files/{user_id}`：`user_id` 支持 string（TeachDo: `course.id`）。
+  - [x] `POST /vectorize/text`：`fileId/userId` 支持 string；写入 metadata 时保持 `file_id/user_id/folder_id` 一致类型（统一存 string）。
+  - [x] 新增 `DELETE /files/{user_id}/{file_id}`：调用 `delete_file_vectors(user_id, file_id)` 删除该文件向量。
+- [x] 3. slide_agent 兼容性与过滤：
+  - [x] `KnowledgeBaseSearch` 移除 `assert PERSONAL_DB`（未配置时返回 `(False, "PERSONAL_DB 未配置，跳过知识库检索")`，不得抛异常阻断生成）。
+  - [x] 支持 `metadata.kb_folder_ids` 过滤：对 personaldb `/search` 返回的 `metadatas/documents` 同步过滤，仅保留允许的 `folder_id`。
+- [x] 4. main_api `/tools/aippt` 的 KB 降级（避免误开关导致 500）：
+  - [x] 当 `PERSONAL_DB` 未配置或 personaldb `/healthz` 不可用时，强制将 `generateFromUploadedFile=false`（或至少不把 `KnowledgeBaseSearch` 加入 `search_engine`）。
+  - [x] 记录日志但不中断生成。
 - DoD：
-1. `/api/kb/upload`、`/api/kb/files/*`、`/api/kb/vectorize/text`、`/api/kb/files/*`(DELETE) 可联调通过。
-2. `PERSONAL_DB` 缺失或 personaldb 停止时，PPT 生成仍可用（仅自动禁用 KB 生成）。
+  - [x] 已补充后端单元测试覆盖（KB BFF + `/tools/aippt` KB 降级）：`venv/bin/python -m pytest backend -q`。
+  - [ ] `/api/kb/upload`、`/api/kb/files/*`、`/api/kb/vectorize/text`、`/api/kb/files/*`(DELETE) **真实服务联调**通过（建议用 `scripts/verify_endpoints.py --require-kb` 校验）。
+  - [ ] `PERSONAL_DB` 缺失或 personaldb 停止时，PPT 生成仍可用（仅自动禁用 KB 生成；建议用冒烟脚本 + 手工验证 SSE）。
 
 ### 阶段 C：大纲模块重构
 1. 在 `OutlineView` 中接入 `/api/tools/aippt_outline_unified`。

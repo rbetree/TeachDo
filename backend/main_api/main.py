@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 import re
 import os
 from pathlib import Path
@@ -10,7 +11,7 @@ import logging
 from pydantic import BaseModel
 import uuid
 import httpx
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi import UploadFile, File, HTTPException, Form
@@ -429,8 +430,41 @@ class AipptContentRequest(BaseModel):
     sessionId: str = ""  # 当使用知识库时，需要根据用户的user_id查询对应的知识库
     generateFromUploadedFile: bool = False  # 是否从上传的文件中生成PPT内容
     generateFromWebSearch: bool = True  # 是否从网络搜索中生成PPT内容
+    kb_folder_ids: list[int] | None = None  # 仅当启用知识库检索时生效，用于过滤可检索的 folder_id
 
-async def stream_content_response(markdown_content: str, language, generateFromUploadedFile, generateFromWebSearch, user_id):
+def _kb_ok(data):
+    return {"ok": True, "data": data}
+
+
+def _kb_error(code: str, message: str, status_code: int = 500):
+    return JSONResponse(
+        status_code=status_code,
+        content={"ok": False, "error": {"code": code, "message": message}},
+    )
+
+
+def _get_personaldb_url() -> str | None:
+    url = os.environ.get("PERSONAL_DB")
+    return url.rstrip("/") if url else None
+
+
+async def _is_personaldb_ready(personaldb_url: str) -> bool:
+    try:
+        async with httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(2.0)) as client:
+            resp = await client.get(f"{personaldb_url}/healthz")
+            return resp.status_code == 200
+    except Exception:
+        return False
+
+
+async def stream_content_response(
+    markdown_content: str,
+    language,
+    generateFromUploadedFile,
+    generateFromWebSearch,
+    user_id,
+    kb_folder_ids: list[int] | None = None,
+):
     match = re.search(r"(# .*)", markdown_content, flags=re.DOTALL)
     result = markdown_content[match.start():] if match else markdown_content
     logger.info(f"用户输入的markdown大纲是：{result}")
@@ -444,6 +478,8 @@ async def stream_content_response(markdown_content: str, language, generateFromU
         search_engine.append("DocumentSearch")
 
     metadata = {"user_id": user_id, "search_engine": search_engine, "language": language}
+    if kb_folder_ids:
+        metadata["kb_folder_ids"] = kb_folder_ids
     logger.info(f"前端*内容**=====>metadata数据为：{metadata}")
 
     last_flush = asyncio.get_event_loop().time()
@@ -491,13 +527,26 @@ async def aippt_content(request: AipptContentRequest):
     # 兼容旧字段名：如果 user_id 为空就用 sessionId
     user_id = getattr(request, "user_id", None) or getattr(request, "sessionId", None)
 
+    generate_from_uploaded_file = bool(request.generateFromUploadedFile)
+    personaldb_url = _get_personaldb_url()
+    if generate_from_uploaded_file:
+        if not personaldb_url:
+            logger.info("PERSONAL_DB 未配置，强制禁用 generateFromUploadedFile")
+            generate_from_uploaded_file = False
+        else:
+            ready = await _is_personaldb_ready(personaldb_url)
+            if not ready:
+                logger.info("personaldb 不可用，强制禁用 generateFromUploadedFile: %s", personaldb_url)
+                generate_from_uploaded_file = False
+
     async def event_generator():
         async for chunk in stream_content_response(
             markdown_content,
             language=request.language,
-            generateFromUploadedFile=request.generateFromUploadedFile,
+            generateFromUploadedFile=generate_from_uploaded_file,
             generateFromWebSearch=request.generateFromWebSearch,
-            user_id=user_id
+            user_id=user_id,
+            kb_folder_ids=request.kb_folder_ids if generate_from_uploaded_file else None,
         ):
             yield chunk
 
@@ -511,6 +560,199 @@ async def aippt_content(request: AipptContentRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.post("/kb/upload")
+async def kb_upload(
+    user_id: str = Form(...),
+    folder_id: int = Form(0),
+    file_id: str | None = Form(None),
+    file_type: str | None = Form(None),
+    file: UploadFile = File(...),
+):
+    """
+    KB BFF：上传素材并向量化（转发到 personaldb /upload/）。
+    - 前端统一访问 /api/kb/upload（Vite proxy 去掉 /api）
+    """
+    personaldb_url = _get_personaldb_url()
+    if not personaldb_url:
+        return _kb_error("KB_NOT_CONFIGURED", "PERSONAL_DB 未配置", status_code=500)
+
+    if not file:
+        return _kb_error("KB_FILE_REQUIRED", "缺少文件", status_code=400)
+
+    resolved_file_type = (file_type or "").strip() or None
+    if not resolved_file_type and file.filename and "." in file.filename:
+        resolved_file_type = file.filename.rsplit(".", 1)[-1]
+
+    resolved_file_id = (file_id or "").strip() or None
+    if not resolved_file_id:
+        epoch_ms = int(time.time() * 1000)
+        resolved_file_id = f"upload:{user_id}:{epoch_ms}:{random.randint(0, 999):03d}"
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        return _kb_error("KB_EMPTY_FILE", "文件内容为空", status_code=400)
+
+    data = {
+        "userId": str(user_id),
+        "fileId": str(resolved_file_id),
+        "folderId": str(folder_id),
+    }
+    if resolved_file_type:
+        data["fileType"] = str(resolved_file_type)
+
+    files_payload = {
+        "file": (
+            file.filename or "uploaded_file",
+            file_bytes,
+            file.content_type or "application/octet-stream",
+        )
+    }
+
+    upload_url = f"{personaldb_url}/upload/"
+
+    async with httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(360.0)) as client:
+        try:
+            resp = await client.post(upload_url, data=data, files=files_payload)
+            if resp.status_code >= 400:
+                logger.info("[personaldb %s] %s", resp.status_code, resp.text)
+                return _kb_error("KB_UPLOAD_FAILED", resp.text, status_code=resp.status_code)
+            result = resp.json()
+        except Exception as exc:
+            logger.error("kb_upload 调用 personaldb 失败: %s", exc, exc_info=True)
+            return _kb_error("KB_UPLOAD_FAILED", f"personaldb 调用失败: {exc}", status_code=502)
+
+    # 不向前端返回 markdown_content（可能很大）
+    return _kb_ok(
+        {
+            "user_id": str(user_id),
+            "file_id": str(resolved_file_id),
+            "file_name": file.filename or result.get("file_name") or "uploaded_file",
+            "file_type": resolved_file_type or result.get("fileType") or "unknown",
+            "folder_id": int(folder_id),
+            "status": "ready",
+        }
+    )
+
+
+@app.get("/kb/files/{user_id}")
+async def kb_list_files(user_id: str, folder_id: int | None = Query(None)):
+    """
+    KB BFF：列出知识库文件（转发 personaldb GET /files/{user_id}）。
+    """
+    personaldb_url = _get_personaldb_url()
+    if not personaldb_url:
+        return _kb_error("KB_NOT_CONFIGURED", "PERSONAL_DB 未配置", status_code=500)
+
+    url = f"{personaldb_url}/files/{user_id}"
+    async with httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(10.0)) as client:
+        try:
+            resp = await client.get(url)
+            if resp.status_code >= 400:
+                logger.info("[personaldb %s] %s", resp.status_code, resp.text)
+                return _kb_error("KB_LIST_FAILED", resp.text, status_code=resp.status_code)
+            files = resp.json()
+        except Exception as exc:
+            logger.error("kb_list_files 调用 personaldb 失败: %s", exc, exc_info=True)
+            return _kb_error("KB_LIST_FAILED", f"personaldb 调用失败: {exc}", status_code=502)
+
+    if not isinstance(files, list):
+        return _kb_error("KB_LIST_FAILED", "personaldb 返回格式非法（期望 list）", status_code=502)
+
+    normalized = []
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        try:
+            fid = str(item.get("file_id") or item.get("fileId") or "")
+            if not fid:
+                continue
+            one_folder_id = item.get("folder_id") if item.get("folder_id") is not None else item.get("folderId")
+            one_folder_id_int = int(one_folder_id) if one_folder_id is not None else 0
+            if folder_id is not None and int(folder_id) != one_folder_id_int:
+                continue
+            normalized.append(
+                {
+                    "user_id": str(user_id),
+                    "file_id": fid,
+                    "file_name": item.get("file_name") or item.get("fileName") or "",
+                    "file_type": item.get("file_type") or item.get("fileType") or "",
+                    "folder_id": one_folder_id_int,
+                }
+            )
+        except Exception:
+            continue
+
+    return _kb_ok(normalized)
+
+
+class KbVectorizeTextRequest(BaseModel):
+    user_id: str
+    file_id: str
+    file_name: str
+    content: str
+    file_type: str = "md"
+    folder_id: int = 1
+
+
+@app.post("/kb/vectorize/text")
+async def kb_vectorize_text(request: KbVectorizeTextRequest):
+    """
+    KB BFF：把文本写入 KB 索引（转发 personaldb POST /vectorize/text）。
+    """
+    personaldb_url = _get_personaldb_url()
+    if not personaldb_url:
+        return _kb_error("KB_NOT_CONFIGURED", "PERSONAL_DB 未配置", status_code=500)
+
+    if not request.content.strip():
+        return _kb_error("KB_CONTENT_REQUIRED", "content 不能为空", status_code=400)
+
+    payload = {
+        "userId": request.user_id,
+        "fileId": request.file_id,
+        "fileName": request.file_name,
+        "fileType": request.file_type,
+        "folderId": request.folder_id,
+        "content": request.content,
+        "url": "",
+    }
+
+    url = f"{personaldb_url}/vectorize/text"
+    async with httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(60.0)) as client:
+        try:
+            resp = await client.post(url, json=payload)
+            if resp.status_code >= 400:
+                logger.info("[personaldb %s] %s", resp.status_code, resp.text)
+                return _kb_error("KB_VECTORIZE_FAILED", resp.text, status_code=resp.status_code)
+        except Exception as exc:
+            logger.error("kb_vectorize_text 调用 personaldb 失败: %s", exc, exc_info=True)
+            return _kb_error("KB_VECTORIZE_FAILED", f"personaldb 调用失败: {exc}", status_code=502)
+
+    return _kb_ok(True)
+
+
+@app.delete("/kb/files/{user_id}/{file_id}")
+async def kb_delete_file(user_id: str, file_id: str):
+    """
+    KB BFF：删除知识库文件向量（转发 personaldb DELETE /files/{user_id}/{file_id}）。
+    """
+    personaldb_url = _get_personaldb_url()
+    if not personaldb_url:
+        return _kb_error("KB_NOT_CONFIGURED", "PERSONAL_DB 未配置", status_code=500)
+
+    url = f"{personaldb_url}/files/{user_id}/{file_id}"
+    async with httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(10.0)) as client:
+        try:
+            resp = await client.delete(url)
+            if resp.status_code >= 400:
+                logger.info("[personaldb %s] %s", resp.status_code, resp.text)
+                return _kb_error("KB_DELETE_FAILED", resp.text, status_code=resp.status_code)
+        except Exception as exc:
+            logger.error("kb_delete_file 调用 personaldb 失败: %s", exc, exc_info=True)
+            return _kb_error("KB_DELETE_FAILED", f"personaldb 调用失败: {exc}", status_code=502)
+
+    return _kb_ok(True)
 
 @app.get("/data/{filename}")
 async def get_data(filename: str):

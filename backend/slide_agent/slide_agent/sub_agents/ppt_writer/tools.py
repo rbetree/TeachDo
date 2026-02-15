@@ -212,7 +212,8 @@ def KnowledgeBaseSearch(keyword: str, tool_context: ToolContext):
     logger.info(f"❤️❤️❤️❤️😜😜😜😜😜调用知识库搜索接口, user_id: {user_id}, query: {keyword}, topk: {topk}")
     print(f"❤️❤️❤️❤️😜😜😜😜😜调用知识库搜索接口, user_id: {user_id}, query: {keyword}, topk: {topk}")
     PERSONAL_DB = os.environ.get('PERSONAL_DB', '')
-    assert PERSONAL_DB, "PERSONAL_DB is not set"
+    if not PERSONAL_DB:
+        return False, "PERSONAL_DB 未配置，跳过知识库检索"
     url = f"{PERSONAL_DB}/search"
     # 正确的请求数据格式
     data = {
@@ -222,6 +223,16 @@ def KnowledgeBaseSearch(keyword: str, tool_context: ToolContext):
         "topk": topk
     }
     headers = {'content-type': 'application/json'}
+    kb_folder_ids = metadata.get("kb_folder_ids")
+    allowed_folder_ids: set[int] | None = None
+    if isinstance(kb_folder_ids, list) and kb_folder_ids:
+        allowed_folder_ids = set()
+        for one in kb_folder_ids:
+            try:
+                allowed_folder_ids.add(int(one))
+            except Exception:
+                continue
+
     try:
         # 发送POST请求
         response = httpx.post(url, json=data, headers=headers, timeout=20.0, trust_env=False)
@@ -234,6 +245,30 @@ def KnowledgeBaseSearch(keyword: str, tool_context: ToolContext):
         result = response.json()
         documents = result.get("documents", [])
         metadatas = result.get("metadatas", [])
+
+        # 过滤：仅保留允许的 folder_id（folder_id=0 上传素材，folder_id=1 生成产物等）
+        if allowed_folder_ids is not None and isinstance(documents, list) and isinstance(metadatas, list):
+            filtered_documents = []
+            filtered_metadatas = []
+            for docs_row, metas_row in zip(documents, metadatas):
+                if not isinstance(docs_row, list) or not isinstance(metas_row, list):
+                    continue
+                row_docs = []
+                row_metas = []
+                for doc, meta in zip(docs_row, metas_row):
+                    if not isinstance(meta, dict):
+                        continue
+                    try:
+                        folder_id = int(meta.get("folder_id", -1))
+                    except Exception:
+                        continue
+                    if folder_id in allowed_folder_ids:
+                        row_docs.append(doc)
+                        row_metas.append(meta)
+                filtered_documents.append(row_docs)
+                filtered_metadatas.append(row_metas)
+            documents = filtered_documents
+            metadatas = filtered_metadatas
         data = {"documents": documents, "metadatas": metadatas}
         print("Response status:", response.status_code)
         print("Response body:", result)
