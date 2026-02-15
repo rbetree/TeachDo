@@ -303,8 +303,9 @@
   - [x] 已完成阶段 A（仓库与启动链路切换）
   - [x] 已完成阶段 B（工作台路由化）
   - [x] 已完成阶段 C0（KB 后端打底：代码实现）
+  - [x] 已完成阶段 C（大纲模块重构）
   - [ ] 阶段 C0 联调/验收（按 DoD）
-  - [ ] 下一步优先级：阶段 C（大纲模块重构）-> 阶段 D（PPT 模块替换）
+  - [ ] 下一步优先级：阶段 D（PPT 模块替换）-> 阶段 E（编辑器独立页 + 工作台预览）
 
 ### 阶段 A：仓库与启动链路切换
 - [ ] 1. 创建新仓库 `teachdo`（干净历史）：
@@ -357,49 +358,50 @@
   - [ ] `PERSONAL_DB` 缺失或 personaldb 停止时，PPT 生成仍可用（仅自动禁用 KB 生成；建议用冒烟脚本 + 手工验证 SSE）。
 
 ### 阶段 C：大纲模块重构
-1. 在 `OutlineView` 中接入 `/api/tools/aippt_outline_unified`。
-2. 主题必填；V1 只支持“主题模式”（不在大纲阶段引用知识库/上传素材，也不在 Outline 页面上传文件）。
-3. 保留现有对比/编辑/保存交互，替换底层流式生成实现。
-4. 统一错误处理与 toast 文案。
-5. 统一传参约定：
-- `content` 包含课程与单元上下文（可包含课程名称、单元标题、教学目标等）。
-- `user_id = course.id`（用于后续“产物入库”与 PPT 生成阶段 KB 作用域对齐）。
-6. 大纲保存后“产物入库”（写入 KB 索引）：
-- 调用 `/api/kb/vectorize/text`，`file_id=gen:{courseId}:{unitId}:outline`，`folder_id=1`，`content=最终大纲 markdown`。
+- [x] 1. 在 `OutlineView` 中接入 `/api/tools/aippt_outline_unified`。
+- [x] 2. 主题必填；V1 只支持“主题模式”（不在大纲阶段引用知识库/上传素材，也不在 Outline 页面上传文件）。
+- [x] 3. 保留现有对比/编辑/保存交互，替换底层流式生成实现。
+- [x] 4. 统一错误处理与 toast 文案。
+- [x] 5. 统一传参约定：
+  - `content` 包含课程与单元上下文（可包含课程名称、单元标题、教学目标等）。
+  - `user_id = course.id`（用于后续“产物入库”与 PPT 生成阶段 KB 作用域对齐）。
+- [x] 6. 大纲保存后“产物入库”（写入 KB 索引）：
+  - 调用 `/api/kb/vectorize/text`，`file_id=gen:{courseId}:{unitId}:outline`，`folder_id=1`，`content=最终大纲 markdown`。
 - DoD：
-1. 主题模式可流式输出并保存。
-2. SSE 中断时有明确错误提示，不导致页面崩溃。
+  - [x] 主题模式可流式输出并保存。
+  - [x] SSE 中断时有明确错误提示，不导致页面崩溃。
 
 ### 阶段 D：PPT 模块替换
-1. 在 `PPTView` 中使用真实模板接口替换 mock 逻辑。
-2. 接入 `/api/tools/aippt` SSE 流，处理增量页生成。
-3. 统一 SSE 解析策略（必须与旧前端一致），覆盖跨 chunk、多行 `data:`、`\r\n`、`[DONE]`：
-- 以“空行分隔事件”作为解析边界（见 `5.6.1`）。
-- 单条事件内拼接多行 `data:` 得到 payload。
-- 兼容 ```json 围栏并做容错解析。
-4. 将生成结果写入单元状态，并提供进入编辑器入口（“进行编辑”）。
-5. 模板契约与生成管线对齐（沿用 ai2ppt 逻辑）：
-- 模板列表：`GET /api/templates`。
-- 模板详情：`GET /api/data/${templateId}.json`（包含 `slides/theme/width/height`）。
-- 生成流：`POST /api/tools/aippt` 返回的每个 SSE payload 解析为 `AIPPTSlide`（JSON）。
-- 由 “模板 slides + AIPPTSlide” 生成可编辑 `Slide[]`（与编辑器一致的数据结构），必须复用 `AIPPTGenerator`（见 `5.6.3`），并写入 `CourseUnit.editorDocument`。
-6. 高级开关（可选，但建议保留 ai2ppt 功能点）：
-- `generateFromWebSearch` 默认打开（使用网络搜索生成）。
-- `generateFromUploadedFile` 默认打开（使用知识库生成）；当知识库无 `ready` 文件时自动关闭/禁用。
-- KB 检索范围（生成时可选）：
- - 默认仅引用 `folder_id=0` 上传素材（KB 素材）。
- - 可选包含 `folder_id=1` 生成产物（outline/slides/slides_final 等入库文本）。
- - 前端需把选择结果作为 `kb_folder_ids` 传给后端，后端透传到 slide_agent 的 metadata 并在 `KnowledgeBaseSearch` 内执行过滤（见 `5.5.1.2`）。
-- 上传文件不在 PPT 页进行：文件上传与管理统一在知识库页面完成，同时上传并向量化到 personaldb，并保存到 `currentCourse.kbFiles`。
-7. 会话作用域：
-- `sessionId = course.id`。
-8. PPT 生成完成后“产物入库”（写入 KB 索引）：
-- 调用 `/api/kb/vectorize/text`，`file_id=gen:{courseId}:{unitId}:slides`，`folder_id=1`。
-- `content` 推荐拼成 markdown：每页用 `## Slide N` + 标题/要点/备注，便于 KB 检索与引用。
+- [x] 1. 在 `PPTView` 中使用真实模板接口替换 mock 逻辑。
+- [x] 2. 接入 `/api/tools/aippt` SSE 流，处理增量页生成。
+- [x] 3. 统一 SSE 解析策略（必须与旧前端一致），覆盖跨 chunk、多行 `data:`、`\r\n`、`[DONE]`、```json 围栏：
+  - [x] 以“空行分隔事件”作为解析边界（见 `5.6.1`）。
+  - [x] 单条事件内拼接多行 `data:` 得到 payload。
+  - [x] 兼容 ```json 围栏并做容错解析。
+- [ ] 4. 将生成结果写入单元状态，并提供进入编辑器入口（“进行编辑”）。
+  - [x] 生成结果写入单元状态（`presentation` + `editorDocument`）。
+  - [ ] “进行编辑”入口与路由（阶段 E）。
+- [x] 5. 模板契约与生成管线对齐（沿用 ai2ppt 逻辑）：
+  - [x] 模板列表：`GET /api/templates`。
+  - [x] 模板详情：`GET /api/data/${templateId}.json`（包含 `slides/theme/width/height`）。
+  - [x] 生成流：`POST /api/tools/aippt` 返回的每个 SSE payload 解析为 `AIPPTSlide`（JSON）。
+  - [x] 由 “模板 slides + AIPPTSlide” 生成可编辑 `Slide[]`（与编辑器一致的数据结构），复用 `AIPPTGenerator`（见 `5.6.3`），并写入 `CourseUnit.editorDocument`。
+- [x] 6. 高级开关（可选，但建议保留 ai2ppt 功能点）：
+  - [x] `generateFromWebSearch` 默认打开（使用网络搜索生成）。
+  - [x] `generateFromUploadedFile` 默认打开（使用知识库生成）；当知识库无 `ready` 文件时自动关闭/禁用。
+  - [x] KB 检索范围（生成时可选）：
+    - [x] 默认仅引用 `folder_id=0` 上传素材（KB 素材）。
+    - [x] 可选包含 `folder_id=1` 生成产物（outline/slides/slides_final 等入库文本）。
+    - [x] 前端把选择结果作为 `kb_folder_ids` 传给后端，后端透传到 slide_agent 的 metadata 并在 `KnowledgeBaseSearch` 内执行过滤（见 `5.5.1.2`）。
+  - [x] 上传文件不在 PPT 页进行：文件上传与管理统一在知识库页面完成，并同步到 `currentCourse.kbFiles`。
+- [x] 7. 会话作用域：`sessionId = course.id`。
+- [x] 8. PPT 生成完成后“产物入库”（写入 KB 索引）：
+  - [x] 调用 `/api/kb/vectorize/text`，`file_id=gen:{courseId}:{unitId}:slides`，`folder_id=1`。
+  - [x] `content` 推荐拼成 markdown：每页用 `## Slide N` + 标题/要点/备注，便于 KB 检索与引用。
 - DoD：
-1. 生成过程可见增量页面增长。
-2. 完成后可稳定回显、可重新生成。
-3. 预览页渲染效果与编辑器一致（同一套 renderer/主题/比例）。
+  - [x] 生成过程可见增量页面增长。
+  - [ ] 完成后可稳定回显、可重新生成（待联调验证）。
+  - [ ] 预览页渲染效果与编辑器一致（同一套 renderer/主题/比例）（阶段 E）。
 
 ### 阶段 E：编辑器独立页 + 工作台预览
 0. 工具链与依赖对齐（编辑器体量最大，需优先保证可编译）：

@@ -17,6 +17,7 @@ export interface KBFile {
   status: 'uploading' | 'processing' | 'ready' | 'error';
   uploadedAt: Date;
   progress?: number;
+  folderId?: number;
 }
 
 interface LessonPlanSection {
@@ -62,6 +63,22 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+export interface EditorViewport {
+  size: number;
+  ratio: number;
+}
+
+export interface EditorDocument {
+  title: string;
+  templateId: string;
+  width: number;
+  height: number;
+  theme: any;
+  slides: any[];
+  viewport: EditorViewport;
+  updatedAt: number;
+}
+
 export interface CourseUnit {
   id: string;
   title: string;
@@ -70,6 +87,7 @@ export interface CourseUnit {
   lessonPlan?: LessonPlan;
   presentation?: Presentation;
   selectedTemplateId?: string;
+  editorDocument?: EditorDocument;
 }
 
 export interface CourseGroup {

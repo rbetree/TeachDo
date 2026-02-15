@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import type { CourseGroup, CourseUnit, Presentation, PPTTemplate } from '#root/types';
 import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
-import PptxGenJS from 'pptxgenjs';
+import type { AIPPTSlide } from '@/editor-runtime/types/AIPPT';
+import { createAipptGenerator, type ImgPoolItem } from '@/editor-runtime/aippt/aipptGenerator';
 
 interface Props {
   currentCourse: CourseGroup;
@@ -19,6 +21,7 @@ interface Emits {
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const { t } = useI18n();
+const router = useRouter();
 
 const loading = ref(false);
 const presentation = ref<Presentation | null>(null);
@@ -31,6 +34,114 @@ const hasOutline = computed(() => !!props.currentUnit?.outlineContent);
 const selectedTemplate = computed(() => templates.value.find((item) => item.id === selectedTemplateId.value) || null);
 const slides = computed(() => presentation.value?.slides ?? []);
 const currentSlide = computed(() => slides.value[currentSlideIndex.value]);
+
+const advancedOpen = ref(false);
+const generateFromWebSearch = ref(true);
+const generateFromUploadedFile = ref(true);
+const includeGeneratedKb = ref(false);
+
+const kbFolderIds = computed<number[]>(() => (includeGeneratedKb.value ? [0, 1] : [0]));
+const readyKbFileCount = computed(() => {
+  const allowed = new Set(kbFolderIds.value);
+  const list = props.currentCourse.kbFiles || [];
+  return list.filter((f) => f.status === 'ready' && allowed.has(typeof f.folderId === 'number' ? f.folderId : 0)).length;
+});
+const hasReadyKbFiles = computed(() => readyKbFileCount.value > 0);
+
+watch(
+  hasReadyKbFiles,
+  (ok) => {
+    if (!ok && generateFromUploadedFile.value) {
+      generateFromUploadedFile.value = false;
+    }
+  },
+  { immediate: true },
+);
+
+const goToKnowledgeBase = () => {
+  router.push({ name: 'course-tab', params: { courseId: props.currentCourse.id, tab: 'kb' } });
+};
+
+const mapAipptSlideToPreview = (slide: AIPPTSlide): Presentation['slides'][number] | null => {
+  if (!slide) return null;
+
+  if (slide.type === 'cover') {
+    return {
+      title: slide.data.title || '封面',
+      content: slide.data.text ? [slide.data.text] : [],
+      notes: '',
+    };
+  }
+
+  if (slide.type === 'contents') {
+    return {
+      title: '目录',
+      content: slide.data.items || [],
+      notes: '',
+    };
+  }
+
+  if (slide.type === 'transition') {
+    const lines = [slide.data.text].filter(Boolean) as string[];
+    return {
+      title: slide.data.title || '章节',
+      content: lines,
+      notes: '',
+    };
+  }
+
+  if (slide.type === 'content') {
+    const contentLines = (slide.data.items || []).map((it: any) => {
+      if (it?.kind === 'chart') return `图表：${it.title || it.chartType || 'chart'}`;
+      if (it?.kind === 'image') return `图片：${it.title || ''} ${it.text || ''}`.trim();
+      if (it?.kind === 'text') return `${it.title || ''}：${it.text || ''}`.replace(/^：/, '');
+      // legacy {title,text}
+      if (typeof it?.title === 'string' && typeof it?.text === 'string') return `${it.title}：${it.text}`;
+      return String(it ?? '');
+    });
+    return {
+      title: slide.data.title || '内容',
+      content: contentLines.filter((x) => x && x.trim().length > 0),
+      notes: '',
+    };
+  }
+
+  if (slide.type === 'reference') {
+    const refs = slide.data.references || [];
+    return {
+      title: slide.data.title || '参考资料',
+      content: refs.map((r: any) => r?.text).filter(Boolean),
+      notes: '',
+    };
+  }
+
+  if (slide.type === 'end') {
+    return {
+      title: '结束',
+      content: [],
+      notes: '',
+    };
+  }
+
+  return null;
+};
+
+const buildSlidesMarkdown = (unitTitle: string, slidesList: Presentation['slides']): string => {
+  const chunks: string[] = [`# ${unitTitle}`];
+
+  slidesList.forEach((slide, index) => {
+    chunks.push(`## Slide ${index + 1}: ${slide.title}`);
+    if (slide.content?.length) {
+      chunks.push(slide.content.map((c) => `- ${c}`).join('\n'));
+    }
+    if (slide.notes?.trim()) {
+      chunks.push(`**Speaker Notes:**\n${slide.notes.trim()}`);
+    }
+    chunks.push('---');
+  });
+
+  return chunks.join('\n\n');
+};
 
 const ensureSelectedTemplate = (list: PPTTemplate[]) => {
   if (!list.length) return;
@@ -91,144 +202,92 @@ const handleGenerate = async () => {
   loading.value = true;
   currentSlideIndex.value = 0;
   presentation.value = { theme: template.id, slides: [] };
+  viewState.value = 'PREVIEW';
 
   try {
-    const result = await aiService.generatePPT(
-      props.currentCourse,
-      unit,
-      unit.outlineContent,
-      template,
-      (newSlide) => {
-        presentation.value = {
-          theme: template?.id || '',
-          slides: [...(presentation.value?.slides || []), { title: newSlide.title, content: newSlide.content, notes: newSlide.notes || '' }],
-        };
-      },
-    );
+    const templateData = await aiService.getTemplateFileData(template.id);
+    const templateSlides = (templateData?.slides || []) as any[];
+    const width = Number(templateData?.width || 960);
+    const height = Number(templateData?.height || 540);
+    const theme = templateData?.theme;
 
-    presentation.value = result;
-    viewState.value = 'PREVIEW';
+    const mapper = createAipptGenerator();
+    mapper.reset();
+
+    const editorSlides: any[] = [];
+
+    await aiService.streamAipptSlides({
+      content: unit.outlineContent,
+      sessionId: props.currentCourse.id,
+      language: 'zh',
+      generateFromWebSearch: generateFromWebSearch.value,
+      generateFromUploadedFile: generateFromUploadedFile.value,
+      kbFolderIds: generateFromUploadedFile.value ? kbFolderIds.value : null,
+      onSlide: (slide) => {
+        // 后端可能返回图片池（用于模板图片槽位填充）
+        if (slide.images?.length) {
+          const imgs: ImgPoolItem[] = slide.images.map((img: any) => ({
+            id: String(img.id || Math.random().toString(36).slice(2)),
+            src: String(img.src),
+            width: Number(img.width || 1920),
+            height: Number(img.height || 1080),
+          }));
+          mapper.presetImgPool(imgs);
+        }
+
+        const generated = mapper.generateSlides(templateSlides as any, [slide]);
+        if (generated.length) editorSlides.push(...generated);
+
+        const preview = mapAipptSlideToPreview(slide);
+        if (preview) {
+          presentation.value = {
+            theme: template.id,
+            slides: [...(presentation.value?.slides || []), preview],
+          };
+        }
+      },
+    });
+
+    const result: Presentation = presentation.value || { theme: template.id, slides: [] };
 
     emit('updateUnit', unit.id, {
       presentation: result,
       selectedTemplateId: selectedTemplateId.value,
+      editorDocument: {
+        title: unit.title,
+        templateId: template.id,
+        width,
+        height,
+        theme,
+        slides: editorSlides,
+        viewport: {
+          size: width,
+          ratio: width ? height / width : 0.5625,
+        },
+        updatedAt: Date.now(),
+      },
     });
+
+    // 产物入库（失败不阻断）
+    const md = buildSlidesMarkdown(unit.title, result.slides);
+    void aiService
+      .vectorizeTextToKb({
+        userId: props.currentCourse.id,
+        fileId: `gen:${props.currentCourse.id}:${unit.id}:slides`,
+        fileName: `幻灯片-${unit.title}`,
+        content: md,
+        fileType: 'md',
+        folderId: 1,
+      })
+      .catch((e) => console.warn('PPT 产物入库失败（已忽略）', e));
+
     toast.success(t('ppt.toast.generated'));
   } catch (error) {
     console.error(error);
     toast.error(t('ppt.toast.error'));
+    viewState.value = unit.presentation ? 'PREVIEW' : 'SELECT_TEMPLATE';
   } finally {
     loading.value = false;
-  }
-};
-
-const downloadMarkdown = () => {
-  if (!presentation.value || !props.currentUnit) return;
-
-  const mdContent = presentation.value.slides
-    .map(
-      (slide, i) => `
-# Slide ${i + 1}: ${slide.title}
-
-${slide.content.map((c) => `- ${c}`).join('\n')}
-
-**Speaker Notes:**
-${slide.notes}
-
----
-`,
-    )
-    .join('\n');
-
-  const blob = new Blob([mdContent], { type: 'text/markdown' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${props.currentUnit.title.replace(/\s+/g, '_')}_Slides.md`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-  toast.success(t('ppt.toast.markdown'));
-};
-
-const downloadPPTX = async () => {
-  if (!presentation.value || !props.currentUnit) return;
-
-  const pres = new PptxGenJS();
-  pres.layout = 'LAYOUT_16x9';
-  pres.author = 'TeachDo AI';
-  pres.title = props.currentUnit.title;
-
-  const template = selectedTemplate.value;
-
-  const masterOptions: any = {
-    title: 'MASTER_SLIDE',
-    background: { color: 'FFFFFF' },
-    objects: [
-      { rect: { x: 0, y: '96%', w: '100%', h: '4%', fill: { color: 'F8FAFC' } } },
-      { text: { text: 'Generated by TeachDo', options: { x: 0.2, y: '97%', fontSize: 9, color: '94A3B8' } } },
-    ],
-  };
-
-  if (template?.coverUrl) {
-    masterOptions.background = { path: template.coverUrl };
-  }
-
-  pres.defineSlideMaster(masterOptions);
-
-  presentation.value.slides.forEach((slide) => {
-    const s = pres.addSlide({ masterName: 'MASTER_SLIDE' });
-    s.addShape(pres.ShapeType.rect, {
-      x: '5%',
-      y: '15%',
-      w: '90%',
-      h: '75%',
-      fill: { color: 'FFFFFF', transparency: 15 },
-      line: { color: 'FFFFFF', width: 0 },
-    });
-
-    s.addText(slide.title, {
-      x: '7%',
-      y: '18%',
-      w: '86%',
-      h: 1,
-      fontSize: 32,
-      bold: true,
-      color: '1E293B',
-      fontFace: 'Arial',
-      shadow: { type: 'outer', blur: 3, offset: 2, angle: 45, color: '000000', opacity: 0.1 },
-    });
-
-    if (slide.content && slide.content.length > 0) {
-      const bullets = slide.content.map((line) => ({
-        text: line,
-        options: { breakLine: true, indentLevel: 0 },
-      }));
-      s.addText(bullets, {
-        x: '7%',
-        y: '32%',
-        w: '86%',
-        h: '55%',
-        fontSize: 20,
-        color: '334155',
-        bullet: { code: '2022' },
-        lineSpacing: 36,
-        fontFace: 'Arial',
-      });
-    }
-
-    if (slide.notes) {
-      s.addNotes(slide.notes);
-    }
-  });
-
-  try {
-    await pres.writeFile({ fileName: `${props.currentUnit.title.replace(/\s+/g, '_')}.pptx` });
-    toast.success(t('ppt.toast.pptx'));
-  } catch (e) {
-    console.error('PPT Export failed', e);
-    toast.error(t('ppt.toast.pptx_error'));
   }
 };
 </script>
@@ -243,6 +302,86 @@ const downloadPPTX = async () => {
   </div>
 
   <div v-else class="h-full flex flex-col gap-6">
+    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      <button
+        type="button"
+        class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+        @click="advancedOpen = !advancedOpen"
+      >
+        <div class="flex items-center gap-2">
+          <LucideIcon name="settings-2" :size="18" class="text-slate-500" />
+          <div class="font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.title') }}</div>
+        </div>
+        <LucideIcon
+          name="chevron-down"
+          :size="18"
+          class="text-slate-400 transition-transform"
+          :class="advancedOpen ? 'rotate-180' : ''"
+        />
+      </button>
+
+      <div v-if="advancedOpen" class="px-4 pb-4 space-y-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
+            <input
+              v-model="generateFromWebSearch"
+              :disabled="loading"
+              type="checkbox"
+              class="mt-1 h-4 w-4 accent-indigo-600 disabled:opacity-50"
+            />
+            <div class="min-w-0">
+              <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.web_search') }}</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ t('ppt.advanced.web_search_desc') }}</div>
+            </div>
+          </label>
+
+          <label
+            class="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30"
+            :class="!hasReadyKbFiles ? 'opacity-60' : ''"
+          >
+            <input
+              v-model="generateFromUploadedFile"
+              :disabled="loading || !hasReadyKbFiles"
+              type="checkbox"
+              class="mt-1 h-4 w-4 accent-indigo-600 disabled:opacity-50"
+            />
+            <div class="min-w-0">
+              <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.kb') }}</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ t('ppt.advanced.kb_desc') }}</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/30">
+          <div class="min-w-0">
+            <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.kb_scope') }}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ t('ppt.advanced.kb_scope_desc') }}</div>
+          </div>
+          <label class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+            <input
+              v-model="includeGeneratedKb"
+              :disabled="loading"
+              type="checkbox"
+              class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
+            />
+            <span>{{ t('ppt.advanced.kb_include_generated') }}</span>
+          </label>
+        </div>
+
+        <div class="flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+          <div>{{ t('ppt.advanced.kb_ready', { count: readyKbFileCount }) }}</div>
+          <button
+            v-if="!hasReadyKbFiles"
+            type="button"
+            class="text-indigo-600 dark:text-indigo-300 font-bold hover:underline"
+            @click="goToKnowledgeBase"
+          >
+            {{ t('ppt.advanced.goto_kb') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="viewState === 'SELECT_TEMPLATE'" class="flex-1 flex flex-col">
       <div class="mb-6">
         <h2 class="text-2xl font-bold text-slate-900 dark:text-white">{{ t('ppt.choose_template') }}</h2>
@@ -297,21 +436,6 @@ const downloadPPTX = async () => {
           </div>
         </div>
         <div class="flex gap-2 flex-wrap justify-end">
-          <button
-            type="button"
-            class="hidden md:flex px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors items-center gap-2"
-            @click="downloadMarkdown"
-          >
-            <LucideIcon name="file-down" :size="16" /> {{ t('ppt.download_md') }}
-          </button>
-          <button
-            type="button"
-            class="px-4 py-2 border border-orange-200 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 rounded-lg font-bold text-sm hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors flex items-center gap-2"
-            @click="downloadPPTX"
-          >
-            <LucideIcon name="download" :size="16" /> {{ t('ppt.download_pptx') }}
-          </button>
-          <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
           <button
             type="button"
             class="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"

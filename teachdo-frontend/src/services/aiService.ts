@@ -1,5 +1,6 @@
 import type { CourseGroup, CourseUnit, LessonPlan, Presentation, PPTTemplate, ChatMessage } from "#root/types";
 import { SseParser, stripJsonCodeFence } from "@/utils/sse";
+import type { AIPPTSlide } from "@/editor-runtime/types/AIPPT";
 
 /**
  * AI Service Layer - TeachDo x ai2ppt Integration
@@ -54,18 +55,17 @@ export const aiService = {
         const res = await fetch(apiUrl("/templates"));
         if (res.ok) {
           const wrapper = await res.json();
-          // ai2ppt returns { data: [...], message: "Success" }
+          // main_api returns { data: [...] }
           const list = wrapper.data || [];
           
           return list.map((t: any) => ({
-            id: t.id || t.name, // Use ID from backend
-            name: t.name,
+            id: t.id || t.name,
+            name: t.name || t.id,
             thumbnailColor: 'bg-slate-200',
-            styleDescription: t.name,
-            // Construct static resource URL for cover
-            coverUrl: t.image_path ? apiUrl(`/data/${t.image_path}`) : undefined,
-            // Store the full template object for generation
-            rawTemplate: t
+            styleDescription: t.name || t.id,
+            // main_api already returns /api/data/*.jpg
+            coverUrl: typeof t.cover === 'string' ? t.cover : undefined,
+            rawTemplate: t,
           }));
         }
       } catch (e) {
@@ -73,6 +73,208 @@ export const aiService = {
       }
     }
     return MOCK_TEMPLATES;
+  },
+
+  /**
+   * GET /data/{templateId}.json
+   * 获取模板详情（slides/theme/width/height 等）
+   */
+  async getTemplateFileData(templateId: string): Promise<any> {
+    const available = await checkBackend();
+    if (!available) throw new Error("Backend service is offline. Cannot fetch template data.");
+
+    const id = (templateId || "").trim();
+    if (!id) throw new Error("templateId is required.");
+
+    const res = await fetch(apiUrl(`/data/${id}.json`));
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `Failed to fetch template data: ${res.statusText}`);
+    }
+    return await res.json();
+  },
+
+  /**
+   * POST /tools/aippt (SSE, JSON per slide)
+   * 返回 AIPPTSlide[]；并可通过 onSlide 增量回调。
+   */
+  async streamAipptSlides(input: {
+    content: string;
+    sessionId: string;
+    language?: string;
+    generateFromWebSearch?: boolean;
+    generateFromUploadedFile?: boolean;
+    kbFolderIds?: number[] | null;
+    onSlide?: (slide: AIPPTSlide) => void;
+  }): Promise<AIPPTSlide[]> {
+    const available = await checkBackend();
+    if (!available) throw new Error("Backend service is offline. Cannot generate PPT.");
+
+    const payload = {
+      content: input.content,
+      language: input.language ?? "zh",
+      sessionId: input.sessionId,
+      generateFromWebSearch: input.generateFromWebSearch ?? true,
+      generateFromUploadedFile: input.generateFromUploadedFile ?? false,
+      kb_folder_ids: input.kbFolderIds ?? null,
+    };
+
+    const response = await fetch(apiUrl("/tools/aippt"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(text || `Backend PPT generation failed: ${response.statusText}`);
+    }
+    if (!response.body) throw new Error("No response body");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const parser = new SseParser();
+
+    const slides: AIPPTSlide[] = [];
+    let finished = false;
+
+    while (!finished) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const messages = parser.feed(chunk);
+
+      for (const msg of messages) {
+        const raw = msg.data.trim();
+        if (!raw) continue;
+        if (raw === "[DONE]") {
+          finished = true;
+          break;
+        }
+
+        const candidate = stripJsonCodeFence(raw).trim();
+        let obj: any;
+        try {
+          obj = JSON.parse(candidate);
+        } catch {
+          // 非 JSON（例如零散文本片段）直接忽略
+          continue;
+        }
+
+        const type = obj?.type;
+        if (type === "error") {
+          throw new Error(obj?.text || "PPT generation error.");
+        }
+
+        if (type === "cover" || type === "contents" || type === "transition" || type === "content" || type === "reference" || type === "end") {
+          const slide = obj as AIPPTSlide;
+          slides.push(slide);
+          input.onSlide?.(slide);
+        }
+      }
+    }
+
+    return slides;
+  },
+
+  /**
+   * POST /kb/upload
+   * 上传知识库文件并向量化（folder_id: 0=上传素材，1=生成产物）。
+   */
+  async kbUpload(input: { userId: string; file: File; folderId?: number }): Promise<{
+    user_id: string;
+    file_id: string;
+    file_name: string;
+    file_type: string;
+    folder_id: number;
+    status: string;
+  }> {
+    const available = await checkBackend();
+    if (!available) throw new Error("Backend service is offline. Cannot upload KB file.");
+
+    const formData = new FormData();
+    formData.append("user_id", input.userId);
+    formData.append("folder_id", String(input.folderId ?? 0));
+    formData.append("file_type", input.file.name.split(".").pop() || "unknown");
+    formData.append("file", input.file);
+
+    const res = await fetch(apiUrl("/kb/upload"), {
+      method: "POST",
+      body: formData,
+    });
+
+    let wrapper: any;
+    try {
+      wrapper = await res.json();
+    } catch {
+      wrapper = null;
+    }
+
+    if (!res.ok || !wrapper?.ok) {
+      const message = wrapper?.error?.message || res.statusText || "KB upload failed.";
+      throw new Error(message);
+    }
+
+    return wrapper.data;
+  },
+
+  /**
+   * GET /kb/files/{user_id}
+   */
+  async kbListFiles(input: { userId: string; folderId?: number }): Promise<
+    Array<{
+      user_id: string;
+      file_id: string;
+      file_name: string;
+      file_type: string;
+      folder_id: number;
+    }>
+  > {
+    const available = await checkBackend();
+    if (!available) throw new Error("Backend service is offline. Cannot list KB files.");
+
+    const userId = encodeURIComponent(input.userId);
+    const qs = typeof input.folderId === "number" ? `?folder_id=${encodeURIComponent(String(input.folderId))}` : "";
+    const res = await fetch(apiUrl(`/kb/files/${userId}${qs}`));
+
+    let wrapper: any;
+    try {
+      wrapper = await res.json();
+    } catch {
+      wrapper = null;
+    }
+
+    if (!res.ok || !wrapper?.ok) {
+      const message = wrapper?.error?.message || res.statusText || "KB list failed.";
+      throw new Error(message);
+    }
+
+    return wrapper.data || [];
+  },
+
+  /**
+   * DELETE /kb/files/{user_id}/{file_id}
+   */
+  async kbDeleteFile(input: { userId: string; fileId: string }): Promise<void> {
+    const available = await checkBackend();
+    if (!available) throw new Error("Backend service is offline. Cannot delete KB file.");
+
+    const userId = encodeURIComponent(input.userId);
+    const fileId = encodeURIComponent(input.fileId);
+    const res = await fetch(apiUrl(`/kb/files/${userId}/${fileId}`), { method: "DELETE" });
+
+    let wrapper: any;
+    try {
+      wrapper = await res.json();
+    } catch {
+      wrapper = null;
+    }
+
+    if (!res.ok || !wrapper?.ok) {
+      const message = wrapper?.error?.message || res.statusText || "KB delete failed.";
+      throw new Error(message);
+    }
   },
 
   /**
@@ -228,6 +430,7 @@ export const aiService = {
     template: PPTTemplate,
     onSlideGenerated?: (slide: any) => void
   ): Promise<Presentation> {
+    // 兼容旧调用：阶段 D 已改为 streamAipptSlides + 模板映射，这里保留但不再使用
     const available = await checkBackend();
     if (!available) throw new Error("Backend service is offline. Cannot generate PPT.");
 

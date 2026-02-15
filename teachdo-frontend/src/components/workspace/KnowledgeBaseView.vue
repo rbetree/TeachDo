@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { CourseGroup, KBFile } from '#root/types';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useI18n } from 'vue-i18n';
+import { aiService } from '@/services/aiService';
 
 interface Props {
   currentCourse: CourseGroup;
@@ -20,6 +21,8 @@ const { t } = useI18n();
 const isDragging = ref(false);
 const searchQuery = ref('');
 const uploadTimers = new Map<string, number>();
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const syncing = ref(false);
 
 const files = computed(() => props.currentCourse.kbFiles || []);
 
@@ -40,6 +43,36 @@ const updateFiles = (next: KBFile[]) => {
   emit('updateCourse', { kbFiles: next });
 };
 
+const mergeServerFiles = (serverFiles: Array<{ file_id: string; file_name: string; file_type: string; folder_id: number }>) => {
+  const now = new Date();
+  const pending = files.value.filter((f) => f.status === 'uploading' || f.status === 'processing');
+  const mapped = serverFiles.map((it) => {
+    const existing = files.value.find((f) => f.id === it.file_id);
+    return {
+      id: it.file_id,
+      name: it.file_name || it.file_id,
+      size: existing?.size || 0,
+      type: it.file_type || 'unknown',
+      status: 'ready' as const,
+      uploadedAt: existing?.uploadedAt || now,
+      folderId: typeof it.folder_id === 'number' ? it.folder_id : 0,
+    } satisfies KBFile;
+  });
+  updateFiles([...pending, ...mapped]);
+};
+
+const refreshFromBackend = async () => {
+  syncing.value = true;
+  try {
+    const list = await aiService.kbListFiles({ userId: props.currentCourse.id });
+    mergeServerFiles(list);
+  } catch (e) {
+    console.warn('知识库列表同步失败（已忽略）', e);
+  } finally {
+    syncing.value = false;
+  }
+};
+
 const handleDragOver = (e: DragEvent) => {
   e.preventDefault();
   isDragging.value = true;
@@ -56,40 +89,81 @@ const handleDrop = (e: DragEvent) => {
   const droppedFiles = Array.from(e.dataTransfer?.files || []);
   if (droppedFiles.length > 0) {
     const first = droppedFiles[0];
-    if (first) simulateUpload(first);
+    if (first) void uploadFile(first);
   }
 };
 
-const simulateUpload = (file: File) => {
+const openFilePicker = () => {
+  fileInputRef.value?.click();
+};
+
+const handleFilePicked = (e: Event) => {
+  const input = e.target as HTMLInputElement | null;
+  const file = input?.files?.[0];
+  if (input) input.value = '';
+  if (!file) return;
+  void uploadFile(file);
+};
+
+const uploadFile = async (file: File) => {
+  const localId = `temp:${Date.now()}`;
   const newFile: KBFile = {
-    id: Date.now().toString(),
+    id: localId,
     name: file.name,
     size: file.size,
     type: file.name.split('.').pop() || 'unknown',
     status: 'uploading',
     uploadedAt: new Date(),
     progress: 0,
+    folderId: 0,
   };
 
   updateFiles([...files.value, newFile]);
 
   let progress = 0;
   const timer = window.setInterval(() => {
-    progress += 10;
-    if (progress > 100) {
-      progress = 100;
-    }
-    if (progress >= 100) {
-      window.clearInterval(timer);
-      uploadTimers.delete(newFile.id);
-      updateFileStatus(newFile.id, 'processing', 100);
-      // 与 React 版保持一致的索引等待
-      window.setTimeout(() => updateFileStatus(newFile.id, 'ready'), 2000);
-    } else {
-      updateFileStatus(newFile.id, 'uploading', progress);
-    }
-  }, 300);
-  uploadTimers.set(newFile.id, timer);
+    progress += 8;
+    if (progress > 90) progress = 90;
+    updateFileStatus(localId, 'uploading', progress);
+  }, 250);
+  uploadTimers.set(localId, timer);
+
+  try {
+    updateFileStatus(localId, 'processing', 95);
+
+    const res = await aiService.kbUpload({
+      userId: props.currentCourse.id,
+      file,
+      folderId: 0,
+    });
+
+    window.clearInterval(timer);
+    uploadTimers.delete(localId);
+
+    const next = files.value.map((f) =>
+      f.id === localId
+        ? {
+            ...f,
+            id: res.file_id,
+            name: res.file_name || file.name,
+            type: res.file_type || f.type,
+            status: 'ready',
+            progress: 100,
+            folderId: res.folder_id ?? 0,
+          }
+        : f,
+    );
+    updateFiles(next);
+    toast.success(t('kb.toast.uploaded'));
+
+    await refreshFromBackend();
+  } catch (e) {
+    window.clearInterval(timer);
+    uploadTimers.delete(localId);
+    updateFileStatus(localId, 'error');
+    console.error(e);
+    toast.error(t('kb.toast.upload_failed'));
+  }
 };
 
 const updateFileStatus = (fileId: string, status: KBFile['status'], progress?: number) => {
@@ -97,12 +171,35 @@ const updateFileStatus = (fileId: string, status: KBFile['status'], progress?: n
   updateFiles(next);
 };
 
-const handleDelete = (id: string) => {
+const handleDelete = async (id: string) => {
   if (!confirm(t('kb.confirm.delete'))) return;
-  const next = files.value.filter((f) => f.id !== id);
-  updateFiles(next);
-  toast.success(t('kb.action.delete'));
+  const target = files.value.find((f) => f.id === id);
+  if (!target) return;
+
+  // 本地临时条目，直接删除即可
+  if (id.startsWith('temp:') || target.status === 'error') {
+    const timer = uploadTimers.get(id);
+    if (timer) window.clearInterval(timer);
+    uploadTimers.delete(id);
+    updateFiles(files.value.filter((f) => f.id !== id));
+    toast.success(t('kb.action.delete'));
+    return;
+  }
+
+  try {
+    await aiService.kbDeleteFile({ userId: props.currentCourse.id, fileId: id });
+    updateFiles(files.value.filter((f) => f.id !== id));
+    toast.success(t('kb.action.delete'));
+    await refreshFromBackend();
+  } catch (e) {
+    console.error(e);
+    toast.error(t('kb.toast.delete_failed'));
+  }
 };
+
+onMounted(() => {
+  void refreshFromBackend();
+});
 
 onBeforeUnmount(() => {
   uploadTimers.forEach((timer) => window.clearInterval(timer));
@@ -112,6 +209,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="h-full flex flex-col gap-6">
+    <input ref="fileInputRef" type="file" class="hidden" @change="handleFilePicked" />
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
       <div>
         <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -123,6 +221,9 @@ onBeforeUnmount(() => {
         </p>
       </div>
       <div class="flex items-center gap-3 w-full md:w-auto">
+        <div v-if="syncing" class="hidden md:flex items-center gap-2 text-xs font-bold text-slate-400">
+          <LucideIcon name="loader-2" :size="14" class="animate-spin" /> {{ t('kb.status.syncing') }}
+        </div>
         <div class="relative flex-1 md:w-64">
           <LucideIcon name="search" :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -137,13 +238,14 @@ onBeforeUnmount(() => {
 
     <div class="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden">
       <div class="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
-        <div
-          class="m-4 p-8 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-all duration-200 cursor-pointer"
-          :class="isDragging ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800'"
-          @dragover.prevent="handleDragOver"
-          @dragleave.prevent="handleDragLeave"
-          @drop="handleDrop"
-        >
+	        <div
+	          class="m-4 p-8 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-all duration-200 cursor-pointer"
+	          :class="isDragging ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800'"
+	          @click="openFilePicker"
+	          @dragover.prevent="handleDragOver"
+	          @dragleave.prevent="handleDragLeave"
+	          @drop="handleDrop"
+	        >
           <div class="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-sm mb-3">
             <LucideIcon name="upload-cloud" :size="24" :class="isDragging ? 'text-indigo-600' : 'text-slate-400'" />
           </div>

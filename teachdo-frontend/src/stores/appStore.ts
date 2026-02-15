@@ -44,6 +44,7 @@ function createDemoCourses(): CourseGroup[] {
           type: 'pdf',
           status: 'ready',
           uploadedAt: new Date(),
+          folderId: 0,
         },
       ],
       units: [
@@ -80,6 +81,7 @@ function reviveCourses(raw: unknown): CourseGroup[] {
       ? course.kbFiles.map((file: KBFile) => ({
           ...file,
           uploadedAt: file?.uploadedAt ? new Date(file.uploadedAt) : new Date(),
+          folderId: typeof file?.folderId === 'number' ? file.folderId : 0,
         }))
       : [],
     chatHistory: Array.isArray(course?.chatHistory)
