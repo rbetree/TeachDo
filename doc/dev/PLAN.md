@@ -295,8 +295,8 @@
 ### 6.0 当前进度（滚动更新）
 - 更新：2026-02-15
 - 当前仓库状态：
-  - [x] 已完成迁移并初始化新仓库（已 `git init`，但 master 目前还没有 commit）
-  - [ ] 建议在继续大改前先完成一次“初始提交”（避免后续改动与迁移基线混在一起）
+  - [x] 已完成迁移并初始化新仓库（已 `git init`）
+  - [x] 已完成一次“初始提交”（迁移基线已固定，后续改动可独立追踪）
   - [ ] 下一步优先级：阶段 A（仓库与启动链路切换）-> 阶段 B（工作台路由化）
 
 ### 阶段 A：仓库与启动链路切换
@@ -304,10 +304,10 @@
   - [x] 迁移代码到新目录（排除 `.git/` 与运行期目录如 `venv/`、`**/node_modules/`、`var/`、`logs/`、`**/__pycache__/` 等）
   - [x] 在新目录执行 `git init`
   - [ ] 配置新的 remote
-  - [ ] 首次 `git commit`（推荐：`chore: initial import`；commit 前先确认 `.gitignore` 不会提交本地环境文件）
+  - [x] 首次 `git commit`（`chore: initial import`；commit 前确认 `.gitignore` 不会提交本地环境文件）
 - [x] 2. 修正忽略规则（在新仓库中执行）：
   - [x] 确认根目录 `.gitignore` 未忽略 `/teachdo-frontend`
-  - [ ] （可选）补充忽略：`.run/`、`.kilocode/`（如不希望提交 IDE/工具配置目录）
+  - [x] （可选）补充忽略：`.run/`、`.kilocode/`（如不希望提交 IDE/工具配置目录）
 - [ ] 3. 修改 `start.py`：前端目录从 `frontend/` 切换为 `teachdo-frontend/`。
   - 同步统一端口：`teachdo-frontend/vite.config.ts` 当前 `server.port=3000`，因此 `start.py` 默认 `FRONTEND_PORT` 也应调整为 `3000`（保留环境变量覆盖能力）。
 - [ ] 4. 为 `teachdo-frontend/vite.config.ts` 增加 dev proxy：
