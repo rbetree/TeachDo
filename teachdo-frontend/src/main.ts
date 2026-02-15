@@ -9,10 +9,10 @@ import { toast } from './utils/toast';
 
 const app = createApp(App);
 const pinia = createPinia();
-const router = createAppRouter(pinia);
 
 app.use(pinia);
 setupAppStore(pinia);
+const router = createAppRouter(pinia);
 app.use(router);
 app.use(i18n);
 

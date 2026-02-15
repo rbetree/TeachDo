@@ -60,7 +60,7 @@ const handleCreateCourse = () => {
 };
 
 const handleEnterWorkspace = (courseId: string) => {
-  router.push({ name: 'course-workspace', params: { courseId } });
+  router.push({ name: 'course', params: { courseId } });
 };
 </script>
 

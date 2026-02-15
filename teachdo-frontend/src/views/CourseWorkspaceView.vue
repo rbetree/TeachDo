@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import UnitSidebar from '@/components/workspace/UnitSidebar.vue';
@@ -15,6 +15,7 @@ import { ViewState } from '#root/types';
 import type { IconName } from '@/components/common/LucideIcon.vue';
 
 const router = useRouter();
+const route = useRoute();
 const store = useAppStore();
 const { t } = useI18n();
 
@@ -22,8 +23,32 @@ const course = computed(() => store.currentCourse);
 const activeUnit = computed<CourseUnit | null>(() => store.currentUnit);
 const units = computed(() => course.value?.units ?? []);
 
-const globalMode = ref<'UNIT_VIEW' | ViewState.KNOWLEDGE_BASE | ViewState.ASSISTANT>('UNIT_VIEW');
-const activeUnitTab = ref<'OUTLINE' | 'LESSON' | 'PPT'>('OUTLINE');
+type UnitTab = 'outline' | 'lesson' | 'ppt';
+type WorkspaceTab = UnitTab | 'kb' | 'assistant';
+
+const normalizeParam = (value: unknown): string | null => {
+  if (Array.isArray(value)) return value.length ? value[0] ?? null : null;
+  return typeof value === 'string' ? value : null;
+};
+
+const routeTab = computed<WorkspaceTab>(() => {
+  const tabRaw = normalizeParam(route.params.tab)?.toLowerCase();
+  if (tabRaw === 'kb' || tabRaw === 'assistant' || tabRaw === 'outline' || tabRaw === 'lesson' || tabRaw === 'ppt') {
+    return tabRaw;
+  }
+  return 'outline';
+});
+
+const globalMode = computed<'UNIT_VIEW' | ViewState.KNOWLEDGE_BASE | ViewState.ASSISTANT>(() => {
+  if (routeTab.value === 'kb') return ViewState.KNOWLEDGE_BASE;
+  if (routeTab.value === 'assistant') return ViewState.ASSISTANT;
+  return 'UNIT_VIEW';
+});
+
+const activeUnitTab = computed<UnitTab>(() => {
+  if (routeTab.value === 'lesson' || routeTab.value === 'ppt') return routeTab.value;
+  return 'outline';
+});
 const isSidebarCollapsed = ref(false);
 const isMobileSidebarOpen = ref(false);
 
@@ -48,6 +73,16 @@ watch(
   { immediate: true },
 );
 
+const goToUnitTab = (unitId: string, tab: UnitTab) => {
+  if (!course.value) return;
+  router.push({ name: 'course-unit', params: { courseId: course.value.id, unitId, tab } });
+};
+
+const goToCourseTab = (tab: 'kb' | 'assistant') => {
+  if (!course.value) return;
+  router.push({ name: 'course-tab', params: { courseId: course.value.id, tab } });
+};
+
 const handleAddUnit = (title: string) => {
   if (!course.value) return;
   const newUnit: CourseUnit = {
@@ -58,23 +93,23 @@ const handleAddUnit = (title: string) => {
   };
   store.updateCourseUnits(course.value.id, (list) => [...list, newUnit]);
   store.selectUnit(newUnit.id);
-  globalMode.value = 'UNIT_VIEW';
-  activeUnitTab.value = 'OUTLINE';
+  goToUnitTab(newUnit.id, activeUnitTab.value);
 };
 
 const handleSelectUnit = (unitId: string) => {
   store.selectUnit(unitId);
-  globalMode.value = 'UNIT_VIEW';
+  goToUnitTab(unitId, activeUnitTab.value);
 };
 
 const handleSelectGlobal = (view: ViewState) => {
   if (view === ViewState.KNOWLEDGE_BASE || view === ViewState.ASSISTANT) {
-    globalMode.value = view;
+    goToCourseTab(view === ViewState.KNOWLEDGE_BASE ? 'kb' : 'assistant');
   }
 };
 
-const handleTabChange = (tab: 'OUTLINE' | 'LESSON' | 'PPT') => {
-  activeUnitTab.value = tab;
+const handleTabChange = (tab: UnitTab) => {
+  if (!activeUnit.value) return;
+  goToUnitTab(activeUnit.value.id, tab);
 };
 
 const goBack = () => {
@@ -84,10 +119,10 @@ const goBack = () => {
 const tabConfig = computed(
   () =>
     [
-      { id: 'OUTLINE', label: t('workspace.tab.outline'), icon: 'layout-list' },
-      { id: 'LESSON', label: t('workspace.tab.lesson'), icon: 'file-text' },
-      { id: 'PPT', label: t('workspace.tab.ppt'), icon: 'presentation' },
-    ] satisfies { id: 'OUTLINE' | 'LESSON' | 'PPT'; label: string; icon: IconName }[],
+      { id: 'outline', label: t('workspace.tab.outline'), icon: 'layout-list' },
+      { id: 'lesson', label: t('workspace.tab.lesson'), icon: 'file-text' },
+      { id: 'ppt', label: t('workspace.tab.ppt'), icon: 'presentation' },
+    ] satisfies { id: UnitTab; label: string; icon: IconName }[],
 );
 
 const persistActiveUnit = (unitId: string, updates: Partial<CourseUnit>) => {
@@ -178,8 +213,8 @@ const persistCourse = (updates: Partial<CourseGroup>) => {
             </div>
           </header>
 
-          <div class="flex-1 overflow-hidden">
-            <div v-if="activeUnitTab === 'OUTLINE'" class="h-full p-6 md:p-10">
+            <div class="flex-1 overflow-hidden">
+            <div v-if="activeUnitTab === 'outline'" class="h-full p-6 md:p-10">
               <div class="h-full max-w-6xl mx-auto">
                 <OutlineView
                   v-if="course && activeUnit"
@@ -190,14 +225,14 @@ const persistCourse = (updates: Partial<CourseGroup>) => {
               </div>
             </div>
 
-            <div v-else-if="activeUnitTab === 'LESSON'" class="h-full p-6 md:p-10">
+            <div v-else-if="activeUnitTab === 'lesson'" class="h-full p-6 md:p-10">
               <div class="h-full max-w-6xl mx-auto">
                 <LessonPlanView
                   v-if="course && activeUnit"
                   :current-course="course"
                   :current-unit="activeUnit"
                   @update-unit="persistActiveUnit"
-                  @navigate="(view) => activeUnitTab = view === ViewState.OUTLINE ? 'OUTLINE' : 'LESSON'"
+                  @navigate="(view) => (view === ViewState.OUTLINE ? handleTabChange('outline') : undefined)"
                 />
               </div>
             </div>

@@ -18,8 +18,7 @@ const backendConnected = ref<boolean | null>(null);
 const isChecking = ref(false);
 const lastCheckAt = ref(0);
 
-const sanitizedBase = (import.meta.env.VITE_API_BASE ?? 'http://localhost:6800').replace(/\/$/, '');
-const healthUrl = `${sanitizedBase}/healthz`;
+const healthUrl = '/api/healthz';
 
 const currentCourseName = computed(() => {
   const param = route.params.courseId;
@@ -29,7 +28,7 @@ const currentCourseName = computed(() => {
   return target?.name ?? '';
 });
 
-const isHome = computed(() => ['workspace', 'course-workspace'].includes((route.name as string) ?? ''));
+const isHome = computed(() => ['workspace', 'course', 'course-tab', 'course-unit'].includes((route.name as string) ?? ''));
 const isAbout = computed(() => route.name === 'about');
 const isSettings = computed(() => route.name === 'settings');
 
