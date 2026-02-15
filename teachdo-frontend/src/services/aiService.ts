@@ -76,7 +76,7 @@ export const aiService = {
   },
 
   /**
-   * POST /tools/aippt_outline (Streaming Text)
+   * POST /tools/aippt_outline_unified (SSE Text)
    * Strictly uses backend. No client-side fallback.
    */
   async generateOutline(course: CourseGroup, unit: CourseUnit, onStream?: (text: string) => void): Promise<string> {
@@ -84,19 +84,31 @@ export const aiService = {
     const available = await checkBackend();
     if (!available) throw new Error("Backend service is offline. Cannot generate outline.");
 
-    const response = await fetch(apiUrl("/tools/aippt_outline"), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        content: `课程：${course.name}\n背景：${course.description}\n单元：${unit.title}`,
-        language: 'chinese',
-        model: 'GLM-4.5-Air', // Configurable via backend ideally, but passed here for now
-        stream: true
-      }),
+    const topic = unit.title?.trim();
+    if (!topic) throw new Error("Unit title is required to generate outline.");
+
+    const content = [
+      `主题：${topic}`,
+      `课程：${course.name}`,
+      course.description ? `课程背景：${course.description}` : "",
+      unit.objectives ? `教学目标：${unit.objectives}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const formData = new FormData();
+    formData.append("content", content);
+    formData.append("language", "chinese");
+    formData.append("user_id", course.id);
+
+    const response = await fetch(apiUrl("/tools/aippt_outline_unified"), {
+      method: "POST",
+      body: formData,
     });
 
     if (!response.ok) {
-        throw new Error(`Backend error: ${response.statusText}`);
+        const text = await response.text().catch(() => "");
+        throw new Error(text || `Backend error: ${response.statusText}`);
     }
 
     if (!response.body) throw new Error("No response body");
@@ -104,14 +116,72 @@ export const aiService = {
     const decoder = new TextDecoder();
     let fullText = '';
 
-    while (true) {
+    const parser = new SseParser();
+    let finished = false;
+
+    while (!finished) {
       const { done, value } = await reader.read();
       if (done) break;
       const chunk = decoder.decode(value, { stream: true });
-      fullText += chunk;
-      onStream?.(fullText);
+      const messages = parser.feed(chunk);
+
+      for (const msg of messages) {
+        const raw = msg.data;
+        if (!raw) continue;
+        if (raw.trim() === "[DONE]") {
+          finished = true;
+          break;
+        }
+        fullText += raw;
+        onStream?.(fullText);
+      }
     }
     return fullText;
+  },
+
+  /**
+   * POST /kb/vectorize/text
+   * 将生成/编辑后的文本写入知识库索引（产物入库）。
+   */
+  async vectorizeTextToKb(input: {
+    userId: string;
+    fileId: string;
+    fileName: string;
+    content: string;
+    fileType?: string;
+    folderId?: number;
+  }): Promise<void> {
+    const available = await checkBackend();
+    if (!available) throw new Error("Backend service is offline. Cannot write KB index.");
+
+    const response = await fetch(apiUrl("/kb/vectorize/text"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: input.userId,
+        file_id: input.fileId,
+        file_name: input.fileName,
+        content: input.content,
+        file_type: input.fileType ?? "md",
+        folder_id: input.folderId ?? 1,
+      }),
+    });
+
+    let wrapper: any;
+    try {
+      wrapper = await response.json();
+    } catch {
+      wrapper = null;
+    }
+
+    if (!response.ok) {
+      const message = wrapper?.error?.message || response.statusText || "KB vectorize failed.";
+      throw new Error(message);
+    }
+    if (!wrapper?.ok) {
+      const message = wrapper?.error?.message || "KB vectorize failed.";
+      throw new Error(message);
+    }
   },
 
   /**

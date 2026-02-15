@@ -68,6 +68,7 @@ const handleGenerateWrapper = async () => {
         outlineText.value = text;
       });
       emit('updateUnit', props.currentUnit.id, { outlineContent: finalText });
+      vectorizeOutlineToKb(finalText);
       toast.success(t('outline.toast.generated'));
     } catch (e) {
       console.error(e);
@@ -76,6 +77,23 @@ const handleGenerateWrapper = async () => {
       loading.value = false;
     }
   }
+};
+
+const vectorizeOutlineToKb = (content: string) => {
+  if (!props.currentUnit) return;
+  const trimmed = content?.trim();
+  if (!trimmed) return;
+
+  void aiService
+    .vectorizeTextToKb({
+      userId: props.currentCourse.id,
+      fileId: `gen:${props.currentCourse.id}:${props.currentUnit.id}:outline`,
+      fileName: `大纲-${props.currentUnit.title}`,
+      content: trimmed,
+      fileType: 'md',
+      folderId: 1,
+    })
+    .catch((e) => console.warn('大纲入库失败（已忽略）', e));
 };
 
 const handleConfirmChoice = (choice: 'OLD' | 'NEW') => {
@@ -88,6 +106,7 @@ const handleConfirmChoice = (choice: 'OLD' | 'NEW') => {
   // Persist choice
   if (props.currentUnit) {
     emit('updateUnit', props.currentUnit.id, { outlineContent: finalText });
+    vectorizeOutlineToKb(finalText);
   }
   toast.info(choice === 'NEW' ? t('outline.replace_new') : t('outline.keep_original'));
 };
@@ -95,6 +114,7 @@ const handleConfirmChoice = (choice: 'OLD' | 'NEW') => {
 const handleSave = () => {
   if (props.currentUnit) {
     emit('updateUnit', props.currentUnit.id, { outlineContent: outlineText.value });
+    vectorizeOutlineToKb(outlineText.value);
   }
   mode.value = 'PREVIEW';
   toast.success(t('outline.toast.saved'));
