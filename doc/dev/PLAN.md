@@ -429,19 +429,20 @@
   - [ ] 可导出 PPTX（导出仅在编辑器内；需实际导出验证）。
 
 ### 阶段 F：非 PPT 标签收敛
-1. 保留 `lesson/kb/assistant` 页面与路由结构。
-2. 去掉直接报错的虚构后端调用，改为可运行状态。
-3. 在页面上明确“能力建设中/后续重构”的状态提示。
-4. 知识库页面归口上传与保存（前置条件：阶段 C0 已完成后端 KB 能力）：
-- 支持真实上传并写入 personaldb（通过 `/api/kb/upload`），并同步到 `currentCourse.kbFiles`（状态流转：uploading/processing/ready/error）。
-- 支持拉取后端文件列表（`/api/kb/files/{course.id}`）做一致性校准。
-- 支持删除文件（需要后端删除接口），删除后不再被检索命中。
-- PPT 生成页读取 `kbFiles` 状态联动 `generateFromUploadedFile`（默认打开，无可用 ready 文件时禁用）。
-5. 联调与回归：
-- 验证“产物入库”写入后，PPT 生成阶段在启用 KB 时能命中检索（可通过 personaldb `/search` 验证）。
+- [x] 保留 `lesson/kb/assistant` 页面与路由结构。
+- [x] 去掉直接报错的虚构后端调用（移除前端 `/teachdo/*` 调用），改为可运行状态。
+- [x] 在教案/助教页面上明确“能力建设中/后续重构”的状态提示，并禁用交互入口。
+- [x] 知识库页面归口上传与保存（前置条件：阶段 C0 已完成后端 KB 能力）：
+  - [x] 支持真实上传并写入 personaldb（通过 `/api/kb/upload`），并同步到 `currentCourse.kbFiles`（状态流转：uploading/processing/ready/error）。
+  - [x] 支持拉取后端文件列表（`/api/kb/files/{course.id}`）做一致性校准。
+  - [x] 支持删除文件（通过 `/api/kb/files/{user_id}/{file_id}`），删除后不再被检索命中。
+  - [x] PPT 生成页读取 `kbFiles` 状态联动 `generateFromUploadedFile`（默认打开，无可用 ready 文件时禁用）。
+- [ ] 联调与回归：
+  - [ ] 验证“产物入库”写入后，PPT 生成阶段在启用 KB 时能命中检索（可通过 personaldb `/search` 验证）。
 - DoD：
-1. 三个页面均可正常进入且无 runtime error。
-2. 不影响 outline/ppt 主链路。
+  - [x] 三个页面均可正常进入且无 runtime error。
+  - [x] 不影响 outline/ppt 主链路。
+  - [ ] 产物入库命中检索（待联调验证）。
 
 ### 阶段 G：回归与发布
 1. 链路回归：大纲、模板、流式生成、编辑、导出全流程。
