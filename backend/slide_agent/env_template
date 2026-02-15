@@ -1,0 +1,34 @@
+# Slide Agent 服务本地覆盖配置（可选）
+#
+# 推荐做法：
+# - 统一在项目根目录维护 `.env`（从 `env_template.txt` 复制）
+# - 本文件仅用于本机临时覆盖（例如单独打开/关闭内容服务流式、配置 Pexels Key）
+
+# 内容生成服务是否启用 SSE 流式输出
+# 注意：默认建议关闭（避免部分 Agent 依赖严格 JSON 解析时受流式影响）
+CONTENT_STREAMING=false
+
+# 是否启用图表生成
+USE_CHART=true
+
+# 可选：图片素材搜索（Pexels）。未配置则可走模拟返回或跳过
+# PEXELS_API_KEY=your_pexels_api_key
+
+# 可选：知识库服务地址（一般不需要，根目录 .env 已配置 PERSONAL_DB）
+# PERSONAL_DB=http://127.0.0.1:9100
+
+# 可选：单独覆盖 Writer/Checker 模型配置（不推荐；建议统一放根目录 .env）
+# PPT_WRITER_TYPE=openai
+# PPT_WRITER_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+# PPT_WRITER_API_KEY=sk-xxx
+# PPT_WRITER_MODEL=qwen-turbo-latest
+#
+# PPT_CHECKER_TYPE=openai
+# PPT_CHECKER_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+# PPT_CHECKER_API_KEY=sk-xxx
+# PPT_CHECKER_MODEL=qwen-turbo-latest
+
+# 如需代理访问外部 API（可选）
+# HTTP_PROXY=http://127.0.0.1:7890
+# HTTPS_PROXY=http://127.0.0.1:7890
+

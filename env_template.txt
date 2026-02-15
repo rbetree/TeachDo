@@ -1,0 +1,97 @@
+﻿# ====================================================================
+# 根目录 .env 统一模型配置（精简版）
+#
+# 目标：只按“用途 + 协议类型”配置一套通用字段：
+#   *_TYPE       - 协议类型（如：openai、google、claude、ollama 等）
+#   *_BASE_URL   - 可选，自托管或 OpenAI 兼容服务的 base_url
+#   *_API_KEY    - 对应服务的 API Key
+#   *_MODEL      - 模型名称
+#
+# 具体支持的 TYPE 取值及模型示例，参考 doc/ai/CUSTOM_MODEL.md。
+# ====================================================================
+
+# 大纲生成主模型
+# 协议类型 TYPE: openai | google | claude | ollama | vllm | local_openai
+# 说明：
+#   - 使用 OpenAI 官方：   TYPE=openai, BASE_URL 留空，API_KEY=OpenAI Key
+#   - 使用 DeepSeek：      TYPE=openai, BASE_URL=https://api.deepseek.com/v1
+#   - 使用 阿里 DashScope：TYPE=openai, BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+#   - 使用 豆包：          TYPE=openai, BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+OUTLINE_TYPE=openai
+OUTLINE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+OUTLINE_API_KEY=sk-your_outline_api_key
+OUTLINE_MODEL=qwen-turbo-latest
+
+# 幻灯片内容生成模型（同样按“协议类型 + BASE_URL”配置）
+PPT_WRITER_TYPE=openai
+PPT_WRITER_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+PPT_WRITER_API_KEY=sk-your_writer_api_key
+PPT_WRITER_MODEL=qwen-turbo-latest
+
+# 幻灯片内容校对模型
+PPT_CHECKER_TYPE=openai
+PPT_CHECKER_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+PPT_CHECKER_API_KEY=sk-your_checker_api_key
+PPT_CHECKER_MODEL=qwen-turbo-latest
+
+# 知识库向量嵌入模型
+# EMBEDDING_TYPE: openai | ollama | vllm | xinference
+# 说明：
+#   - 阿里/豆包/vLLM/xinference 也是 OpenAI 协议，可统一走 openai + EMBEDDING_BASE_URL
+EMBEDDING_TYPE=openai
+EMBEDDING_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+EMBEDDING_API_KEY=your_embedding_api_key
+EMBEDDING_MODEL=doubao-embedding-text-240715
+
+# 可选：嵌入维度（部分模型支持）
+# EMBEDDING_DIM=1536
+
+# 如果使用 GPU，可启用 Mineru 自动下载模型。需要 mineru[core]>=2.0.6
+# USE_MINERU=false
+
+
+# ====================================================================
+# 运行期目录（默认不提交到 git）
+# ====================================================================
+
+# 缓存目录（会按服务名再分一层子目录）
+AI2PPT_CACHE_DIR=var/cache
+
+# 临时目录（会按服务名再分一层子目录）
+AI2PPT_TMP_DIR=var/tmp
+
+# 日志目录
+AI2PPT_LOG_DIR=logs
+
+
+# ====================================================================
+# 内部服务 URL 与其他设置（本地部署通常无需更改）
+# ====================================================================
+
+# 内部 API 端点
+OUTLINE_API=http://127.0.0.1:10001
+CONTENT_API=http://127.0.0.1:10011
+PERSONAL_DB=http://127.0.0.1:9100
+
+# 网络代理（可选）
+# 若访问外部 API（如 OpenAI / DeepSeek 等）需要代理，请取消注释。
+# HTTP_PROXY=http://127.0.0.1:7890
+# HTTPS_PROXY=http://127.0.0.1:7890
+
+# 启用/禁用图表生成
+# 若使用较小模型且其在图表数据生成方面表现欠佳，可设为 false。
+USE_CHART=True
+
+# 大纲/内容服务是否启用 SSE 流式输出（与代码读取变量保持一致）
+OUTLINE_STREAMING=true
+CONTENT_STREAMING=false
+
+# 可选：图片素材搜索（Pexels），未配置则使用内置模拟返回或跳过
+# PEXELS_API_KEY=your_pexels_api_key
+
+# 可选：服务绑定地址与端口（start.py 使用，通常保持默认即可）
+# HOST=0.0.0.0
+# MAIN_API_PORT=6800
+# OUTLINE_API_PORT=10001
+# CONTENT_API_PORT=10011
+# FRONTEND_PORT=5173

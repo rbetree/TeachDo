@@ -1,0 +1,104 @@
+# 根目录 Docker Compose（推荐）
+#
+# 使用方式：
+#   1) cp env_template.txt .env  # 并填入你的 API Key
+#   2) docker compose up --build
+#
+# 约定：
+# - 运行期数据写入 ./var（缓存/临时文件）
+# - 日志写入 ./logs
+services:
+  outline_api:
+    build:
+      context: ./backend/simpleOutline
+      dockerfile: Dockerfile
+    ports:
+      - "10001:10001"
+    env_file:
+      - .env
+    command: >
+      python main_api.py
+      --host 0.0.0.0
+      --port 10001
+      --agent_url http://outline_api:10001/
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:10001/.well-known/agent.json', timeout=2).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    volumes:
+      - ./var:/app/var
+      - ./logs:/app/logs
+
+  content_api:
+    build:
+      context: ./backend/slide_agent
+      dockerfile: Dockerfile
+    ports:
+      - "10011:10011"
+    env_file:
+      - .env
+    command: >
+      python main_api.py
+      --host 0.0.0.0
+      --port 10011
+      --agent_url http://content_api:10011/
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:10011/.well-known/agent.json', timeout=2).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    volumes:
+      - ./var:/app/var
+      - ./logs:/app/logs
+
+  personaldb:
+    build:
+      context: ./backend/personaldb
+      dockerfile: Dockerfile
+    ports:
+      - "9100:9100"
+    env_file:
+      - .env
+    restart: unless-stopped
+    volumes:
+      - ./var:/app/var
+      - ./logs:/app/logs
+
+  main_api:
+    build:
+      context: ./backend/main_api
+      dockerfile: Dockerfile
+    ports:
+      - "6800:6800"
+    env_file:
+      - .env
+    environment:
+      OUTLINE_API: http://outline_api:10001
+      CONTENT_API: http://content_api:10011
+      PERSONAL_DB: http://personaldb:9100
+    depends_on:
+      outline_api:
+        condition: service_healthy
+      content_api:
+        condition: service_healthy
+      personaldb:
+        condition: service_started
+    restart: unless-stopped
+    volumes:
+      - ./var:/app/var
+      - ./logs:/app/logs
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      - main_api
+    restart: unless-stopped

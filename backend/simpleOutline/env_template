@@ -1,0 +1,21 @@
+# SimpleOutline 服务本地覆盖配置（可选）
+#
+# 推荐做法：
+# 1) 仅在项目根目录创建/维护 `.env`（从 `env_template.txt` 复制）
+# 2) 本目录下的 `.env` 只用于“本机临时覆盖”，例如你想单独调整流式开关
+#
+# 注意：环境变量优先级建议为：系统环境变量 > 本地服务 `.env` > 项目根 `.env`
+
+# 是否启用 SSE 流式输出（默认 true）
+OUTLINE_STREAMING=true
+
+# 如需单独覆盖大纲模型配置（不推荐；建议统一放根目录 .env）
+# OUTLINE_TYPE=openai
+# OUTLINE_BASE_URL=https://api.deepseek.com/v1
+# OUTLINE_API_KEY=sk-xxx
+# OUTLINE_MODEL=deepseek-chat
+
+# 如需代理访问外部 API（可选）
+# HTTP_PROXY=http://127.0.0.1:7890
+# HTTPS_PROXY=http://127.0.0.1:7890
+

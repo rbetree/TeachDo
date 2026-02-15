@@ -1,0 +1,15 @@
+# PersonalDB 服务本地覆盖配置（可选）
+#
+# 推荐做法：
+# - 统一在项目根目录维护 `.env`（从 `env_template.txt` 复制）
+# - 本文件仅用于本机临时覆盖（例如单独开启/关闭 MinerU 解析）
+
+# 是否允许使用 MinerU（PDF 解析，若无 GPU 可能较慢；需要 mineru[core]>=2.0.6）
+USE_MINERU=false
+
+# 可选：单独覆盖向量嵌入模型配置（不推荐；建议统一放根目录 .env）
+# EMBEDDING_TYPE=openai
+# EMBEDDING_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+# EMBEDDING_API_KEY=sk-xxx
+# EMBEDDING_MODEL=doubao-embedding-text-240715
+
