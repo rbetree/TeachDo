@@ -26,7 +26,7 @@ TeachDo 目前以前端 **Vite + Vue 3 + TypeScript** 为主工程形态，目�
 
 ## 4. 路由与运行模式
 - 使用 **Vue Router** 的 `createWebHistory`（干净路径，无 `#/`）
-- Vite DevServer 默认监听 `http://localhost:3000`（见 `vite.config.ts`）
+- Vite DevServer 默认监听 `http://localhost:5174`（见 `vite.config.ts`）
 - 生产部署通过 `npm run build` 生成 `dist/`
 - 部署到静态服务器/网关时需开启 `historyApiFallback`（未知路径回退到 `index.html`），避免刷新 404
 
@@ -50,6 +50,5 @@ TeachDo 目前以前端 **Vite + Vue 3 + TypeScript** 为主工程形态，目�
 
 ## 7. 常见问题与处理
 1. **刷新后 404**：检查部署环境是否启用 `historyApiFallback`（回退到 `index.html`）
-2. **后端不可用**：确认 `VITE_API_BASE` 是否正确、`/healthz` 是否可访问，以及后端 CORS 是否允许来自 `http://localhost:3000`
+2. **后端不可用**：确认 `VITE_API_BASE` 是否正确、`/healthz` 是否可访问，以及后端 CORS 是否允许来自 `http://localhost:5174`
 3. **本地存储不兼容**：若调整 `CourseGroup/CourseUnit` 结构，需提供兼容/迁移逻辑，或提醒清空 localStorage
-

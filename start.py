@@ -365,8 +365,8 @@ class ProductionStarter:
             },
         }
 
-        # teachdo-frontend/vite.config.ts 默认端口为 3000；这里通过 CLI 参数显式传入，避免误导/漂移
-        self.frontend_port = int(os.environ.get("FRONTEND_PORT", "3000"))
+        # teachdo-frontend/vite.config.ts 默认端口为 5174；这里通过 CLI 参数显式传入，避免误导/漂移
+        self.frontend_port = int(os.environ.get("FRONTEND_PORT", "5174"))
         self.frontend_host = "127.0.0.1"
 
         self.processes: Dict[str, subprocess.Popen] = {}

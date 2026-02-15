@@ -32,7 +32,7 @@ TeachDo 是一套面向教师的智能备课平台，当前仓库提供 **Vite +
 ---
 
 ## 🧱 技术栈概览
-- **构建工具**：Vite 7（DevServer 默认监听 3000）+ `vue-tsc` 构建前类型校验
+- **构建工具**：Vite 7（DevServer 默认监听 5174）+ `vue-tsc` 构建前类型校验
 - **框架**：Vue 3.5 + Vue Router（`createWebHistory`），Router 守卫用于课程有效性校验等前端导航约束
 - **语言**：TypeScript，组件统一使用 `<script setup lang="ts">`
 - **状态持久化**：Pinia + LocalStorage，同步主题、语言与课程上下文
@@ -53,7 +53,7 @@ TeachDo 是一套面向教师的智能备课平台，当前仓库提供 **Vite +
    ```bash
    npm run dev
    ```
-   默认监听 `http://localhost:3000`（已在 `vite.config.ts` 配置，如需变更可自定义）。
+   默认监听 `http://localhost:5174`（已在 `vite.config.ts` 配置，如需变更可自定义）。
 4. **启动后端（TeachDo/ai2ppt Gateway，默认监听 `http://localhost:6800`）**
    - 建议按照 `teachdo_local_dev.md` 中的说明使用虚拟环境运行 `python start.py`
 5. **构建/预览**

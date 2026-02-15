@@ -316,7 +316,7 @@
   - [x] 确认根目录 `.gitignore` 未忽略 `/teachdo-frontend`
   - [x] （可选）补充忽略：`.run/`、`.kilocode/`（如不希望提交 IDE/工具配置目录）
 - [x] 3. 修改 `start.py`：前端目录从 `frontend/` 切换为 `teachdo-frontend/`。
-  - 同步统一端口：`teachdo-frontend/vite.config.ts` 当前 `server.port=3000`，因此 `start.py` 默认 `FRONTEND_PORT` 也应调整为 `3000`（保留环境变量覆盖能力）。
+  - 同步统一端口：`teachdo-frontend/vite.config.ts` 当前 `server.port=5174`，因此 `start.py` 默认 `FRONTEND_PORT` 也应调整为 `5174`（保留环境变量覆盖能力）。
 - [x] 4. 为 `teachdo-frontend/vite.config.ts` 增加 dev proxy：
   - `/api` -> `http://127.0.0.1:6800`，rewrite 去掉 `/api` 前缀。
 - [x] 5. TeachDo 前端服务层与 API 基址统一（为后续 C/D 阶段铺路）：
@@ -520,8 +520,8 @@
 
 #### 8.4.2 使用方式（示例）
 1. 验证前端 `/api` 代理是否正确（阶段 A 必做）：
-- 前提：`teachdo-frontend` dev server 已在 `3000` 启动，后端 main_api 已在 `6800` 启动。
-- 命令：`python3 scripts/verify_endpoints.py --base-url http://127.0.0.1:3000 --prefix /api --skip-outline --skip-ppt`
+- 前提：`teachdo-frontend` dev server 已在 `5174` 启动，后端 main_api 已在 `6800` 启动。
+- 命令：`python3 scripts/verify_endpoints.py --base-url http://127.0.0.1:5174 --prefix /api --skip-outline --skip-ppt`
 2. 验证后端直连基础接口（不依赖前端）：
 - 命令：`python3 scripts/verify_endpoints.py --base-url http://127.0.0.1:6800`
 3. 若当前环境未配置模型/外网，仅做前端联调冒烟（用 mock_api 提供固定 SSE 数据）：
