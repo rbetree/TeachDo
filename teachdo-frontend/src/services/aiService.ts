@@ -1,4 +1,4 @@
-import type { CourseGroup, CourseUnit, LessonPlan, Presentation, PPTTemplate, ChatMessage } from "#root/types";
+import type { CourseGroup, CourseUnit, Presentation, PPTTemplate } from "#root/types";
 import { SseParser, stripJsonCodeFence } from "@/utils/sse";
 import type { AIPPTSlide } from "@/editor-runtime/types/AIPPT";
 
@@ -387,39 +387,6 @@ export const aiService = {
   },
 
   /**
-   * POST /teachdo/lesson-plan
-   * Generates a structured JSON Lesson Plan via Backend
-   */
-  async generateLessonPlan(course: CourseGroup, unit: CourseUnit, outline: string): Promise<LessonPlan> {
-    const available = await checkBackend();
-    if (!available) throw new Error("Backend service is offline. Cannot generate lesson plan.");
-
-    const response = await fetch(apiUrl("/teachdo/lesson-plan"), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            course: {
-                name: course.name,
-                subject: course.subject,
-                description: course.description
-            },
-            unit: {
-                title: unit.title,
-                objectives: unit.objectives
-            },
-            outline: outline
-        })
-    });
-
-    if (!response.ok) {
-        throw new Error("Failed to generate lesson plan via backend.");
-    }
-
-    const data = await response.json();
-    return data as LessonPlan;
-  },
-
-  /**
    * POST /tools/aippt (Server Sent Events)
    * Strictly uses backend. No client-side fallback.
    */
@@ -498,83 +465,6 @@ export const aiService = {
     };
   },
 
-  /**
-   * POST /teachdo/assistant/chat (Streaming Text or SSE)
-   * Chat with the course assistant via backend
-   */
-  async chatWithAssistant(
-      course: CourseGroup, 
-      unit: CourseUnit | undefined | null, 
-      history: ChatMessage[], 
-      message: string, 
-      onChunk: (text: string) => void
-  ): Promise<void> {
-    const available = await checkBackend();
-    if (!available) throw new Error("Backend service is offline. Please check connection.");
-
-    const response = await fetch(apiUrl("/teachdo/assistant/chat"), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            course: {
-                name: course.name,
-                subject: course.subject,
-                description: course.description
-            },
-            unit: unit ? {
-                title: unit.title,
-                objectives: unit.objectives
-            } : null,
-            history: history.map(h => ({ role: h.role, text: h.text })),
-            message: message
-        })
-    });
-
-    if (!response.ok) throw new Error(`Chat request failed: ${response.statusText}`);
-    if (!response.body) throw new Error("No response body");
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        
-        // Handle SSE if detected (data: prefix), otherwise treat as raw stream
-        if (chunk.includes('data:') || buffer.includes('data:')) {
-            buffer += chunk;
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (trimmed.startsWith('data:')) {
-                    const dataContent = trimmed.substring(5).trim();
-                    if (dataContent === '[DONE]') break;
-                    try {
-                        // Attempt to parse JSON object from data line (e.g. { content: "..." })
-                        if (dataContent.startsWith('{')) {
-                            const json = JSON.parse(dataContent);
-                            const text = json.text || json.content || json.delta || '';
-                            if (text) onChunk(text);
-                        } else {
-                            // Raw text after data:
-                            onChunk(dataContent);
-                        }
-                    } catch {
-                        // Fallback: just use content as is
-                        onChunk(dataContent);
-                    }
-                }
-            }
-        } else {
-            // Raw text stream fallback
-            onChunk(chunk);
-        }
-    }
-  }
 };
 
 /**

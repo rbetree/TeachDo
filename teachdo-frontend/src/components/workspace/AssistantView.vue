@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import type { ChatMessage, CourseGroup, CourseUnit } from '#root/types';
-import { aiService } from '@/services/aiService';
+import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useI18n } from 'vue-i18n';
 
@@ -18,12 +18,16 @@ const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const { t } = useI18n();
 
+const assistantEnabled = false;
+
 const messages = ref<ChatMessage[]>([]);
 const inputValue = ref('');
 const isTyping = ref(false);
 const messagesEndRef = ref<HTMLDivElement | null>(null);
 
-const greeting = computed(() => t('assistant.greeting', { name: props.currentCourse.name }));
+const greeting = computed(() =>
+  assistantEnabled ? t('assistant.greeting', { name: props.currentCourse.name }) : t('assistant.in_progress.greeting', { name: props.currentCourse.name }),
+);
 
 const renderInlineStyles = (text: string) => {
   const parts = text.split(/(\*\*.*?\*\*)/g);
@@ -101,6 +105,10 @@ watch(
 );
 
 const handleSend = async () => {
+  if (!assistantEnabled) {
+    toast.info(t('assistant.toast.in_progress'));
+    return;
+  }
   if (!inputValue.value.trim()) return;
   const userMsg: ChatMessage = { role: 'user', text: inputValue.value.trim(), timestamp: new Date() };
   const history = [...messages.value, userMsg];
@@ -114,18 +122,8 @@ const handleSend = async () => {
   let fullResponse = '';
 
   try {
-    await aiService.chatWithAssistant(props.currentCourse, props.currentUnit, history, userMsg.text, (chunk) => {
-      fullResponse += chunk;
-      const updated = [...messages.value];
-      const lastIndex = updated.length - 1;
-      if (lastIndex >= 0) {
-        const last = updated[lastIndex] || streamingMsg;
-        updated[lastIndex] = { ...last, role: last.role ?? 'model', text: fullResponse, timestamp: last.timestamp || new Date() };
-      }
-      messages.value = updated;
-    });
-  } catch (e) {
-    console.error(e);
+    // 当前阶段仅保留页面与路由结构，助教能力后续接入。
+    fullResponse = t('assistant.toast.in_progress');
     const updated = [...messages.value];
     const lastIndex = updated.length - 1;
     if (lastIndex >= 0) {
@@ -134,7 +132,7 @@ const handleSend = async () => {
         ...last,
         role: last.role ?? 'model',
         timestamp: last.timestamp || new Date(),
-        text: t('assistant.error'),
+        text: fullResponse,
       };
     }
     messages.value = updated;
@@ -174,6 +172,18 @@ const clearHistory = () => {
       >
         {{ t('assistant.clear') }}
       </button>
+    </div>
+
+    <div class="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200/70 dark:border-amber-800/40">
+      <div class="flex items-start gap-3">
+        <div class="w-9 h-9 rounded-xl bg-white/80 dark:bg-slate-900/40 border border-amber-200 dark:border-amber-800/50 flex items-center justify-center text-amber-600 dark:text-amber-300 flex-shrink-0">
+          <LucideIcon name="alert-triangle" :size="18" />
+        </div>
+        <div class="min-w-0">
+          <div class="text-sm font-bold text-amber-900 dark:text-amber-100">{{ t('assistant.in_progress.title') }}</div>
+          <div class="text-xs text-amber-700 dark:text-amber-200 mt-0.5 leading-relaxed">{{ t('assistant.in_progress.desc') }}</div>
+        </div>
+      </div>
     </div>
 
     <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/50 dark:bg-slate-950/50">
@@ -221,13 +231,13 @@ const clearHistory = () => {
         <textarea
           v-model="inputValue"
           class="w-full bg-slate-100 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/30 rounded-xl pl-4 pr-14 py-3.5 text-sm outline-none dark:text-white transition-all resize-none h-14 max-h-32 custom-scrollbar shadow-inner"
-          :placeholder="t('assistant.placeholder')"
-          :disabled="isTyping"
+          :placeholder="assistantEnabled ? t('assistant.placeholder') : t('assistant.in_progress.placeholder')"
+          :disabled="isTyping || !assistantEnabled"
           @keydown.enter.prevent="(event) => { if (!event.shiftKey && !isTyping) handleSend(); }"
         />
         <button
           type="button"
-          :disabled="isTyping || !inputValue.trim()"
+          :disabled="isTyping || !assistantEnabled || !inputValue.trim()"
           class="absolute right-2 top-2 p-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg transition-all shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95"
           @click="handleSend"
         >

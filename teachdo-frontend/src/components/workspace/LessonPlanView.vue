@@ -3,7 +3,6 @@ import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { CourseGroup, CourseUnit, LessonPlan } from '#root/types';
 import { ViewState } from '#root/types';
-import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 
@@ -37,29 +36,7 @@ watch(
 );
 
 const handleGenerate = async () => {
-  if (!props.currentUnit?.outlineContent) return;
-
-  loading.value = true;
-  copied.value = false;
-
-  try {
-    const result = await aiService.generateLessonPlan(
-      props.currentCourse,
-      props.currentUnit,
-      props.currentUnit.outlineContent
-    );
-
-    plan.value = result;
-    if (props.currentUnit) {
-      emit('updateUnit', props.currentUnit.id, { lessonPlan: result });
-    }
-    toast.success(t('lesson.toast.success'));
-  } catch (error) {
-    console.error('Error generating lesson plan:', error);
-    toast.error(t('lesson.toast.error'));
-  } finally {
-    loading.value = false;
-  }
+  toast.info(t('lesson.toast.in_progress'));
 };
 
 const copyToClipboard = () => {
@@ -163,6 +140,16 @@ const goToOutline = () => {
   </div>
 
   <div v-else class="h-full flex flex-col gap-6 items-center">
+    <div class="w-full max-w-4xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-4 flex gap-3">
+      <div class="w-10 h-10 rounded-xl bg-white/80 dark:bg-slate-900/40 border border-amber-200 dark:border-amber-800/50 flex items-center justify-center text-amber-600 dark:text-amber-300 flex-shrink-0">
+        <LucideIcon name="alert-triangle" :size="18" />
+      </div>
+      <div class="min-w-0">
+        <div class="text-sm font-bold text-amber-900 dark:text-amber-100">{{ t('lesson.in_progress.title') }}</div>
+        <div class="text-xs text-amber-700 dark:text-amber-200 mt-0.5 leading-relaxed">{{ t('lesson.in_progress.desc') }}</div>
+      </div>
+    </div>
+
     <!-- Actions Bar -->
     <div class="w-full flex justify-between items-center max-w-4xl">
       <div class="flex flex-col">
@@ -189,8 +176,7 @@ const goToOutline = () => {
           class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2"
           @click="handleGenerate"
         >
-          <span v-if="loading" class="animate-spin">↻</span>
-          <span>{{ plan ? t('lesson.update') : t('lesson.generate') }}</span>
+          <span>{{ t('lesson.in_progress.cta') }}</span>
         </button>
       </div>
     </div>
