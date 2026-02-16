@@ -43,6 +43,11 @@ EMBEDDING_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 EMBEDDING_API_KEY=your_embedding_api_key
 EMBEDDING_MODEL=doubao-embedding-text-240715
 
+# 可选：嵌入请求超时与重试（秒 / 次）
+# 某些 OpenAI 兼容网关在 TLS 握手或高峰期可能偶发超时，可按需调大。
+# EMBEDDING_TIMEOUT_S=60
+# EMBEDDING_MAX_RETRIES=2
+
 # 可选：嵌入维度（部分模型支持）
 # EMBEDDING_DIM=1536
 

@@ -416,9 +416,22 @@ class EmbeddingModel(object):
             api_key = os.getenv("EMBEDDING_API_KEY")
             assert api_key, "未配置嵌入模型 API Key，请设置 EMBEDDING_API_KEY"
             base_url = (os.getenv("EMBEDDING_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
+            # 可调超时与重试：某些 OpenAI 兼容网关在 TLS 握手/高峰期可能偶发超时
+            # - EMBEDDING_TIMEOUT_S：请求超时（秒），默认 60
+            # - EMBEDDING_MAX_RETRIES：失败重试次数，默认 2（与 OpenAI SDK 默认一致）
+            try:
+                timeout_s = float(os.getenv("EMBEDDING_TIMEOUT_S", "60"))
+            except Exception:
+                timeout_s = 60.0
+            try:
+                max_retries = int(os.getenv("EMBEDDING_MAX_RETRIES", "2"))
+            except Exception:
+                max_retries = 2
             self.client = OpenAI(
                 api_key=api_key,
                 base_url=base_url,
+                timeout=timeout_s,
+                max_retries=max_retries,
             )
             self._impl = self._impl_openai_compatible
         elif self.provider == "ollama":
