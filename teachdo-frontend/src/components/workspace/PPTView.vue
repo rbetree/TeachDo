@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import type { CourseGroup, CourseUnit, Presentation, PPTTemplate } from '#root/types';
@@ -47,11 +47,26 @@ const currentEditorSlide = computed<any | null>(() => editorSlides.value[current
 
 const previewCanvasRef = ref<HTMLElement | null>(null);
 const previewCanvasWidth = ref(0);
+const previewCanvasHeight = ref(0);
+const thumbnailListRef = ref<HTMLElement | null>(null);
+const thumbnailSize = ref(200);
 let previewResizeObserver: ResizeObserver | null = null;
+let thumbnailResizeObserver: ResizeObserver | null = null;
 
 const mainSlideSize = computed(() => {
+  const doc = editorDocument.value;
+  const ratioRaw = Number(doc?.viewport?.ratio || (doc?.width && doc?.height ? doc.height / doc.width : 0.5625));
+  const ratio = ratioRaw && Number.isFinite(ratioRaw) ? ratioRaw : 0.5625;
+
   const width = previewCanvasWidth.value || 960;
-  return Math.max(360, Math.min(1400, Math.floor(width)));
+  const height = previewCanvasHeight.value || Math.round(width * ratio);
+
+  // 预留像素，避免 1px 溢出导致横向滚动条
+  const safePadding = 8;
+  const maxByWidth = Math.max(0, Math.floor(width - safePadding));
+  const maxByHeight = ratio ? Math.max(0, Math.floor(height / ratio - safePadding)) : maxByWidth;
+
+  return Math.max(0, Math.floor(Math.min(1400, maxByWidth, maxByHeight)));
 });
 
 const extractTextFromHtml = (html: string): string => {
@@ -96,6 +111,12 @@ const advancedOpen = ref(false);
 const generateFromWebSearch = ref(true);
 const generateFromUploadedFile = ref(true);
 const includeGeneratedKb = ref(false);
+const advancedDialogRef = ref<HTMLElement | null>(null);
+const lastFocusedEl = ref<HTMLElement | null>(null);
+
+const hasAdvancedOverrides = computed(
+  () => !generateFromWebSearch.value || !generateFromUploadedFile.value || includeGeneratedKb.value,
+);
 
 watch(
   editorDocument,
@@ -130,7 +151,41 @@ watch(
 
 const goToKnowledgeBase = () => {
   ui.setRightPanelTab('kb');
+  advancedOpen.value = false;
 };
+
+const openAdvanced = () => {
+  lastFocusedEl.value = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  advancedOpen.value = true;
+};
+
+const closeAdvanced = () => {
+  advancedOpen.value = false;
+};
+
+const handleAdvancedEsc = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && advancedOpen.value) {
+    closeAdvanced();
+  }
+};
+
+watch(
+  advancedOpen,
+  async (open) => {
+    if (open) {
+      document.body.style.overflow = 'hidden';
+      await nextTick();
+      advancedDialogRef.value?.focus();
+      return;
+    }
+
+    document.body.style.overflow = '';
+    await nextTick();
+    const el = lastFocusedEl.value;
+    if (el && document.contains(el)) el.focus();
+  },
+  { flush: 'post' },
+);
 
 const goToEditor = () => {
   const unit = props.currentUnit;
@@ -253,6 +308,7 @@ const syncFromUnit = (unit: CourseUnit | null) => {
 
 onMounted(() => {
   void loadTemplates();
+  document.addEventListener('keydown', handleAdvancedEsc);
 });
 
 watch(
@@ -267,8 +323,33 @@ watch(
       const rect = entries[0]?.contentRect;
       if (!rect) return;
       previewCanvasWidth.value = rect.width;
+      previewCanvasHeight.value = rect.height;
     });
     previewResizeObserver.observe(el);
+  },
+  { immediate: true },
+);
+
+watch(
+  thumbnailListRef,
+  (el) => {
+    if (thumbnailResizeObserver) {
+      thumbnailResizeObserver.disconnect();
+      thumbnailResizeObserver = null;
+    }
+    if (!el || typeof ResizeObserver === 'undefined') return;
+
+    const update = () => {
+      const styles = window.getComputedStyle(el);
+      const paddingLeft = Number.parseFloat(styles.paddingLeft || '0') || 0;
+      const paddingRight = Number.parseFloat(styles.paddingRight || '0') || 0;
+      const inner = el.clientWidth - paddingLeft - paddingRight;
+      thumbnailSize.value = Math.max(120, Math.floor(inner - 2));
+    };
+
+    update();
+    thumbnailResizeObserver = new ResizeObserver(() => update());
+    thumbnailResizeObserver.observe(el);
   },
   { immediate: true },
 );
@@ -278,6 +359,12 @@ onBeforeUnmount(() => {
     previewResizeObserver.disconnect();
     previewResizeObserver = null;
   }
+  if (thumbnailResizeObserver) {
+    thumbnailResizeObserver.disconnect();
+    thumbnailResizeObserver = null;
+  }
+  document.removeEventListener('keydown', handleAdvancedEsc);
+  document.body.style.overflow = '';
 });
 
 watch(
@@ -408,91 +495,25 @@ const handleGenerate = async () => {
     <p class="text-sm mt-2 mb-6 max-w-md text-center text-slate-500">{{ t('ppt.empty_outline') }}</p>
   </div>
 
-  <div v-else class="h-full flex flex-col gap-6">
-    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-      <button
-        type="button"
-        class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
-        @click="advancedOpen = !advancedOpen"
-      >
-        <div class="flex items-center gap-2">
-          <LucideIcon name="settings-2" :size="18" class="text-slate-500" />
-          <div class="font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.title') }}</div>
-        </div>
-        <LucideIcon
-          name="chevron-down"
-          :size="18"
-          class="text-slate-400 transition-transform"
-          :class="advancedOpen ? 'rotate-180' : ''"
-        />
-      </button>
-
-      <div v-if="advancedOpen" class="px-4 pb-4 space-y-3">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label class="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
-            <input
-              v-model="generateFromWebSearch"
-              :disabled="loading"
-              type="checkbox"
-              class="mt-1 h-4 w-4 accent-indigo-600 disabled:opacity-50"
-            />
-            <div class="min-w-0">
-              <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.web_search') }}</div>
-              <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ t('ppt.advanced.web_search_desc') }}</div>
-            </div>
-          </label>
-
-          <label
-            class="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30"
-            :class="!hasReadyKbFiles ? 'opacity-60' : ''"
-          >
-            <input
-              v-model="generateFromUploadedFile"
-              :disabled="loading || !hasReadyKbFiles"
-              type="checkbox"
-              class="mt-1 h-4 w-4 accent-indigo-600 disabled:opacity-50"
-            />
-            <div class="min-w-0">
-              <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.kb') }}</div>
-              <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ t('ppt.advanced.kb_desc') }}</div>
-            </div>
-          </label>
+  <div v-else class="h-full flex flex-col gap-6 min-h-0">
+    <div v-if="viewState === 'SELECT_TEMPLATE'" class="flex-1 flex flex-col min-h-0">
+      <div class="mb-6 flex items-start justify-between gap-4">
+        <div class="min-w-0">
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-white">{{ t('ppt.choose_template') }}</h2>
+          <p class="text-slate-500 dark:text-slate-400">{{ t('ppt.select_hint') }}</p>
         </div>
 
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/30">
-          <div class="min-w-0">
-            <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.kb_scope') }}</div>
-            <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ t('ppt.advanced.kb_scope_desc') }}</div>
-          </div>
-          <label class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-            <input
-              v-model="includeGeneratedKb"
-              :disabled="loading"
-              type="checkbox"
-              class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
-            />
-            <span>{{ t('ppt.advanced.kb_include_generated') }}</span>
-          </label>
-        </div>
-
-        <div class="flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-          <div>{{ t('ppt.advanced.kb_ready', { count: readyKbFileCount }) }}</div>
-          <button
-            v-if="!hasReadyKbFiles"
-            type="button"
-            class="text-indigo-600 dark:text-indigo-300 font-bold hover:underline"
-            @click="goToKnowledgeBase"
-          >
-            {{ t('ppt.advanced.goto_kb') }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="viewState === 'SELECT_TEMPLATE'" class="flex-1 flex flex-col">
-      <div class="mb-6">
-        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">{{ t('ppt.choose_template') }}</h2>
-        <p class="text-slate-500 dark:text-slate-400">{{ t('ppt.select_hint') }}</p>
+        <button
+          type="button"
+          class="shrink-0 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2 font-bold text-sm"
+          @click="openAdvanced"
+        >
+          <span class="relative inline-flex">
+            <LucideIcon name="settings-2" :size="16" />
+            <span v-if="hasAdvancedOverrides" class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-slate-900" aria-hidden="true" />
+          </span>
+          <span class="hidden sm:inline">{{ t('ppt.advanced.title') }}</span>
+        </button>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -534,42 +555,53 @@ const handleGenerate = async () => {
       </div>
     </div>
 
-    <div v-else class="h-full flex flex-col gap-6">
-      <div class="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-	        <div class="flex items-center gap-4">
-	          <div>
-	            <h3 class="font-bold text-slate-800 dark:text-white">{{ t('ppt.preview_title') }}</h3>
-	            <p class="text-xs text-slate-500">
-	              {{ t('ppt.slides_generated', { count: hasEditorSlides ? editorSlides.length : (presentation?.slides.length || 0) }) }}
-	            </p>
-	          </div>
-	        </div>
-	        <div class="flex gap-2 flex-wrap justify-end">
-          <button
-            v-if="props.currentUnit?.editorDocument"
-            type="button"
-            :disabled="loading"
-            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-sm shadow-md transition-all flex items-center gap-2 disabled:bg-slate-300 disabled:text-slate-500"
-            @click="goToEditor"
-          >
-            <LucideIcon name="edit-3" :size="16" />
-            <span>{{ t('ppt.edit') }}</span>
-          </button>
-          <button
-            type="button"
-            class="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-            @click="viewState = 'SELECT_TEMPLATE'"
-          >
-            {{ t('ppt.change_template') }}
-          </button>
-          <button
-            type="button"
-            :disabled="loading"
-            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-sm shadow-md transition-all flex items-center gap-2 disabled:bg-slate-300 disabled:text-slate-500"
-            @click="handleGenerate"
-          >
-            <LucideIcon :name="loading ? 'loader-2' : 'refresh-cw'" :size="16" :class="{ 'animate-spin': loading }" />
-            <span>{{ loading ? t('ppt.generating') : t('ppt.regenerate') }}</span>
+		    <div v-else class="h-full flex flex-col gap-6 min-h-0">
+		      <div class="flex justify-between items-center bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+			        <div class="flex items-center gap-4">
+			          <div>
+		            <h3 class="text-sm font-black text-slate-800 dark:text-white leading-tight">{{ t('ppt.preview_title') }}</h3>
+		            <p class="text-[11px] text-slate-500 leading-tight mt-0.5">
+		              {{ t('ppt.slides_generated', { count: hasEditorSlides ? editorSlides.length : (presentation?.slides.length || 0) }) }}
+		            </p>
+		          </div>
+			        </div>
+			        <div class="flex gap-2 flex-wrap justify-end">
+		          <button
+		            type="button"
+		            class="px-3 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
+		            @click="openAdvanced"
+		          >
+		            <span class="relative inline-flex">
+		              <LucideIcon name="settings-2" :size="16" />
+	              <span v-if="hasAdvancedOverrides" class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-slate-900" aria-hidden="true" />
+	            </span>
+	            <span class="hidden lg:inline">{{ t('ppt.advanced.title') }}</span>
+	          </button>
+		          <button
+		            v-if="props.currentUnit?.editorDocument"
+		            type="button"
+	            :disabled="loading"
+	            class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center gap-2 disabled:bg-slate-300 disabled:text-slate-500"
+	            @click="goToEditor"
+	          >
+	            <LucideIcon name="edit-3" :size="16" />
+	            <span>{{ t('ppt.edit') }}</span>
+	          </button>
+	          <button
+	            type="button"
+	            class="px-3 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+	            @click="viewState = 'SELECT_TEMPLATE'"
+	          >
+	            {{ t('ppt.change_template') }}
+	          </button>
+	          <button
+	            type="button"
+	            :disabled="loading"
+	            class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center gap-2 disabled:bg-slate-300 disabled:text-slate-500"
+	            @click="handleGenerate"
+	          >
+	            <LucideIcon :name="loading ? 'loader-2' : 'refresh-cw'" :size="16" :class="{ 'animate-spin': loading }" />
+	            <span>{{ loading ? t('ppt.generating') : t('ppt.regenerate') }}</span>
           </button>
         </div>
 	      </div>
@@ -581,44 +613,37 @@ const handleGenerate = async () => {
 	        </div>
 	      </div>
 	
-	      <div v-else-if="hasEditorSlides" class="flex-1 flex gap-6 overflow-hidden">
-	        <div class="w-60 flex-shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto custom-scrollbar p-3 space-y-3">
-	          <button
-	            v-for="(slide, i) in editorSlides"
-	            :key="slide?.id || i"
-	            :class="['w-full text-left group transition-all', currentSlideIndex === i ? 'ring-2 ring-emerald-500 rounded-lg' : 'opacity-70 hover:opacity-100']"
-	            @click="currentSlideIndex = i"
-	          >
-	            <div class="w-full rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-	              <ThumbnailSlide :slide="slide" :size="200" />
-	            </div>
-	            <div class="flex justify-between items-center px-1 mt-1 gap-2">
-	              <span class="text-[10px] font-bold text-slate-400 shrink-0">{{ t('ppt.slide_label', { index: i + 1 }) }}</span>
-	              <span class="text-[10px] text-slate-500 line-clamp-1 min-w-0">{{ editorSlideTitles[i] }}</span>
-	            </div>
-	          </button>
-	        </div>
+		      <div v-else-if="hasEditorSlides" class="flex-1 min-h-0 flex gap-6 overflow-hidden">
+		        <div ref="thumbnailListRef" class="w-60 min-h-0 flex-shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto custom-scrollbar p-3 space-y-3">
+		          <button
+		            v-for="(slide, i) in editorSlides"
+		            :key="slide?.id || i"
+		            :class="['w-full text-left group transition-all', currentSlideIndex === i ? 'ring-2 ring-emerald-500 rounded-lg' : 'opacity-70 hover:opacity-100']"
+		            @click="currentSlideIndex = i"
+		          >
+		            <div class="w-full rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+		              <ThumbnailSlide :slide="slide" :size="thumbnailSize" />
+		            </div>
+		            <div class="flex justify-between items-center px-1 mt-1 gap-2">
+		              <span class="text-[10px] font-bold text-slate-400 shrink-0">{{ t('ppt.slide_label', { index: i + 1 }) }}</span>
+		              <span class="text-[10px] text-slate-500 line-clamp-1 min-w-0">{{ editorSlideTitles[i] }}</span>
+		            </div>
+		          </button>
+		        </div>
+	
+		        <div class="flex-1 min-h-0 flex flex-col bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 overflow-hidden">
+		          <div ref="previewCanvasRef" class="flex-1 min-h-0 overflow-hidden">
+		            <div class="h-full w-full flex items-center justify-center">
+		              <div v-if="currentEditorSlide" class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl ring-1 ring-slate-200/60 dark:ring-slate-800/60 overflow-hidden">
+		                <ThumbnailSlide :slide="currentEditorSlide" :size="mainSlideSize" />
+		              </div>
+		            </div>
+		          </div>
+		        </div>
+		      </div>
 
-	        <div class="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 overflow-hidden">
-	          <div ref="previewCanvasRef" class="flex-1 overflow-auto">
-	            <div class="min-h-full flex items-center justify-center">
-	              <div v-if="currentEditorSlide" class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl p-4">
-	                <ThumbnailSlide :slide="currentEditorSlide" :size="mainSlideSize" />
-	              </div>
-	            </div>
-	          </div>
-
-	          <div class="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 flex-shrink-0 mt-4">
-	            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{{ t('ppt.speaker_notes') }}</h4>
-	            <p class="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">
-	              {{ currentEditorSlide?.remark || t('ppt.no_notes') }}
-	            </p>
-	          </div>
-	        </div>
-	      </div>
-
-	      <div v-else class="flex-1 flex gap-6 overflow-hidden">
-	        <div class="w-48 flex-shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto custom-scrollbar p-3 space-y-3">
+	      <div v-else class="flex-1 min-h-0 flex gap-6 overflow-hidden">
+	        <div class="w-48 min-h-0 flex-shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto custom-scrollbar p-3 space-y-3">
 	          <button
 	            v-for="(slide, i) in slides"
 	            :key="i"
@@ -639,11 +664,11 @@ const handleGenerate = async () => {
 	          </button>
 	        </div>
 
-	        <div class="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 overflow-y-auto">
-	          <div v-if="currentSlide" class="w-full aspect-video bg-white dark:bg-slate-900 shadow-2xl rounded-xl p-12 flex flex-col relative overflow-hidden mb-6 flex-shrink-0 transition-all duration-300">
-	            <div v-if="selectedTemplate?.coverUrl" class="absolute inset-0 bg-center bg-cover opacity-5 pointer-events-none" :style="{ backgroundImage: `url(${selectedTemplate.coverUrl})` }" />
-	            <div v-else class="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl opacity-20 -mr-20 -mt-20" :class="selectedTemplate?.thumbnailColor || 'bg-slate-200'" />
-	            <div class="relative z-10 flex flex-col h-full">
+		        <div class="flex-1 min-h-0 flex flex-col bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 overflow-y-auto">
+		          <div v-if="currentSlide" class="w-full aspect-video bg-white dark:bg-slate-900 shadow-2xl rounded-xl p-12 flex flex-col relative overflow-hidden mb-6 flex-shrink-0 transition-all duration-300">
+		            <div v-if="selectedTemplate?.coverUrl" class="absolute inset-0 bg-center bg-cover opacity-5 pointer-events-none" :style="{ backgroundImage: `url(${selectedTemplate.coverUrl})` }" />
+		            <div v-else class="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl opacity-20 -mr-20 -mt-20" :class="selectedTemplate?.thumbnailColor || 'bg-slate-200'" />
+		            <div class="relative z-10 flex flex-col h-full">
 	              <h1 class="text-4xl font-black text-slate-900 dark:text-white mb-8 leading-tight">
 	                {{ currentSlide?.title }}
 	              </h1>
@@ -658,19 +683,118 @@ const handleGenerate = async () => {
 	              <div class="mt-auto flex justify-between items-end border-t border-slate-100 dark:border-slate-800 pt-6">
 	                <div class="text-sm font-bold text-slate-400 uppercase tracking-widest">TeachDo</div>
 	                <div class="text-sm font-bold text-slate-400">{{ currentSlideIndex + 1 }} / {{ slides.length }}</div>
-	              </div>
-	            </div>
-	          </div>
-
-	          <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex-shrink-0">
-	            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{{ t('ppt.speaker_notes') }}</h4>
-	            <p class="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">
-	              {{ currentSlide?.notes || t('ppt.no_notes') }}
-	            </p>
-	          </div>
-	        </div>
-	      </div>
+		              </div>
+		            </div>
+		          </div>
+		        </div>
+		      </div>
     </div>
+
+    <Teleport to="body">
+      <Transition name="td-modal">
+        <div v-if="advancedOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="closeAdvanced" />
+
+          <div
+            ref="advancedDialogRef"
+            class="relative w-full max-w-2xl rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl outline-none td-modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ppt-advanced-title"
+            tabindex="-1"
+            @click.stop
+          >
+            <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200/60 dark:border-slate-800/60">
+              <div class="flex items-center gap-2">
+                <LucideIcon name="settings-2" :size="18" class="text-slate-500" />
+                <h3 id="ppt-advanced-title" class="text-sm font-black text-slate-900 dark:text-white">
+                  {{ t('ppt.advanced.title') }}
+                </h3>
+              </div>
+              <button
+                type="button"
+                class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                :aria-label="t('common.close')"
+                @click="closeAdvanced"
+              >
+                <LucideIcon name="x" :size="18" />
+              </button>
+            </div>
+
+            <div class="px-5 py-4 space-y-3 max-h-[min(70vh,640px)] overflow-y-auto custom-scrollbar">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
+                  <input
+                    v-model="generateFromWebSearch"
+                    :disabled="loading"
+                    type="checkbox"
+                    class="mt-1 h-4 w-4 accent-indigo-600 disabled:opacity-50"
+                  />
+                  <div class="min-w-0">
+                    <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.web_search') }}</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ t('ppt.advanced.web_search_desc') }}</div>
+                  </div>
+                </label>
+
+                <label
+                  class="flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30"
+                  :class="!hasReadyKbFiles ? 'opacity-60' : ''"
+                >
+                  <input
+                    v-model="generateFromUploadedFile"
+                    :disabled="loading || !hasReadyKbFiles"
+                    type="checkbox"
+                    class="mt-1 h-4 w-4 accent-indigo-600 disabled:opacity-50"
+                  />
+                  <div class="min-w-0">
+                    <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.kb') }}</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ t('ppt.advanced.kb_desc') }}</div>
+                  </div>
+                </label>
+              </div>
+
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/30">
+                <div class="min-w-0">
+                  <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.kb_scope') }}</div>
+                  <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ t('ppt.advanced.kb_scope_desc') }}</div>
+                </div>
+                <label class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+                  <input
+                    v-model="includeGeneratedKb"
+                    :disabled="loading"
+                    type="checkbox"
+                    class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
+                  />
+                  <span>{{ t('ppt.advanced.kb_include_generated') }}</span>
+                </label>
+              </div>
+
+              <div class="flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+                <div>{{ t('ppt.advanced.kb_ready', { count: readyKbFileCount }) }}</div>
+                <button
+                  v-if="!hasReadyKbFiles"
+                  type="button"
+                  class="text-indigo-600 dark:text-indigo-300 font-bold hover:underline"
+                  @click="goToKnowledgeBase"
+                >
+                  {{ t('ppt.advanced.goto_kb') }}
+                </button>
+              </div>
+            </div>
+
+            <div class="px-5 py-4 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-end gap-2 bg-slate-50/40 dark:bg-slate-950/20">
+              <button
+                type="button"
+                class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md transition-colors"
+                @click="closeAdvanced"
+              >
+                {{ t('common.close') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -699,5 +823,35 @@ const handleGenerate = async () => {
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(71, 85, 105, 0.7);
+}
+
+.td-modal-enter-active,
+.td-modal-leave-active {
+  transition: opacity 150ms ease;
+}
+
+.td-modal-enter-from,
+.td-modal-leave-to {
+  opacity: 0;
+}
+
+.td-modal-enter-active .td-modal-panel,
+.td-modal-leave-active .td-modal-panel {
+  transition: transform 150ms ease, opacity 150ms ease;
+}
+
+.td-modal-enter-from .td-modal-panel,
+.td-modal-leave-to .td-modal-panel {
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .td-modal-enter-active,
+  .td-modal-leave-active,
+  .td-modal-enter-active .td-modal-panel,
+  .td-modal-leave-active .td-modal-panel {
+    transition: none;
+  }
 }
 </style>

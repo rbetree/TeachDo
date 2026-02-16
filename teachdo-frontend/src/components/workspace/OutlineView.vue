@@ -165,7 +165,7 @@ const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
 </script>
 
 <template>
-  <div class="h-full flex flex-col gap-6">
+  <div class="h-full flex flex-col gap-6 min-h-0">
     <!-- Toolbar -->
     <div class="flex justify-between items-center bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm sticky top-0 z-10">
       <div class="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
@@ -221,11 +221,11 @@ const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
     </div>
 
     <!-- Main Content Area -->
-    <div :class="['flex-1 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative', mode === 'COMPARE' ? 'bg-slate-100 dark:bg-slate-950' : '']">
+    <div :class="['flex-1 min-h-0 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative', mode === 'COMPARE' ? 'bg-slate-100 dark:bg-slate-950' : '']">
       <!-- --- COMPARE MODE --- -->
       <div v-if="mode === 'COMPARE'" class="h-full grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
         <!-- Left: Original -->
-        <div class="flex flex-col h-full bg-white dark:bg-slate-900">
+        <div class="flex flex-col h-full min-h-0 bg-white dark:bg-slate-900">
           <div class="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center sticky top-0 z-10">
             <span class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
               <LucideIcon name="history" :size="16" /> {{ t('outline.current_version') }}
@@ -247,7 +247,7 @@ const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
         </div>
 
         <!-- Right: New -->
-        <div class="flex flex-col h-full bg-indigo-50/30 dark:bg-indigo-900/10 relative">
+        <div class="flex flex-col h-full min-h-0 bg-indigo-50/30 dark:bg-indigo-900/10 relative">
           <div class="p-4 border-b border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-900/20 flex justify-between items-center sticky top-0 z-10">
             <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-2">
               <LucideIcon :name="loading ? 'loader-2' : 'refresh-cw'" :size="16" :class="{ 'animate-spin': loading }" />
@@ -287,7 +287,7 @@ const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
       </div>
 
       <!-- --- PREVIEW MODE --- -->
-      <div v-if="mode === 'PREVIEW'" class="h-full overflow-y-auto custom-scrollbar p-8 md:p-12 max-w-4xl mx-auto bg-white dark:bg-slate-900">
+      <div v-if="mode === 'PREVIEW'" class="h-full min-h-0 overflow-y-auto custom-scrollbar p-8 md:p-12 max-w-4xl mx-auto bg-white dark:bg-slate-900">
         <article class="prose dark:prose-invert prose-indigo max-w-none">
           <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8 border-b border-slate-100 dark:border-slate-800 pb-4">
             {{ t('outline.course_outline_title', { title: currentUnit?.title }) }}
