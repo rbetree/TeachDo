@@ -3,20 +3,17 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import type { CourseGroup } from '#root/types';
-import { ViewState } from '#root/types';
 
 const props = defineProps<{
   course: CourseGroup;
   activeUnitId: string | null;
-  currentView: 'UNIT_VIEW' | ViewState;
   collapsed: boolean;
   mobileOpen: boolean;
 }>();
 
 const emit = defineEmits<{
   (event: 'select-unit', unitId: string): void;
-  (event: 'add-unit', title: string): void;
-  (event: 'select-global', view: ViewState): void;
+  (event: 'add-unit', payload: { title: string; objectives: string }): void;
   (event: 'toggle-collapse'): void;
   (event: 'close-mobile'): void;
 }>();
@@ -25,26 +22,23 @@ const { t } = useI18n();
 
 const isCreatingUnit = ref(false);
 const newUnitTitle = ref('');
+const newUnitObjectives = ref('');
 
-const kbCount = computed(() => props.course.kbFiles?.length ?? 0);
-
-const isCourseView = (view: ViewState) => props.currentView === view;
-const isUnitActive = (unitId: string) => props.currentView === 'UNIT_VIEW' && props.activeUnitId === unitId;
+const isUnitActive = (unitId: string) => props.activeUnitId === unitId;
 
 const handleSelectUnit = (unitId: string) => {
   emit('select-unit', unitId);
   if (props.mobileOpen) emit('close-mobile');
 };
 
-const handleSelectGlobal = (view: ViewState) => {
-  emit('select-global', view);
-  if (props.mobileOpen) emit('close-mobile');
-};
-
 const handleCreateUnit = () => {
-  if (!newUnitTitle.value.trim()) return;
-  emit('add-unit', newUnitTitle.value.trim());
+  const title = newUnitTitle.value.trim();
+  const objectives = newUnitObjectives.value.trim();
+  if (!title || !objectives) return;
+
+  emit('add-unit', { title, objectives });
   newUnitTitle.value = '';
+  newUnitObjectives.value = '';
   isCreatingUnit.value = false;
 };
 
@@ -99,65 +93,6 @@ const baseSidebarClasses = computed(() => [
               {{ course.name.substring(0, 1).toUpperCase() }}
             </div>
           </template>
-        </div>
-
-        <div class="space-y-2 border-b border-slate-100 dark:border-slate-800" :class="collapsed ? 'p-2' : 'p-4'">
-          <div v-if="!collapsed" class="px-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-            {{ t('sidebar.modules') }}
-          </div>
-
-          <button
-            class="w-full flex items-center rounded-xl border transition-all duration-200"
-            :class="[
-              collapsed ? 'justify-center p-2' : 'justify-between p-3',
-              isCourseView(ViewState.KNOWLEDGE_BASE)
-                ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
-                : 'bg-white dark:bg-slate-800/40 border-slate-100 dark:border-slate-800/50 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-200',
-            ]"
-            type="button"
-            :title="collapsed ? t('sidebar.kb') : ''"
-            @click="handleSelectGlobal(ViewState.KNOWLEDGE_BASE)"
-          >
-            <div :class="['flex items-center', collapsed ? 'justify-center' : 'gap-3']">
-              <div
-                class="p-1.5 rounded-lg"
-                :class="isCourseView(ViewState.KNOWLEDGE_BASE) ? 'bg-indigo-200/50 dark:bg-indigo-800/50' : 'bg-slate-100 dark:bg-slate-800'"
-              >
-                <LucideIcon name="database" class="w-4 h-4" />
-              </div>
-              <span v-if="!collapsed" class="font-bold text-sm">{{ t('sidebar.kb') }}</span>
-            </div>
-            <span
-              v-if="!collapsed"
-              class="text-xs font-mono font-bold px-2 py-0.5 rounded-full"
-              :class="isCourseView(ViewState.KNOWLEDGE_BASE) ? 'bg-indigo-200 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'"
-            >
-              {{ kbCount }}
-            </span>
-          </button>
-
-          <button
-            class="w-full flex items-center rounded-xl border transition-all duration-200"
-            :class="[
-              collapsed ? 'justify-center p-2' : 'justify-between p-3',
-              isCourseView(ViewState.ASSISTANT)
-                ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300'
-                : 'bg-white dark:bg-slate-800/40 border-slate-100 dark:border-slate-800/50 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-200',
-            ]"
-            type="button"
-            :title="collapsed ? t('sidebar.assistant') : ''"
-            @click="handleSelectGlobal(ViewState.ASSISTANT)"
-          >
-            <div :class="['flex items-center', collapsed ? 'justify-center' : 'gap-3']">
-              <div
-                class="p-1.5 rounded-lg"
-                :class="isCourseView(ViewState.ASSISTANT) ? 'bg-purple-200/50 dark:bg-purple-800/50' : 'bg-slate-100 dark:bg-slate-800'"
-              >
-                <LucideIcon name="message-square" class="w-4 h-4" />
-              </div>
-              <span v-if="!collapsed" class="font-bold text-sm">{{ t('sidebar.assistant') }}</span>
-            </div>
-          </button>
         </div>
 
         <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3" :class="collapsed ? 'p-2' : 'p-4'">
@@ -279,10 +214,17 @@ const baseSidebarClasses = computed(() => [
               :placeholder="t('sidebar.unit_placeholder')"
               @keyup.enter="handleCreateUnit"
             />
+            <textarea
+              v-model="newUnitObjectives"
+              rows="3"
+              class="w-full bg-transparent text-sm font-medium outline-none mb-3 text-slate-900 dark:text-white placeholder-slate-400 resize-none"
+              :placeholder="t('sidebar.unit_objectives_placeholder')"
+            />
             <div class="flex gap-2">
               <button
                 type="button"
-                class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-1.5 rounded-md font-medium transition-colors"
+                class="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs py-1.5 rounded-md font-medium transition-colors"
+                :disabled="!newUnitTitle.trim() || !newUnitObjectives.trim()"
                 @click="handleCreateUnit"
               >
                 {{ t('sidebar.add_unit') }}

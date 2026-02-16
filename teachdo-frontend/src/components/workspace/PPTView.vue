@@ -10,6 +10,7 @@ import type { AIPPTSlide } from '@/editor-runtime/types/AIPPT';
 import { createAipptGenerator, type ImgPoolItem } from '@/editor-runtime/aippt/aipptGenerator';
 import { useSlidesStore as useEditorSlidesStore } from '@editor/store';
 import ThumbnailSlide from '@editor/views/components/ThumbnailSlide/index.vue';
+import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
 
 interface Props {
   currentCourse: CourseGroup;
@@ -24,6 +25,7 @@ const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const { t } = useI18n();
 const router = useRouter();
+const ui = useWorkspaceUiStore();
 
 const loading = ref(false);
 const presentation = ref<Presentation | null>(null);
@@ -127,7 +129,7 @@ watch(
 );
 
 const goToKnowledgeBase = () => {
-  router.push({ name: 'course-tab', params: { courseId: props.currentCourse.id, tab: 'kb' } });
+  ui.setRightPanelTab('kb');
 };
 
 const goToEditor = () => {

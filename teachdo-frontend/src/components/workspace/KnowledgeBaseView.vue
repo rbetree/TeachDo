@@ -6,8 +6,11 @@ import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useI18n } from 'vue-i18n';
 import { aiService } from '@/services/aiService';
 
+type KnowledgeBaseViewVariant = 'page' | 'panel';
+
 interface Props {
   currentCourse: CourseGroup;
+  variant?: KnowledgeBaseViewVariant;
 }
 
 interface Emits {
@@ -17,6 +20,8 @@ interface Emits {
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const { t } = useI18n();
+
+const isPanel = computed(() => props.variant === 'panel');
 
 const isDragging = ref(false);
 const searchQuery = ref('');
@@ -208,9 +213,68 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col gap-6">
+  <div :class="['h-full flex flex-col', isPanel ? 'gap-3' : 'gap-6']">
     <input ref="fileInputRef" type="file" class="hidden" @change="handleFilePicked" />
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+
+    <!-- Panel Variant: 紧凑侧栏布局 -->
+    <div
+      v-if="isPanel"
+      class="px-3 py-3 border-b border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-900/30 backdrop-blur"
+    >
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 text-indigo-600 dark:text-indigo-300 flex items-center justify-center border border-indigo-100 dark:border-indigo-800/40 flex-shrink-0">
+            <LucideIcon name="database" :size="18" />
+          </div>
+          <div class="min-w-0">
+            <div class="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">{{ t('kb.title') }}</div>
+            <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+              {{ props.currentCourse.name }} · {{ t('kb.stats.total') }} {{ files.length }}
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1">
+          <button
+            type="button"
+            class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 transition-colors"
+            :aria-label="t('kb.action.refresh')"
+            :title="t('kb.action.refresh')"
+            @click="refreshFromBackend"
+          >
+            <LucideIcon name="refresh-cw" :size="18" :class="syncing ? 'animate-spin' : ''" />
+          </button>
+
+          <button
+            type="button"
+            class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
+            :aria-label="t('kb.action.upload')"
+            :title="t('kb.action.upload')"
+            @click="openFilePicker"
+          >
+            <LucideIcon name="upload-cloud" :size="18" />
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <div class="relative">
+          <LucideIcon name="search" :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            :placeholder="t('kb.search')"
+            class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-all"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Variant: 原页面布局 -->
+    <div
+      v-else
+      class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm"
+    >
       <div>
         <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <LucideIcon name="database" :size="24" class="text-indigo-600" />
@@ -236,102 +300,212 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden">
-      <div class="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
-	        <div
-	          class="m-4 p-8 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-all duration-200 cursor-pointer"
-	          :class="isDragging ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800'"
-	          @click="openFilePicker"
-	          @dragover.prevent="handleDragOver"
-	          @dragleave.prevent="handleDragLeave"
-	          @drop="handleDrop"
-	        >
-          <div class="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-sm mb-3">
-            <LucideIcon name="upload-cloud" :size="24" :class="isDragging ? 'text-indigo-600' : 'text-slate-400'" />
+    <div :class="['flex-1 flex overflow-hidden', isPanel ? 'flex-col gap-0' : 'flex-col md:flex-row gap-6']">
+      <div
+        :class="[
+          'flex-1 flex flex-col overflow-hidden',
+          isPanel ? '' : 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm',
+        ]"
+      >
+        <!-- Panel Variant：紧凑上传区 + 列表 -->
+        <template v-if="isPanel">
+          <div
+            class="mx-3 mt-3 mb-2 p-4 border border-dashed rounded-xl flex items-center gap-3 transition-colors cursor-pointer"
+            :class="isDragging
+              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+              : 'border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/20 hover:bg-white/80 dark:hover:bg-slate-900/30'"
+            @click="openFilePicker"
+            @dragover.prevent="handleDragOver"
+            @dragleave.prevent="handleDragLeave"
+            @drop="handleDrop"
+          >
+            <div class="w-9 h-9 rounded-xl bg-white/80 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0">
+              <LucideIcon name="upload-cloud" :size="18" :class="isDragging ? 'text-indigo-600' : 'text-slate-400'" />
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{{ t('kb.drop.title') }}</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ t('kb.drop.desc') }}</p>
+            </div>
           </div>
-          <div class="text-center">
-            <p class="text-sm font-bold text-slate-700 dark:text-slate-200">
-              {{ isDragging ? t('kb.drop.title') : t('kb.drop.title') }}
-            </p>
-            <p class="text-xs text-slate-500 mt-1">{{ t('kb.drop.desc') }}</p>
-          </div>
-        </div>
 
-        <div class="grid grid-cols-12 gap-4 px-6 py-3 border-b border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50 dark:bg-slate-900/50">
-          <div class="col-span-6">{{ t('kb.table.name') }}</div>
-          <div class="col-span-2">{{ t('kb.table.size') }}</div>
-          <div class="col-span-3">{{ t('kb.table.status') }}</div>
-          <div class="col-span-1 text-right">{{ t('kb.table.action') }}</div>
-        </div>
+          <div class="flex-1 overflow-y-auto custom-scrollbar">
+            <div v-if="filteredFiles.length === 0" class="flex flex-col items-center justify-center py-10 text-slate-400">
+              <LucideIcon name="file" :size="32" class="mb-2 opacity-40" />
+              <p class="text-sm">{{ t('kb.empty') }}</p>
+            </div>
 
-        <div class="flex-1 overflow-y-auto custom-scrollbar">
-          <div v-if="filteredFiles.length === 0" class="flex flex-col items-center justify-center h-48 text-slate-400">
-            <LucideIcon name="file" :size="40" class="mb-2 opacity-40" />
-            <p class="text-sm">{{ t('kb.empty') }}</p>
-          </div>
-          <div v-else class="divide-y divide-slate-100 dark:divide-slate-800">
-            <div
-              v-for="file in filteredFiles"
-              :key="file.id"
-              class="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
-            >
-              <div class="col-span-6 flex items-center gap-3 overflow-hidden">
-                <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0 font-bold text-xs uppercase">
-                  {{ file.type }}
-                </div>
-                <div class="min-w-0">
-                  <div class="font-bold text-sm text-slate-800 dark:text-slate-200 truncate" :title="file.name">{{ file.name }}</div>
-                  <div class="text-xs text-slate-400">{{ new Date(file.uploadedAt).toLocaleDateString() }}</div>
-                </div>
-              </div>
-              <div class="col-span-2 text-sm text-slate-500 font-mono">
-                {{ formatSize(file.size || 0) }}
-              </div>
-              <div class="col-span-3">
-                <span
-                  v-if="file.status === 'ready'"
-                  class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                >
-                  <LucideIcon name="check-circle" :size="14" /> {{ t('kb.status.ready') }}
-                </span>
-                <span
-                  v-else-if="file.status === 'processing'"
-                  class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 animate-pulse"
-                >
-                  <LucideIcon name="loader-2" :size="14" class="animate-spin" /> {{ t('kb.status.processing') }}
-                </span>
-                <div v-else-if="file.status === 'uploading'" class="w-full max-w-[140px] space-y-1">
-                  <div class="flex justify-between text-[10px] font-bold text-indigo-600">
-                    <span>{{ t('kb.status.uploading') }}</span>
-                    <span>{{ file.progress ?? 0 }}%</span>
+            <div v-else class="divide-y divide-slate-200/60 dark:divide-slate-800/60">
+              <div
+                v-for="file in filteredFiles"
+                :key="file.id"
+                class="px-3 py-3 hover:bg-white/60 dark:hover:bg-slate-900/30 transition-colors"
+              >
+                <div class="flex items-start gap-3">
+                  <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 flex items-center justify-center text-indigo-700 dark:text-indigo-200 flex-shrink-0 font-bold text-[10px] uppercase border border-indigo-100 dark:border-indigo-800/40">
+                    {{ file.type }}
                   </div>
-                  <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div class="h-full bg-indigo-500 transition-all duration-300" :style="{ width: `${file.progress ?? 0}%` }"></div>
+
+                  <div class="min-w-0 flex-1">
+                    <div class="font-bold text-sm text-slate-800 dark:text-slate-100 truncate" :title="file.name">{{ file.name }}</div>
+                    <div class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
+                      <span class="font-mono">{{ formatSize(file.size || 0) }}</span>
+                      <span class="text-slate-300 dark:text-slate-700">•</span>
+                      <span>{{ new Date(file.uploadedAt).toLocaleDateString() }}</span>
+                    </div>
+
+                    <div v-if="file.status === 'uploading'" class="mt-2 space-y-1">
+                      <div class="flex justify-between text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                        <span>{{ t('kb.status.uploading') }}</span>
+                        <span>{{ file.progress ?? 0 }}%</span>
+                      </div>
+                      <div class="h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div class="h-full bg-indigo-500 transition-all duration-300" :style="{ width: `${file.progress ?? 0}%` }"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                    <span
+                      v-if="file.status === 'ready'"
+                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300"
+                    >
+                      <LucideIcon name="check-circle" :size="12" /> {{ t('kb.status.ready') }}
+                    </span>
+                    <span
+                      v-else-if="file.status === 'processing'"
+                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200"
+                    >
+                      <LucideIcon name="loader-2" :size="12" class="animate-spin" /> {{ t('kb.status.processing') }}
+                    </span>
+                    <span
+                      v-else-if="file.status === 'uploading'"
+                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-200"
+                    >
+                      <LucideIcon name="loader-2" :size="12" class="animate-spin" /> {{ t('kb.status.uploading') }}
+                    </span>
+                    <span
+                      v-else
+                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300"
+                    >
+                      <LucideIcon name="alert-circle" :size="12" /> {{ t('kb.status.error') }}
+                    </span>
+
+                    <button
+                      type="button"
+                      class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                      :aria-label="t('kb.action.delete')"
+                      :title="t('kb.action.delete')"
+                      :disabled="file.status === 'uploading'"
+                      @click="handleDelete(file.id)"
+                    >
+                      <LucideIcon name="trash-2" :size="16" />
+                    </button>
                   </div>
                 </div>
-                <span
-                  v-else
-                  class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                >
-                  <LucideIcon name="alert-circle" :size="14" /> {{ t('kb.status.error') }}
-                </span>
-              </div>
-              <div class="col-span-1 text-right">
-                <button
-                  type="button"
-                  class="text-slate-400 hover:text-red-500 transition-colors"
-                  :disabled="file.status === 'uploading'"
-                  @click="handleDelete(file.id)"
-                >
-                  <LucideIcon name="trash-2" :size="16" :title="t('kb.action.delete')" />
-                </button>
               </div>
             </div>
           </div>
-        </div>
+        </template>
+
+        <!-- Page Variant：原表格布局 -->
+        <template v-else>
+          <div
+            class="m-4 p-8 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-all duration-200 cursor-pointer"
+            :class="isDragging
+              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+              : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800'"
+            @click="openFilePicker"
+            @dragover.prevent="handleDragOver"
+            @dragleave.prevent="handleDragLeave"
+            @drop="handleDrop"
+          >
+            <div class="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-sm mb-3">
+              <LucideIcon name="upload-cloud" :size="24" :class="isDragging ? 'text-indigo-600' : 'text-slate-400'" />
+            </div>
+            <div class="text-center">
+              <p class="text-sm font-bold text-slate-700 dark:text-slate-200">
+                {{ isDragging ? t('kb.drop.title') : t('kb.drop.title') }}
+              </p>
+              <p class="text-xs text-slate-500 mt-1">{{ t('kb.drop.desc') }}</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-12 gap-4 px-6 py-3 border-b border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50 dark:bg-slate-900/50">
+            <div class="col-span-6">{{ t('kb.table.name') }}</div>
+            <div class="col-span-2">{{ t('kb.table.size') }}</div>
+            <div class="col-span-3">{{ t('kb.table.status') }}</div>
+            <div class="col-span-1 text-right">{{ t('kb.table.action') }}</div>
+          </div>
+
+          <div class="flex-1 overflow-y-auto custom-scrollbar">
+            <div v-if="filteredFiles.length === 0" class="flex flex-col items-center justify-center h-48 text-slate-400">
+              <LucideIcon name="file" :size="40" class="mb-2 opacity-40" />
+              <p class="text-sm">{{ t('kb.empty') }}</p>
+            </div>
+            <div v-else class="divide-y divide-slate-100 dark:divide-slate-800">
+              <div
+                v-for="file in filteredFiles"
+                :key="file.id"
+                class="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+              >
+                <div class="col-span-6 flex items-center gap-3 overflow-hidden">
+                  <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0 font-bold text-xs uppercase">
+                    {{ file.type }}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="font-bold text-sm text-slate-800 dark:text-slate-200 truncate" :title="file.name">{{ file.name }}</div>
+                    <div class="text-xs text-slate-400">{{ new Date(file.uploadedAt).toLocaleDateString() }}</div>
+                  </div>
+                </div>
+                <div class="col-span-2 text-sm text-slate-500 font-mono">
+                  {{ formatSize(file.size || 0) }}
+                </div>
+                <div class="col-span-3">
+                  <span
+                    v-if="file.status === 'ready'"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                  >
+                    <LucideIcon name="check-circle" :size="14" /> {{ t('kb.status.ready') }}
+                  </span>
+                  <span
+                    v-else-if="file.status === 'processing'"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 animate-pulse"
+                  >
+                    <LucideIcon name="loader-2" :size="14" class="animate-spin" /> {{ t('kb.status.processing') }}
+                  </span>
+                  <div v-else-if="file.status === 'uploading'" class="w-full max-w-[140px] space-y-1">
+                    <div class="flex justify-between text-[10px] font-bold text-indigo-600">
+                      <span>{{ t('kb.status.uploading') }}</span>
+                      <span>{{ file.progress ?? 0 }}%</span>
+                    </div>
+                    <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div class="h-full bg-indigo-500 transition-all duration-300" :style="{ width: `${file.progress ?? 0}%` }"></div>
+                    </div>
+                  </div>
+                  <span
+                    v-else
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                  >
+                    <LucideIcon name="alert-circle" :size="14" /> {{ t('kb.status.error') }}
+                  </span>
+                </div>
+                <div class="col-span-1 text-right">
+                  <button
+                    type="button"
+                    class="text-slate-400 hover:text-red-500 transition-colors"
+                    :disabled="file.status === 'uploading'"
+                    @click="handleDelete(file.id)"
+                  >
+                    <LucideIcon name="trash-2" :size="16" :title="t('kb.action.delete')" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
 
-      <div class="w-full md:w-72 flex-shrink-0 space-y-4">
+      <div v-if="!isPanel" class="w-full md:w-72 flex-shrink-0 space-y-4">
         <div class="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800/50">
           <h3 class="font-bold text-indigo-900 dark:text-indigo-100 mb-2">{{ t('kb.rag.title') }}</h3>
           <p class="text-xs text-indigo-700 dark:text-indigo-300 leading-relaxed">

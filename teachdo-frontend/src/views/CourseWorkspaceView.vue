@@ -7,50 +7,49 @@ import UnitSidebar from '@/components/workspace/UnitSidebar.vue';
 import OutlineView from '@/components/workspace/OutlineView.vue';
 import LessonPlanView from '@/components/workspace/LessonPlanView.vue';
 import PPTView from '@/components/workspace/PPTView.vue';
-import AssistantView from '@/components/workspace/AssistantView.vue';
-import KnowledgeBaseView from '@/components/workspace/KnowledgeBaseView.vue';
+import WorkspaceRightPanel from '@/components/workspace/WorkspaceRightPanel.vue';
 import { useAppStore } from '@/stores/appStore';
 import type { CourseGroup, CourseUnit } from '#root/types';
 import { ViewState } from '#root/types';
 import type { IconName } from '@/components/common/LucideIcon.vue';
+import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
+import { aiService } from '@/services/aiService';
+import { toast } from '@/utils/toast';
 
 const router = useRouter();
 const route = useRoute();
 const store = useAppStore();
 const { t } = useI18n();
+const ui = useWorkspaceUiStore();
 
 const course = computed(() => store.currentCourse);
 const activeUnit = computed<CourseUnit | null>(() => store.currentUnit);
 const units = computed(() => course.value?.units ?? []);
 
 type UnitTab = 'outline' | 'lesson' | 'ppt';
-type WorkspaceTab = UnitTab | 'kb' | 'assistant';
 
 const normalizeParam = (value: unknown): string | null => {
   if (Array.isArray(value)) return value.length ? value[0] ?? null : null;
   return typeof value === 'string' ? value : null;
 };
 
-const routeTab = computed<WorkspaceTab>(() => {
-  const tabRaw = normalizeParam(route.params.tab)?.toLowerCase();
-  if (tabRaw === 'kb' || tabRaw === 'assistant' || tabRaw === 'outline' || tabRaw === 'lesson' || tabRaw === 'ppt') {
-    return tabRaw;
-  }
-  return 'outline';
-});
-
-const globalMode = computed<'UNIT_VIEW' | ViewState.KNOWLEDGE_BASE | ViewState.ASSISTANT>(() => {
-  if (routeTab.value === 'kb') return ViewState.KNOWLEDGE_BASE;
-  if (routeTab.value === 'assistant') return ViewState.ASSISTANT;
-  return 'UNIT_VIEW';
-});
-
 const activeUnitTab = computed<UnitTab>(() => {
-  if (routeTab.value === 'lesson' || routeTab.value === 'ppt') return routeTab.value;
+  const tabRaw = normalizeParam(route.params.tab)?.toLowerCase();
+  if (tabRaw === 'lesson' || tabRaw === 'ppt') return tabRaw;
   return 'outline';
 });
 const isSidebarCollapsed = ref(false);
 const isMobileSidebarOpen = ref(false);
+
+watch(
+  () => normalizeParam(route.params.tab)?.toLowerCase(),
+  (tabRaw) => {
+    if (tabRaw === 'kb' || tabRaw === 'assistant') {
+      ui.setRightPanelTab(tabRaw);
+    }
+  },
+  { immediate: true },
+);
 
 const unitIndex = computed(() => {
   if (!course.value || !activeUnit.value) return -1;
@@ -78,33 +77,48 @@ const goToUnitTab = (unitId: string, tab: UnitTab) => {
   router.push({ name: 'course-unit', params: { courseId: course.value.id, unitId, tab } });
 };
 
-const goToCourseTab = (tab: 'kb' | 'assistant') => {
+const handleAddUnit = async (payload: { title: string; objectives: string }) => {
   if (!course.value) return;
-  router.push({ name: 'course-tab', params: { courseId: course.value.id, tab } });
-};
+  const currentCourse = course.value;
 
-const handleAddUnit = (title: string) => {
-  if (!course.value) return;
   const newUnit: CourseUnit = {
     id: `unit-${Date.now()}`,
-    title,
-    objectives: '',
+    title: payload.title,
+    objectives: payload.objectives,
     outlineContent: '',
   };
-  store.updateCourseUnits(course.value.id, (list) => [...list, newUnit]);
+  store.updateCourseUnits(currentCourse.id, (list) => [...list, newUnit]);
   store.selectUnit(newUnit.id);
-  goToUnitTab(newUnit.id, activeUnitTab.value);
+  goToUnitTab(newUnit.id, 'outline');
+
+  // 创建单元后立即生成大纲（大纲不属于 PPT/教案步骤）
+  toast.info(t('outline.crafting'));
+  try {
+    const outline = await aiService.generateOutline(currentCourse, newUnit);
+    persistActiveUnit(newUnit.id, { outlineContent: outline });
+
+    // 产物入库（失败不阻断）
+    void aiService
+      .vectorizeTextToKb({
+        userId: currentCourse.id,
+        fileId: `gen:${currentCourse.id}:${newUnit.id}:outline`,
+        fileName: `大纲-${newUnit.title}`,
+        content: outline.trim(),
+        fileType: 'md',
+        folderId: 1,
+      })
+      .catch((e) => console.warn('大纲入库失败（已忽略）', e));
+
+    toast.success(t('outline.toast.generated'));
+  } catch (e) {
+    console.error(e);
+    toast.error(t('outline.toast.error'));
+  }
 };
 
 const handleSelectUnit = (unitId: string) => {
   store.selectUnit(unitId);
   goToUnitTab(unitId, activeUnitTab.value);
-};
-
-const handleSelectGlobal = (view: ViewState) => {
-  if (view === ViewState.KNOWLEDGE_BASE || view === ViewState.ASSISTANT) {
-    goToCourseTab(view === ViewState.KNOWLEDGE_BASE ? 'kb' : 'assistant');
-  }
 };
 
 const handleTabChange = (tab: UnitTab) => {
@@ -145,12 +159,10 @@ const persistCourse = (updates: Partial<CourseGroup>) => {
     <UnitSidebar
       :course="course"
       :active-unit-id="activeUnit?.id ?? null"
-      :current-view="globalMode"
       :collapsed="isSidebarCollapsed"
       :mobile-open="isMobileSidebarOpen"
       @select-unit="handleSelectUnit"
       @add-unit="handleAddUnit"
-      @select-global="handleSelectGlobal"
       @toggle-collapse="isSidebarCollapsed = !isSidebarCollapsed"
       @close-mobile="isMobileSidebarOpen = false"
     />
@@ -166,26 +178,9 @@ const persistCourse = (updates: Partial<CourseGroup>) => {
         </button>
       </div>
 
-      <div v-if="globalMode === ViewState.KNOWLEDGE_BASE" class="h-full w-full overflow-y-auto custom-scrollbar p-6 md:p-10 pt-16 md:pt-10">
-        <div class="max-w-6xl mx-auto h-full animate-fade-in">
-          <KnowledgeBaseView v-if="course" :current-course="course" @update-course="persistCourse" />
-        </div>
-      </div>
-
-      <div v-else-if="globalMode === ViewState.ASSISTANT" class="h-full w-full overflow-hidden p-6 md:p-10 pt-16 md:pt-10">
-        <div class="max-w-6xl mx-auto h-full animate-fade-in">
-          <AssistantView
-            v-if="course"
-            :current-course="course"
-            :current-unit="activeUnit"
-            @update-course="persistCourse"
-          />
-        </div>
-      </div>
-
-      <div v-else class="flex-1 flex flex-col relative">
+      <div class="flex-1 flex flex-col relative">
         <template v-if="activeUnit">
-          <header class="px-6 md:px-8 py-5 pl-16 md:pl-8 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/70 dark:bg-slate-900/70 backdrop-blur sticky top-0 z-10 border-b border-slate-200/60 dark:border-slate-800/60">
+          <header class="px-6 md:px-8 py-4 pl-16 md:pl-8 flex flex-col gap-3 bg-white/70 dark:bg-slate-900/70 backdrop-blur sticky top-0 z-10 border-b border-slate-200/60 dark:border-slate-800/60">
             <div class="min-w-0">
               <div class="flex items-center text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 gap-2">
                 <span>{{ t('workspace.unit.prefix') }} {{ unitIndex >= 0 ? (unitIndex + 1).toString().padStart(2, '0') : '--' }}</span>
@@ -198,7 +193,9 @@ const persistCourse = (updates: Partial<CourseGroup>) => {
                 {{ activeUnit.title }}
               </h2>
             </div>
-            <div class="flex p-1 bg-slate-200/40 dark:bg-slate-800 rounded-xl overflow-x-auto no-scrollbar gap-1">
+
+            <!-- Tab（在上） -->
+            <div class="flex p-1 bg-slate-200/40 dark:bg-slate-800 rounded-xl overflow-x-auto no-scrollbar gap-1 w-fit">
               <button
                 v-for="tab in tabConfig"
                 :key="tab.id"
@@ -260,6 +257,12 @@ const persistCourse = (updates: Partial<CourseGroup>) => {
         </div>
       </div>
     </main>
+
+    <WorkspaceRightPanel
+      :current-course="course"
+      :current-unit="activeUnit"
+      @update-course="persistCourse"
+    />
   </section>
 
   <section v-else class="text-center py-20 space-y-4 text-slate-500 dark:text-slate-400">
