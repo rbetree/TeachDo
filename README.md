@@ -73,7 +73,7 @@ npm run build
 
 ## 📚 文档与脚本
 
-- 迁移与实施计划：`doc/dev/PLAN.md`
+- 开发计划（当前）：`doc/dev/PLAN.md`
 - 环境变量说明：`doc/dev/ENV_GUIDE.md`
 - 前端 API 映射：`doc/dev/FRONTEND_API_CALLS.md`
 - 接口冒烟校验：`scripts/verify_endpoints.py`

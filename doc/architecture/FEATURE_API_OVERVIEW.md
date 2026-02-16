@@ -89,4 +89,4 @@
 - 前端 API 映射：`doc/dev/FRONTEND_API_CALLS.md`
 - Docker 部署：`doc/DockerDeploy.md`
 - 模板制作与结构：`doc/Template.md`、`doc/PPT_Structure.md`
-- 迁移与实施计划：`doc/dev/PLAN.md`
+- 开发计划（当前）：`doc/dev/PLAN.md`

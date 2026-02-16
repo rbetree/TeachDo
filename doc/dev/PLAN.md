@@ -1,581 +1,295 @@
-# TeachDo 整体重构计划（补充版）
+# TeachDo 开发计划（当前）
 
-## 0. 文档说明（本次为补充，不是替换）
-- 本文在原有计划基础上补充细化，目标是形成可直接执行的实施文档。
-- 原计划/背景文档参考：`doc/dev/DEVELOPMENT_PLAN.md`（本文优先用于落地实施，若两者冲突以本文为准）。
-- 核心方向不变：
-1. 保留现有 `teachdo-frontend`，在其上重构。
-2. 不迁移历史旧前端样式流程页，仅迁移能力链路。
-3. 以 TeachDo 核心链路可用为 V1 首要目标（能力来源为现有 ai2ppt 链路）。
-- 更新时间：2026-02-15。
+> 更新：2026-02-16  
+> 历史迁移计划（ai2ppt → TeachDo，阶段 A–G）已归档：`doc/dev/history/PLAN_AI2PPT_TO_TEACHDO_2026-02.md`
 
-## 1. 项目目标
-- 保留现有 `teachdo-frontend` 的工作台视觉与交互结构。
-- 在工作台内替换原 PPT 生成单元，接入现有 PPT 生成引擎能力链路。
-- 以 `teachdo-frontend` 作为唯一前端入口，确保单前端架构。
-- 新建 `teachdo` 仓库，使用干净历史（不保留 ai2ppt 的 git commit 历史），仅迁移需要的代码与文档。
+## 0. 文档说明
+- 本文件作为 TeachDo 后续开发计划（Roadmap）的唯一入口文件，面向“接下来做什么 / 为什么 / 验收标准（DoD）”。
+- 约定：
+1. 每次更新请同步「更新日期」并记录必要的 commit/PR。
+2. 对外发布前的发布清理/工程校验清单：参考历史计划的“阶段 G”。
+3. Docker/部署（历史阶段 H）：确认“功能开发稳定后”再启动，不阻塞当前迭代。
 
-## 2. 已确认范围与原则
-- 保留：
-1. TeachDo 工作台布局、页面风格、信息架构。
-2. 课程/单元管理与 Tab 工作流。
-- 替换：
-1. `teachdo-frontend` 现有 PPT 生成模块的业务能力实现。
-2. 虚构接口调用与不稳定解析逻辑。
-- 不迁移：
-1. 历史旧前端页面样式与流程页面（`Home/Outline/PPT`）。
-- 优先级：
-1. 先确保 TeachDo 核心链路完整可用。
-2. 再扩展非 PPT 模块能力。
+## 1. 当前状态（简述）
+- 迁移链路已可用：Outline → PPT 生成 → 预览 → 编辑器 → 导出闭环已打通（阶段 A–G 已完成并归档）。
+- 当前工作重点从“迁移实施”切换为“前端产品化/架构收敛 + 连贯性体验打磨 + 性能与可维护性提升”。
 
-## 2.1 命名与文案清理规则（迁移期与交付期）
-- 迁移期（当前文档与实施阶段）允许在文档中出现 `ai2ppt` 术语，用于描述迁移来源能力、接口路径和历史代码上下文。
-- 交付期（重构后项目）对外命名统一为 `TeachDo`：
-1. 用户可见（UI 文案/标题/帮助文档）不出现 `ai2ppt/AI2PPT`。
-2. 代码实现（前端+后端）不保留 `ai2ppt/AI2PPT` 字符串与语义命名（允许文档中的迁移说明保留）。
-- UI 文案、页面标题、帮助文档、品牌标识中的历史品牌字样在上线前全部替换。
-- 前端业务函数命名使用 `teachdo`/`ppt` 语义，不继续新增 `ai2ppt` 语义命名。
-- 后端兼容路径可暂保留 `/tools/aippt*`，但前端对外展示不暴露该命名。
+## 2. 后续里程碑（建议）
 
-## 2.2 关键决策（已确认）
-1. API 访问策略：统一走相对路径 `/api`（Dev 用 Vite proxy，Prod 用 Nginx 反代）。
-2. 模板策略：沿用现有后端模板（`/templates` + `/data/*`）。
-3. KB/会话作用域：`sessionId/user_id = course.id`（course-scoped）。
-4. 导出策略：只使用编辑器导出（PPT 预览页不提供导出）。
-5. 编辑器形态：工作台内仅预览；点击“进行编辑”跳转到独立编辑器页面。
-6. 新仓库策略：`teachdo` 采用干净历史（新建 git 仓库，不保留 ai2ppt git 历史）。
-7. KB 引用策略：仅在 PPT 生成阶段默认开启“引用知识库素材”（当 KB 无 `ready` 文件时自动关闭并禁用）。
-8. KB 检索范围：生成时可选；默认仅引用 `folder_id=0` 上传素材，可勾选包含 `folder_id=1` 生成产物。
-9. 编辑器迁移工具链策略：采用策略 A（保留 TeachDo 工具链，逐步引入旧编辑器依赖修复编译问题）。
+### 阶段 I：前端架构收敛与稳定性（P0）
+目标：先解决结构性风险与边界问题，避免后续优化在“脆弱地基”上叠加。
 
-## 3. 可行性结论与依据
-
-### 3.1 可行性结论
-- 可行，且技术路径明确。
-- 风险主要在编辑器模块体量与依赖差异，可通过模块隔离+分阶段集成控制。
-
-### 3.2 关键依据（代码现状）
-- 后端已提供可用主链路接口：`/tools/aippt_outline_unified`、`/tools/aippt`、`/templates`、`/data/*`、`/healthz`。
-- TeachDo 当前工作台已具备可替换边界：
-1. `CourseWorkspaceView` 以 `PPTView` 作为独立单元。
-2. `aiService` 已有部分真实接口调用，但夹杂虚构接口。
-- 当前 `start.py` 与 `docker-compose.yml` 仍指向旧 `frontend/`，需切换到 `teachdo-frontend/`。
-
-## 4. V1 验收标准
-1. 大纲能力：仅基于主题输入流式生成大纲并可保存（V1 不在大纲阶段引用知识库/上传素材）。
-2. 模板能力：可从后端拉取模板并选择模板。
-3. 内容能力：可流式生成 PPT 内容，支持增量渲染与结束收尾。
-4. 编辑能力：PPT 预览页提供“进行编辑”入口，跳转到独立编辑器页面进行编辑。
-5. 导出能力：仅在编辑器页面支持导出 PPTX（预览页不提供导出）。
-6. 路由能力：工作台标签路由化，可直达、可刷新恢复。
-7. 稳定性：不再依赖虚构接口导致运行时报错。
-
-## 5. 架构与接口设计
-
-### 5.1 前端路由（全标签路由化）
-- `/`：课程列表。
-- `/course/:courseId`：课程工作台（当课程有单元时自动跳转到默认单元页）。
-- `/course/:courseId/unit/:unitId/:tab`：单元标签页。
- - `tab` 取值：`outline`、`lesson`、`ppt`。
-- `/course/:courseId/:tab`：课程级标签页。
- - `tab` 取值：`kb`、`assistant`。
-- `/course/:courseId/unit/:unitId/ppt/editor`：独立编辑器页面路由（从工作台跳转进入）。
-
-### 5.2 后端接口映射（V1）
-- 前端统一走相对路径：以 `/api` 作为唯一 API 前缀（Dev 用 Vite proxy；生产反代在开发完成后处理）。
-- 下述为 main_api 实际路径（不带 `/api` 前缀）；前端访问时统一加上 `/api`。
-- `GET /healthz`：服务可用性检查。
-- `GET /templates`：模板列表（返回 `data` 数组）。
-- `POST /tools/aippt_outline_unified`：统一大纲流式生成（form-data）。
-- `POST /tools/aippt`：PPT 内容流式生成（SSE）。
-- `GET /data/{filename}`：模板相关静态资源。
-
-### 5.3 TeachDo 服务层标准化（目标形态）
-- 统一在 `teachdo-frontend/src/services/aiService.ts` 维护接口调用，不再散落组件内直接 `fetch`。
-- `BASE_API = '/api'`，所有请求走相对路径（不使用 `http://localhost:6800` 这类绝对地址）。
-- 统一提供：
-1. `checkBackend()`
-2. `getTemplates()`
-3. `generateOutline(course, unit, onStream)`
-4. `generatePPT(course, unit, outline, template, onSlide)`
-- 对 V1 非核心能力（lesson/assistant）提供可运行兜底，避免硬失败。
- - 统一会话/知识库作用域：`sessionId/user_id = course.id`（course-scoped）。
-
-### 5.4 数据模型调整（teachdo-frontend）
-- `CourseUnit` 增加 `outlineMeta`：记录来源模式、文件名、时间戳。
-- `CourseUnit` 增加 `editorDocument`：记录编辑器文档快照（slides/theme/viewport）。
-- `CourseUnit` 保留 `presentation`：用于预览与快速回显。
-- `CourseUnit` 保留 `selectedTemplateId`：用于生成与回显一致性。
-
-### 5.5 知识库真实化与“产物入库”（新增）
-#### 5.5.1 知识库定义与原则
-- 知识库（KB）的目标是“可检索语料”，用于 `generateFromUploadedFile`（KnowledgeBaseSearch）检索引用。
-- 本计划中“KB 素材”指：教师在知识库页面上传并向量化的文件内容（默认 `folder_id=0`），生成时通过检索返回的片段（topk chunks）作为上下文引用。
-- 编辑器文档（`editorDocument` 的 slides/theme 等 JSON）属于“可编辑资产”，不直接作为 KB 文件存储。
-- 生成产物（大纲/讲稿/最终 PPT 文本）应“入库”为可检索语料：以文本形式写入 personaldb（向量化），让后续生成/助教可引用。
-
-#### 5.5.1.1 持久化边界（新增，已确认）
-- 不需要跨设备/多人共享 `editorDocument`。
-- `editorDocument` 的持久化策略：
-1. V1：沿用编辑器自身的本地持久化能力（IndexedDB 或等价机制），并在关键节点同步一份快照到 `CourseUnit.editorDocument` 便于工作台预览回显。
-2. 不引入后端“编辑资产存储”作为 V1 前置条件。
-
-#### 5.5.1.2 KB 检索过滤（folder_id，新增）
-- 目标：生成时默认只引用“上传素材”（`folder_id=0`），可选包含“生成产物”（`folder_id=1`）。
-- 推荐实现（最小改动，前后端一致）：
-1. 前端在生成请求中携带 `kb_folder_ids`（例如 `[0]` 或 `[0,1]`）。
-2. main_api 在调用 slide_agent 时把该字段透传进 `metadata`（例如 `metadata.kb_folder_ids=[0]`）。
-3. slide_agent 的 `KnowledgeBaseSearch` 工具读取 `metadata.kb_folder_ids`，对 personaldb `/search` 返回的 `metadatas` 做过滤，只保留允许的 `folder_id`，并同步过滤对应的 `documents`。
-- 进阶优化（后续再做）：personaldb `/search` 增加 `folder_ids` 过滤参数并下推到 Chroma query 的 `where`，避免“先检索再过滤”导致 topk 降低。
-
-#### 5.5.2 后端最小新增接口（建议新增在 main_api 下，前端以 `/api` 前缀访问）
-> 说明：
-> - 前端统一访问：`/api/...`（Vite proxy rewrite 去掉 `/api`，命中 main_api 的实际路由）。
-> - main_api 作为 BFF，仅做鉴权/参数校验/转发与响应裁剪，personaldb 作为 KB 持久化存储与检索引擎。
-> - 需要配置 `PERSONAL_DB` 指向 personaldb 服务地址（例如 `http://127.0.0.1:9100`），否则 KB 上传/检索不可用。
-
-##### 5.5.2.1 `POST /api/kb/upload`（上传素材并向量化）
-- Content-Type：`multipart/form-data`
-- 请求字段：
-1. `user_id`（string，必填）：`course.id`
-2. `folder_id`（int，选填，默认 0）：0=上传素材，1=生成产物
-3. `file_id`（string，选填）：不传则由服务端生成
-4. `file_type`（string，选填）：不传则由文件扩展名推断
-5. `file`（binary，必填）
-- 服务端 `file_id` 生成规则（上传素材）：
-1. 格式：`upload:{courseId}:{epochMs}:{rand3}`
-2. 例：`upload:course-1730000000000:1730000000000:042`
-- 转发到 personaldb：`POST {PERSONAL_DB}/upload/`，字段映射：
-1. `userId=user_id`
-2. `fileId=file_id`
-3. `folderId=folder_id`
-4. `fileType=file_type`
-5. `file=file`
-- 成功响应（200）：
-```json
-{
-  "ok": true,
-  "data": {
-    "user_id": "course-1730000000000",
-    "file_id": "upload:course-1730000000000:1730000000000:042",
-    "file_name": "课程标准.pdf",
-    "file_type": "pdf",
-    "folder_id": 0,
-    "status": "ready"
-  }
-}
-```
-- 失败响应（示例）：
-```json
-{ "ok": false, "error": { "code": "KB_UPLOAD_FAILED", "message": "..." } }
-```
-- 约束：
-1. 不向前端返回 personaldb 的 `markdown_content`（可能过大），如需要可返回 `markdown_length`。
-
-##### 5.5.2.2 `GET /api/kb/files/{user_id}`（列出知识库文件）
-- 路径参数：
-1. `user_id`（string）：`course.id`
-- Query（可选）：
-1. `folder_id`（int）：只返回某一类（0 上传素材 / 1 生成产物）
-- 行为：转发 personaldb `GET /files/{user_id}`，必要时在 main_api 做 folder 过滤
-- 成功响应（200）：
-```json
-{
-  "ok": true,
-  "data": [
-    {
-      "user_id": "course-1730000000000",
-      "file_id": "upload:course-1730000000000:1730000000000:042",
-      "file_name": "课程标准.pdf",
-      "file_type": "pdf",
-      "folder_id": 0
-    }
-  ]
-}
-```
-
-##### 5.5.2.3 `POST /api/kb/vectorize/text`（把生成产物写入 KB 索引）
-- Content-Type：`application/json`
-- 请求字段：
-1. `user_id`（string，必填）：`course.id`
-2. `file_id`（string，必填）：推荐使用“确定性命名”，便于覆盖更新
-3. `file_name`（string，必填）
-4. `file_type`（string，选填，默认 `md`）
-5. `folder_id`（int，选填，默认 1）
-6. `content`（string，必填）
-- `file_id` 命名规范（生成产物，确定性，覆盖更新）：
-1. 大纲：`gen:{courseId}:{unitId}:outline`
-2. 生成 PPT（未编辑）：`gen:{courseId}:{unitId}:slides`
-3. 编辑后最终版：`gen:{courseId}:{unitId}:slides_final`
-- 转发到 personaldb：`POST {PERSONAL_DB}/vectorize/text`，字段映射：
-1. `userId=user_id`
-2. `fileId=file_id`
-3. `fileName=file_name`
-4. `fileType=file_type`
-5. `folderId=folder_id`
-6. `content=content`
-- 成功响应（200）：`{ "ok": true }`（或携带 personaldb 返回的 `embedding_result`）
-
-##### 5.5.2.4 `DELETE /api/kb/files/{user_id}/{file_id}`（删除 KB 文件向量）
-- 路径参数：
-1. `user_id`（string）：`course.id`
-2. `file_id`（string）
-- 行为：转发到 personaldb 新增接口 `DELETE /files/{user_id}/{file_id}`
-- 成功响应（200）：`{ "ok": true }`
-- 说明：若无删除接口，前端“删除”只能删除本地展示，检索仍可能命中旧向量（不可接受）。
-
-#### 5.5.3 personaldb 需补齐能力（为满足 course.id 为字符串）
-- 允许 `user_id` 为字符串（`course.id`），并确保：
-1. `GET /files/{user_id}`：路径参数类型改为 string（当前实现是 int，会导致 course.id 无法列出文件）。
-2. `list_files_by_user(user_id)`：统一使用 `str(user_id)` 归一对比，确保 metadata 中 `user_id` 一致。
-- 允许 `file_id` 为字符串（与 main_api 命名规范一致），并确保：
-1. `/vectorize/text` 的 `fileId` 字段允许 string（当前是 int，会导致 `gen:{...}` 无法入库）。
-2. `insert_file_vectors` / `delete_file_vectors` / `list_files_by_user` 不假设 `file_id` 为 int。
-- 增加删除接口（必须）：
-1. `DELETE /files/{user_id}/{file_id}`：删除该 user 的指定 file 对应向量。
-2. 实现建议：调用现有 `ChromaDB.delete_file_vectors(user_id, file_id)`，并返回 `{ "ok": true }`。
-- （可选，建议）collection 命名安全：
-1. 统一将 collection 名称规范化为 `user_{safe_user_id}`（替换不安全字符），避免未来 user_id 形态变化导致 Chroma collection 创建失败。
-
-#### 5.5.3.1 KB 持久化与目录约定（落盘，新增）
-- personaldb 已使用 `chromadb.PersistentClient` 落盘存储。
-- 默认落盘目录（相对 repo root）：`var/cache/personaldb/chromadb`。
-1. 当前仓库使用 `TEACHDO_CACHE_DIR` 控制基路径（默认 `var/cache`），详见 `backend/personaldb/runtime_paths.py:get_cache_dir()`。
-2. 当前仓库临时文件目录基路径由 `TEACHDO_TMP_DIR` 控制（默认 `var/tmp`）。
-3. 交付版本统一使用 `TEACHDO_CACHE_DIR`、`TEACHDO_TMP_DIR`、`TEACHDO_LOG_DIR`。
-- 本地开发时：只要不删除 `var/cache`，personaldb 重启后 KB 仍可检索命中。
-- Docker/部署（阶段 H 再做）：
-1. 需要将 `var/cache/personaldb` 挂载为 volume，否则容器重建会丢失 KB 数据。
-2. 生产建议显式配置 `TEACHDO_CACHE_DIR=/data/cache` 并做持久化挂载（路径可按你部署习惯调整）。
-
-#### 5.5.4 前端知识库页面（TeachDo）与后端同步策略
-- 知识库页面作为“上传入口与状态中心”，负责：
-1. 上传：调用 `/api/kb/upload`，上传过程中显示 uploading/progress（前端模拟进度即可），成功后标记 ready。
-2. 列表：进入页面或刷新时调用 `/api/kb/files/{course.id}`，与本地 `currentCourse.kbFiles` 合并校准。
-3. 删除：调用 `/api/kb/files/{course.id}/{file_id}`，成功后移除本地条目。
-
-#### 5.5.5 生成产物入库（默认开启）
-- 产物入库以“文本索引”为准，避免存 raw JSON：
-1. 大纲保存后：将最终大纲 markdown 作为文本写入 `/api/kb/vectorize/text`（`file_type='md'`）。
-2. PPT 生成后：将生成的 slide 文本（标题+要点+备注）拼成 markdown，写入 `/api/kb/vectorize/text`。
-3. 编辑器退出/保存后：对编辑后的 slide 文本重新写入同一 `file_id`（覆盖旧向量），确保 KB 命中的是“最终版”。
-- `folder_id` 归类约定（已确认）：
-1. `folder_id=0`：上传素材（教师上传的文件）。
-2. `folder_id=1`：生成产物（大纲/讲稿/最终 PPT 文本等入库索引）。
-
-### 5.6 `/tools/aippt` SSE 协议与 `AIPPTSlide` 结构（补充）
-#### 5.6.1 SSE 事件边界与解析规则
-- main_api 的流式接口使用 SSE：事件以空行分隔（`\n\n` 或 `\r\n\r\n`）。
-- 单条事件可能包含多行 `data:`（尤其是 payload 内带换行时），需要将所有 `data:` 行拼接为完整 payload。
-- 结束标记：payload 为 `[DONE]`。
-- 容错：
-1. 某些模型可能把 JSON 包在 ```json / ``` 围栏内，需要先移除围栏再 `JSON.parse`。
-2. 避免“按行解析”的实现，因为后端会合法输出多行 data，按行会导致 JSON 被截断。
-- 参考实现（迁移来源：ai2ppt 仓库）：`frontend/src/views/PPT/index.vue` 的 `processEvent/pump`。
-
-#### 5.6.2 `AIPPTSlide`（后端每页生成的 JSON）约定
-- WriterAgent 的输出遵循固定结构：顶层键名为 `type` 与 `data`（可选 `images`）。
-- `type` 取值：`cover`、`contents`、`transition`、`content`、`end`。
-- `data` 常见字段：
-1. `cover`：`data.title`、`data.text`
-2. `contents`：`data.items: string[]`
-3. `transition`：`data.title`、`data.text`
-4. `content`：`data.title`、`data.items: { kind?: string, title: string, text: string }[]`（可能包含 `kind=chart|image` 等）
-5. `end`：可能有 `data.text`
-- `images`（可选）：当启用 SearchImage 工具时，可能追加 `images: [{ id, src, alt, width?, height? }]`。
-
-#### 5.6.3 AI Slide 到编辑器 `Slide[]` 的映射策略（必须复用）
-- 目标：工作台预览与编辑器渲染必须一致，因此不能用“TeachDo 自定义的简化 slide 数据结构”替代编辑器的 `Slide` 类型。
-- 推荐方案：迁移并复用旧前端的生成器与类型体系（迁移来源：ai2ppt 仓库）：
-1. `frontend/src/hooks/useAIPPT.ts` 的 `AIPPTGenerator(templateSlides, aiSlides, imgs)` 负责把 `AIPPTSlide[]` 映射为编辑器 `Slide[]`。
-2. `frontend/src/types/slides.ts`、`frontend/src/configs/*`、`frontend/src/utils/*` 中与渲染/导出相关的类型与工具按需迁入 `teachdo-frontend/src/editor-runtime`。
-- TeachDo 侧的数据落点：
-1. 生成时：把生成出的 `Slide[]` + `theme` + `viewport` 写入 `CourseUnit.editorDocument`（用于后续预览与进入编辑器）。
-2. 预览时：直接读取 `CourseUnit.editorDocument` 渲染（只读模式）。
-
-## 6. 分阶段实施计划（含 DoD）
-
-### 6.0 当前进度（滚动更新）
-- 更新：2026-02-16
-- 当前仓库状态：
-  - [x] 已完成迁移并初始化新仓库（已 `git init`）
-  - [x] 已完成一次“初始提交”（迁移基线已固定，后续改动可独立追踪）
-  - [x] 已完成阶段 A（仓库与启动链路切换）
-  - [x] 已完成阶段 B（工作台路由化）
-  - [x] 已完成阶段 C0（KB 后端打底：代码实现）
-  - [x] 已完成阶段 C（大纲模块重构）
-  - [x] 阶段 C0 联调/验收（按 DoD，2026-02-16 已完成）
-  - [x] 已完成阶段 F（非 PPT 标签收敛）
-  - [x] 已完成阶段 G（回归与发布）：按 `8.1` 人工回归通过；工程校验/文档/命名清理已完成（2026-02-16，commit：`2b99dcb`）
-  - [ ] 下一步优先级：推进阶段 H（部署与 Docker）
-
-### 阶段 A：仓库与启动链路切换
-- [ ] 1. 创建新仓库 `teachdo`（干净历史）：
-  - [x] 迁移代码到新目录（排除 `.git/` 与运行期目录如 `venv/`、`**/node_modules/`、`var/`、`logs/`、`**/__pycache__/` 等）
-  - [x] 在新目录执行 `git init`
-  - [ ] 配置新的 remote
-  - [x] 首次 `git commit`（`chore: initial import`；commit 前确认 `.gitignore` 不会提交本地环境文件）
-- [x] 2. 修正忽略规则（在新仓库中执行）：
-  - [x] 确认根目录 `.gitignore` 未忽略 `/teachdo-frontend`
-  - [x] （可选）补充忽略：`.run/`、`.kilocode/`（如不希望提交 IDE/工具配置目录）
-- [x] 3. 修改 `start.py`：前端目录从 `frontend/` 切换为 `teachdo-frontend/`。
-  - 同步统一端口：`teachdo-frontend/vite.config.ts` 当前 `server.port=5174`，因此 `start.py` 默认 `FRONTEND_PORT` 也应调整为 `5174`（保留环境变量覆盖能力）。
-- [x] 4. 为 `teachdo-frontend/vite.config.ts` 增加 dev proxy：
-  - `/api` -> `http://127.0.0.1:6800`，rewrite 去掉 `/api` 前缀。
-- [x] 5. TeachDo 前端服务层与 API 基址统一（为后续 C/D 阶段铺路）：
-  - 将 `teachdo-frontend/src/services/aiService.ts` 统一改为 `BASE_API='/api'`（不依赖 `VITE_API_BASE`、不写死 `http://localhost:6800`）。
-  - 抽一个可复用的 SSE 解析工具（按 `5.6.1` 规则），供大纲与 PPT 两处共用，避免各写一套导致解析边界不一致。
+- [ ] I1. 持久化分层（LocalStorage 轻量化 + 大对象 IndexedDB）
+  - 背景：当前 `appStore` 将整个 state `JSON.stringify` 写入 localStorage，且无写入失败兜底；`editorDocument.slides` 可能巨大，容易触发配额/卡顿/异常。
+  - 方案：
+    1. LocalStorage 仅持久化“轻量元数据”（currentCourseId/currentUnitId、theme、language、课程与单元的轻量字段）。
+    2. `editorDocument`、大纲/生成产物等“大文本/大数组”统一走 IndexedDB（可复用 editor-runtime Dexie 或单独建表），并提供迁移与降级策略。
   - DoD：
-    1. `python start.py` 能启动 `teachdo-frontend`。
-    2. Dev 环境前端通过 `/api/*` 访问后端，无需改代码切换 baseUrl。
-    3. Docker/生产部署相关内容延后到“开发完成后”再处理（见阶段 H）。
-    4. 可运行一键验证脚本并通过（至少验证 `/healthz`、`/templates` 通过 `teachdo-frontend` 的 `/api` 代理可访问，见 `8.4`）。
+    1. 无论 slides 体量多大，刷新/切换路由不出现 localStorage 配额错误与明显卡顿。
+    2. “预览回显/编辑器回显”稳定（支持加载失败降级到 `presentation`）。
 
-### 阶段 B：工作台路由化
-- [x] 1. 将当前 tab 内部状态切换为 URL 驱动切换（可直达）。
-- [x] 2. 增加 `courseId/unitId/tab` 参数守卫与纠错回退。
-- [x] 3. 刷新后可恢复到当前课程、单元和标签页。
+- [ ] I2. 依赖边界与首屏瘦身（避免 editor-runtime 侵入工作台首屏）
+  - 方案：
+    1. 工作台 Tab（Outline/Lesson/PPT）改为懒加载（async component 或子路由 code-splitting）。
+    2. PPT 预览页避免静态引用 editor-runtime 的重依赖（按需加载缩略图/渲染器）。
+  - DoD：
+    1. 首屏（课程选择/工作台）不加载 editor-runtime 相关大 chunk。
+    2. 进入 `/ppt/editor` 时再加载编辑器相关资源。
+
+- [ ] I3. Service 层收敛（aiService 拆分与去重）
+  - 方案：按领域拆分 `ppt/outline/kb`，统一错误模型（超时/取消/后端不可用提示），清理“已不再使用但仍保留的旧实现”。
+  - DoD：同一类错误在所有页面表现一致（文案、toast、重试策略一致）。
+
+- [ ] I4. PPTView 组件拆分（可维护、可测试）
+  - 方案：拆为“模板选择/高级选项/生成状态/预览渲染/入库”等子组件 + composable（如 `usePptGeneration`）。
+  - DoD：核心生成逻辑可被单测覆盖（SSE 解析与生成状态机至少覆盖关键分支）。
+
+### 阶段 J：连贯性设计（Coherence）/无缝用户体验（Seamless UX）（P0）
+目标：解决“割裂感”，让用户从工作台到编辑器、从生成到编辑到导出形成顺滑、可预期的体验闭环。
+
+> 本阶段按 4 个维度审查并落地：一致性（视觉/行为/概念）→ 用户路径（User Flow）→ 交互设计（IxD）→ 信息架构（IA）。  
+> 参考规范来源：`ui-ux-pro-max`（可访问性、交互、性能、布局等检查清单）。
+
+#### J0. 审查范围（页面/入口）
+1. 课程选择页（`/`）
+2. 工作台（`/course/:courseId[/unit/:unitId/:tab]`）：Outline / Lesson / PPT
+3. 课程级页面：KB / Assistant
+4. 独立编辑器（`/course/:courseId/unit/:unitId/ppt/editor`）
+5. 通用组件：Sidebar、Header Tabs、Toast、弹窗/表单、Loading/Empty State
+
+#### J1. 连贯性与一致性（Coherence & Consistency）
+- 视觉一致性（Visual Consistency）
+  - 要点：布局栅格、间距、圆角、阴影、字体、图标体系、配色 token 统一；避免“工作台一套、编辑器一套”。
+  - 重点审查：编辑器容器样式与工作台主题的统一（背景、按钮、边框、z-index、dark mode 行为）。
+- 行为一致性（Behavior Consistency）
+  - 要点：相似操作（生成/保存/返回/关闭）具备相同交互模式：按钮位置、快捷键、禁用与 loading 状态、反馈方式一致。
+  - 重点审查：所有 async 操作（SSE 生成、上传、入库）是否有明确加载态、可取消、失败可重试、错误贴近来源。
+- 概念连贯性（Conceptual Coherence）
+  - 要点：用户心理模型保持一致（“我在哪 / 我下一步做什么 / 我的数据会保存吗”）。
+  - 重点审查：术语与状态统一（课程/单元/大纲/模板/预览/编辑/导出），以及侧边栏进度点的含义与实际状态吻合。
+
+#### J2. 用户路径/操作流（User Flow）
+- 主链路（建议保持线性、最少步骤）：
+1. 选择课程 → 选择/新建单元
+2. 生成/编辑大纲（Outline）
+3. 选择模板（PPT）→ 生成 → 预览
+4. 进入编辑器（Edit）→ 导出（Export）→ 返回工作台
+- 关键原则（奥卡姆剃刀）：
+  - 默认路径最短；高级开关默认折叠且有“推荐默认值”提示。
+  - 每一步都提供“下一步 CTA”，并清晰告知“当前状态/是否已保存”。
 - DoD：
-1. 手动输入任一路由均可进入正确页面或自动回退。
-2. 浏览器刷新后状态一致。
+  - 用户在任意页面能在 1 次点击内回到工作台；不会出现死胡同。
+  - 主链路每一步都有明确反馈（成功/失败/进行中），并能理解下一步。
 
-### 阶段 C0：KB 后端打底（必须先做）
-> 目标：让 KB 上传/列表/删除/产物入库成为“可用的后端能力”，并确保 KB 不可用时不会阻断 PPT 生成主链路。
-- [x] 1. main_api 增加 KB BFF（前端统一以 `/api/...` 访问）：
-  - [x] `POST /kb/upload`、`GET /kb/files/{user_id}`、`POST /kb/vectorize/text`、`DELETE /kb/files/{user_id}/{file_id}`（契约见 `5.5.2`）。
-  - [x] 响应统一 `{ ok: boolean, data?: any, error?: { code, message } }`，避免前端散落判断。
-- [x] 2. personaldb 适配（落盘与向量一致性）：
-  - [x] `GET /files/{user_id}`：`user_id` 支持 string（TeachDo: `course.id`）。
-  - [x] `POST /vectorize/text`：`fileId/userId` 支持 string；写入 metadata 时保持 `file_id/user_id/folder_id` 一致类型（统一存 string）。
-  - [x] 新增 `DELETE /files/{user_id}/{file_id}`：调用 `delete_file_vectors(user_id, file_id)` 删除该文件向量。
-- [x] 3. slide_agent 兼容性与过滤：
-  - [x] `KnowledgeBaseSearch` 移除 `assert PERSONAL_DB`（未配置时返回 `(False, "PERSONAL_DB 未配置，跳过知识库检索")`，不得抛异常阻断生成）。
-  - [x] 支持 `metadata.kb_folder_ids` 过滤：对 personaldb `/search` 返回的 `metadatas/documents` 同步过滤，仅保留允许的 `folder_id`。
-- [x] 4. main_api `/tools/aippt` 的 KB 降级（避免误开关导致 500）：
-  - [x] 当 `PERSONAL_DB` 未配置或 personaldb `/healthz` 不可用时，强制将 `generateFromUploadedFile=false`（或至少不把 `KnowledgeBaseSearch` 加入 `search_engine`）。
-  - [x] 记录日志但不中断生成。
+#### J3. 交互设计（Interaction Design / IxD）
+- 心流（Flow）
+  - 生成过程避免“突然跳变”：骨架屏/进度提示、增量结果、稳定布局（避免 content jump）。
+- 反馈回路（Feedback Loop）
+  - 点击/提交后 150–300ms 内提供视觉反馈；按钮在请求中禁用并展示 loading。
+  - 错误提示贴近触发点（表单/开关/网络请求），toast 只用于全局提醒。
 - DoD：
-  - [x] 已补充后端单元测试覆盖（KB BFF + `/tools/aippt` KB 降级）：`venv/bin/python -m pytest backend -q`。
-  - [x] `/api/kb/upload`、`/api/kb/files/*`、`/api/kb/vectorize/text`、`/api/kb/files/*`(DELETE) **真实服务联调**通过（2026-02-16：`venv/bin/python scripts/verify_endpoints.py --require-kb`，并通过前端 `/api` 代理验证）。
-  - [x] `PERSONAL_DB` 缺失或 personaldb 停止时，PPT 生成仍可用（2026-02-16：模拟 personaldb 不可达后，`/tools/aippt` 在 `generateFromUploadedFile=true` 下仍可完成 SSE 输出，并自动禁用 KB）。
+  - SSE 生成支持“取消/中止”并恢复 UI 状态。
+  - 关键操作（生成/保存/返回/导出）拥有一致的 loading/disabled/成功提示模式。
 
-### 阶段 C：大纲模块重构
-- [x] 1. 在 `OutlineView` 中接入 `/api/tools/aippt_outline_unified`。
-- [x] 2. 主题必填；V1 只支持“主题模式”（不在大纲阶段引用知识库/上传素材，也不在 Outline 页面上传文件）。
-- [x] 3. 保留现有对比/编辑/保存交互，替换底层流式生成实现。
-- [x] 4. 统一错误处理与 toast 文案。
-- [x] 5. 统一传参约定：
-  - `content` 包含课程与单元上下文（可包含课程名称、单元标题、教学目标等）。
-  - `user_id = course.id`（用于后续“产物入库”与 PPT 生成阶段 KB 作用域对齐）。
-- [x] 6. 大纲保存后“产物入库”（写入 KB 索引）：
-  - 调用 `/api/kb/vectorize/text`，`file_id=gen:{courseId}:{unitId}:outline`，`folder_id=1`，`content=最终大纲 markdown`。
+#### J4. 信息架构（Information Architecture / IA）
+- 视觉层级（Visual Hierarchy）
+  - 工作台头部：单元标题 + 状态 → Tab → 主内容；避免同权信息过多导致注意力分散。
+- 接近原则（Proximity）
+  - “课程级模块（KB/Assistant）”与“单元级模块（Outline/Lesson/PPT）”在导航与文案上明确区分。
 - DoD：
-  - [x] 主题模式可流式输出并保存。
-  - [x] SSE 中断时有明确错误提示，不导致页面崩溃。
+  - 用户无需试错即可理解“当前是课程维度还是单元维度”。
 
-### 阶段 D：PPT 模块替换
-- [x] 1. 在 `PPTView` 中使用真实模板接口替换 mock 逻辑。
-- [x] 2. 接入 `/api/tools/aippt` SSE 流，处理增量页生成。
-- [x] 3. 统一 SSE 解析策略（必须与旧前端一致），覆盖跨 chunk、多行 `data:`、`\r\n`、`[DONE]`、```json 围栏：
-  - [x] 以“空行分隔事件”作为解析边界（见 `5.6.1`）。
-  - [x] 单条事件内拼接多行 `data:` 得到 payload。
-  - [x] 兼容 ```json 围栏并做容错解析。
-- [x] 4. 将生成结果写入单元状态，并提供进入编辑器入口（“进行编辑”）。
-  - [x] 生成结果写入单元状态（`presentation` + `editorDocument`）。
-  - [x] “进行编辑”入口与路由（阶段 E）。
-- [x] 5. 模板契约与生成管线对齐（沿用 ai2ppt 逻辑）：
-  - [x] 模板列表：`GET /api/templates`。
-  - [x] 模板详情：`GET /api/data/${templateId}.json`（包含 `slides/theme/width/height`）。
-  - [x] 生成流：`POST /api/tools/aippt` 返回的每个 SSE payload 解析为 `AIPPTSlide`（JSON）。
-  - [x] 由 “模板 slides + AIPPTSlide” 生成可编辑 `Slide[]`（与编辑器一致的数据结构），复用 `AIPPTGenerator`（见 `5.6.3`），并写入 `CourseUnit.editorDocument`。
-- [x] 6. 高级开关（可选，但建议保留 ai2ppt 功能点）：
-  - [x] `generateFromWebSearch` 默认打开（使用网络搜索生成）。
-  - [x] `generateFromUploadedFile` 默认打开（使用知识库生成）；当知识库无 `ready` 文件时自动关闭/禁用。
-  - [x] KB 检索范围（生成时可选）：
-    - [x] 默认仅引用 `folder_id=0` 上传素材（KB 素材）。
-    - [x] 可选包含 `folder_id=1` 生成产物（outline/slides/slides_final 等入库文本）。
-    - [x] 前端把选择结果作为 `kb_folder_ids` 传给后端，后端透传到 slide_agent 的 metadata 并在 `KnowledgeBaseSearch` 内执行过滤（见 `5.5.1.2`）。
-  - [x] 上传文件不在 PPT 页进行：文件上传与管理统一在知识库页面完成，并同步到 `currentCourse.kbFiles`。
-- [x] 7. 会话作用域：`sessionId = course.id`。
-- [x] 8. PPT 生成完成后“产物入库”（写入 KB 索引）：
-  - [x] 调用 `/api/kb/vectorize/text`，`file_id=gen:{courseId}:{unitId}:slides`，`folder_id=1`。
-  - [x] `content` 推荐拼成 markdown：每页用 `## Slide N` + 标题/要点/备注，便于 KB 检索与引用。
+#### J5. 可访问性与基础交互规范（来自 ui-ux-pro-max，P0 必做）
+- [ ] 所有 icon-only 按钮补齐 `aria-label`；所有可点击元素都有清晰 hover/active/focus 样式。
+- [ ] Touch target ≥ 44×44px；表单输入有 label；错误信息支持 `role=alert` 或 `aria-live`。
+- [ ] 避免 emoji 作为 UI 图标（使用 Lucide/SVG）；如需插图，确保语义与风格一致。
+- [ ] 支持 `prefers-reduced-motion`（动画可降级）。
+
+### 阶段 K：性能与质量门槛（P1）
+目标：把“可用”提升为“稳定、可迭代”，并为后续功能扩展留出空间。
+
+- [ ] K1. 性能基线
+  - 关注点：首屏资源、编辑器按需加载、长列表（缩略图）渲染成本、生成过程内存占用。
+- [ ] K2. 自动化与回归保障
+  - SSE 解析单测、持久化迁移单测、关键 store/路由守卫测试。
+  - 保持 `typecheck/lint/build` 作为 PR 必过门槛。
+
+## 3. 连贯性设计（Coherence）专项：详细审查清单（可执行）
+
+> 目的：把“顺滑、不割裂”从抽象要求落到可检查、可验收的条目。
+
+### 3.1 视觉一致性（Visual）
+- [ ] 全局字体与字号层级一致（标题/正文/辅助信息有固定层级）。
+- [ ] 颜色 token 统一（Primary/Success/Warning/Danger/Border/Surface），禁止页面私自引入“另一套灰度/圆角/阴影”。
+- [ ] 组件圆角/阴影/边框风格一致（卡片、按钮、输入框、弹窗、toast）。
+- [ ] 图标体系统一（Lucide 为主）；不使用 emoji 代替图标。
+
+### 3.2 行为一致性（Behavior）
+- [ ] 生成/上传/保存等 async 行为统一：
+  - 触发后按钮禁用 + loading；
+  - 可取消/可重试；
+  - 失败提示明确原因与下一步操作（去 KB、检查后端、重试）。
+- [ ] “返回/关闭”交互一致（位置、文案、是否二次确认）。
+- [ ] Toast 规则一致：成功/失败提示不打断流程、不会遮挡关键操作（尤其编辑器）。
+
+### 3.3 概念连贯性（Concept）
+- [ ] 术语一致：课程/单元/大纲/模板/预览/编辑/导出/知识库/产物入库。
+- [ ] 进度与状态可解释：侧边栏提示点与实际数据状态一致（不出现“看起来完成但实际没保存”）。
+- [ ] 数据保存策略可预期：哪些自动保存、哪些需要显式保存，在 UI 上有明确提示。
+
+### 3.4 用户路径（User Flow）
+- [ ] 任一页面都能回答：
+  - 我从哪来（入口）？
+  - 我在哪（当前模块/单位）？
+  - 我该去哪（下一步 CTA）？
+- [ ] 主链路步骤尽可能少；高级能力可选但不打断主路径。
+
+### 3.5 交互设计（IxD）
+- [ ] 150–300ms 的微交互反馈（hover/press/focus）。
+- [ ] Loading/Empty/Error 三态完整（不出现空白/静默失败）。
+- [ ] 动画尊重 `prefers-reduced-motion`。
+
+### 3.6 信息架构（IA）
+- [ ] 导航结构清晰：课程级与单元级分层明确。
+- [ ] 视觉层级清楚：主 CTA 明显、次要操作弱化但可达。
+
+### 3.7 当前初步发现（基于代码快速审查，待阶段 J 逐项消除）
+- 视觉一致性：
+  - 工作台（Tailwind + slate/indigo）与独立编辑器容器（独立配色/按钮风格）存在风格断层，容易产生“跳到另一个系统”的感受。
+  - 个别地方使用 emoji 作为视觉元素/按钮符号，破坏图标体系一致性（应统一为 Lucide/SVG）。
+- 行为一致性 / 可访问性：
+  - 部分 icon-only 按钮缺少可访问名称（`aria-label`），键盘 focus 样式不统一（需形成“默认可见 focus ring”规范）。
+  - Toast 当前以视觉为主，需补齐 `aria-live`/`role` 以确保错误可被辅助技术读出。
+- 概念连贯性：
+  - “自动保存/退出保存/保存失败是否影响流程”的提示需要统一；用户需要明确知道数据是否已持久化以及回显来源（presentation vs editorDocument）。
+- 架构支撑（与连贯性强相关）：
+  - 当前全量 state 持久化到 localStorage 的策略存在配额与性能风险，会直接造成体验割裂（卡顿/白屏/数据丢失感），优先级需置顶（阶段 I1）。
+
+## 4. 连贯性（Coherence）/无缝体验（Seamless UX）专项审查：问题清单与修复方案（2026-02-16）
+
+> 说明：本节是“现在的真实审查结论”，把问题落到具体代码位置，并给出可执行的修复方案与 DoD。  
+> 审查目标：减少“像跳到另一个系统”的割裂感，让用户在主链路（Outline → PPT → Editor → Export）中保持可预期、可回溯、可操作的闭环体验。
+
+### 4.1 视觉一致性（Visual Consistency）
+
+#### 问题 4.1.1 工作台 vs 独立编辑器风格断层（含暗色模式不一致）
+- 现象/影响：
+  - 编辑器页面不使用工作台的布局与 top bar，且背景/按钮风格独立，用户感知为“跳到另一个产品”。
+  - 全局 dark mode 打开时，编辑器容器仍是固定浅色背景，割裂更明显。
+- 证据（代码位置）：
+  - 编辑器路由是独立顶层路由（不在 MainLayout children 内）：`teachdo-frontend/src/router/index.ts`
+  - 编辑器容器背景/文本颜色固定：`teachdo-frontend/src/views/PPTEditorView.vue`
+- 修复方案：
+  1. 视觉层：为编辑器容器引入与工作台一致的设计 token（surface/bg/border/text），并在 `.dark` 下提供对应变量或样式覆盖，保证主题切换一致。
+  2. 导航层（两种方案二选一）：
+     - 方案 A：编辑器仍全屏，但顶部保留缩窄版 `AppTopBar`（仅返回/标题/导出）；
+     - 方案 B：继续使用独立返回按钮，但统一按钮样式（大小、圆角、边框、hover/focus）与 top bar 一致，并补充“当前位置（课程/单元）”信息。
 - DoD：
-  - [x] 生成过程可见增量页面增长。
-  - [x] 完成后可稳定回显、可重新生成（2026-02-16：人工回归通过）。
-  - [x] 预览页渲染效果与编辑器一致（同一套 renderer/主题/比例）（阶段 E）。
+  - dark mode 下编辑器背景/按钮/文字与工作台一致，不出现“亮屏刺眼/两套主题”。
+  - 进入/退出编辑器时，用户能清晰感知同一应用内的连续体验（视觉与文案一致）。
 
-### 阶段 E：编辑器独立页 + 工作台预览
-- [x] 0. 工具链与依赖对齐（编辑器体量最大，需优先保证可编译）：
-  - [x] 采用策略 A（已确认）：保留 TeachDo 工具链，在 `teachdo-frontend` 内逐步引入旧编辑器依赖并修复编译问题（可能会遇到 Vite 5 -> 7 的兼容差异）。
-  - 回退策略（仅当 A 卡住时启用）：将 `teachdo-frontend` 的构建工具链下调对齐旧编辑器（Vite/TS/ESLint），先确保编辑器能跑，再逐步升级。
-  - [x] `teachdo-frontend` 已可 `npm run build` 通过（存在 Sass `@import` 弃用警告，不阻断构建）。
-- [x] 1. 将现有编辑器能力迁入 `teachdo-frontend/src/editor-runtime`（隔离 pinia/store/types/utils/components）。
-- [x] 2. 依赖迁移（必须，来自旧 `frontend/package.json`，按实际引用增量加入）：
-- 典型必需：`dexie`、`prosemirror-*`、`echarts`、`html-to-image`、`lodash`、`nanoid`、`tippy.js`、`vuedraggable`、`tinycolor2`、`svg-pathdata`、`svg-arc-to-cubic-bezier` 等。
-- 目标：编辑器路由能编译运行，且导出 PPTX 可用（依赖缺失会直接导致功能不可用）。
-- [x] 3. 工作台 `PPTView` 只做“预览模式”：
-- 使用与编辑器相同的渲染组件（同一份 `Slide` 数据结构与主题配置）。
-- 预览布局采用“缩略图列表 + 当前页大画布”（与编辑器一致的 viewport 尺寸/比例）。
-- 提供按钮“进行编辑”，跳转到 `/course/:courseId/unit/:unitId/ppt/editor`。
-- [x] 4. 独立编辑器页面：
-- 全功能编辑、撤销/重做、插入元素等保持编辑器自有风格。
-- 导出仅在编辑器内完成（PPTX）。
-- [x] 5. 状态回写：
-- 进入编辑器时从 `CourseUnit.editorDocument` 加载，缺失则从最新生成结果初始化。
-- 退出/返回时把 editor 的 `slides/theme/viewport/title` 写回 `CourseUnit.editorDocument`，以便预览页复显。
-- 退出/保存时“产物入库”（写入 KB 索引）：将最终 slide 文本写入 `/api/kb/vectorize/text`，`file_id=gen:{courseId}:{unitId}:slides_final`，覆盖更新向量。
-- DoD（2026-02-16：人工回归通过）：
-  - [x] 能从工作台进入编辑器并返回（路由与入口已接入）。
-  - [x] 编辑后数据可持久化到当前单元（已实现 editorDocument 回写）。
-  - [x] 可导出 PPTX（导出仅在编辑器内）。
-
-### 阶段 F：非 PPT 标签收敛
-- [x] 保留 `lesson/kb/assistant` 页面与路由结构。
-- [x] 去掉直接报错的虚构后端调用（移除前端 `/teachdo/*` 调用），改为可运行状态。
-- [x] 在教案/助教页面上明确“能力建设中/后续重构”的状态提示，并禁用交互入口。
-- [x] 知识库页面归口上传与保存（前置条件：阶段 C0 已完成后端 KB 能力）：
-  - [x] 支持真实上传并写入 personaldb（通过 `/api/kb/upload`），并同步到 `currentCourse.kbFiles`（状态流转：uploading/processing/ready/error）。
-  - [x] 支持拉取后端文件列表（`/api/kb/files/{course.id}`）做一致性校准。
-  - [x] 支持删除文件（通过 `/api/kb/files/{user_id}/{file_id}`），删除后不再被检索命中。
-  - [x] PPT 生成页读取 `kbFiles` 状态联动 `generateFromUploadedFile`（默认打开，无可用 ready 文件时禁用）。
- - [x] 联调与回归：
-  - [x] 验证“产物入库”写入后，PPT 生成阶段在启用 KB 时能命中检索（2026-02-16：向量化后通过 personaldb `/search` 命中 `folder_id=1` 文档）。
+#### 问题 4.1.2 UI 中仍存在 emoji 作为图标/符号，破坏图标体系一致性
+- 现象/影响：emoji 在不同平台渲染差异大，会显得“不专业/不统一”，也与 Lucide 图标体系冲突。
+- 证据（代码位置，非穷举）：
+  - 工作台空状态：`teachdo-frontend/src/views/CourseWorkspaceView.vue`
+  - Outline 空状态与 CTA：`teachdo-frontend/src/components/workspace/OutlineView.vue`
+  - PPT 生成按钮：`teachdo-frontend/src/components/workspace/PPTView.vue`
+  - Lesson 空状态：`teachdo-frontend/src/components/workspace/LessonPlanView.vue`
+  - Toast 关闭按钮：`teachdo-frontend/src/components/common/ToastContainer.vue`
+- 修复方案：
+  1. 统一使用 LucideIcon（例如 `sparkles/file-text/x`）替换 emoji；
+  2. 仅允许 emoji 作为“内容”（例如编辑器符号面板插入），禁止作为 UI 图标/按钮文案前缀。
 - DoD：
-  - [x] 三个页面均可正常进入且无 runtime error。
-  - [x] 不影响 outline/ppt 主链路。
-  - [x] 产物入库命中检索（2026-02-16：通过 personaldb `/search` 验证）。
+  - `teachdo-frontend/src` 中不再出现用于 UI 的 emoji（编辑器符号库等“内容型 emoji”除外）。
+  - 所有图标来自同一套 icon set（LucideIcon）。
 
-### 阶段 G：回归与发布
-- [x] 1. 链路回归：大纲、模板、流式生成、编辑、导出全流程（2026-02-16：按 `8.1` 人工回归通过）。
-- [x] 2. 工程校验：`typecheck`、`lint`、`build`（2026-02-16：`teachdo-frontend` 已通过）。
-- [x] 3. 文档更新：开发启动、路由说明、接口映射、已知限制（2026-02-16：已更新根 README + 关键部署/接口文档）。
-- [x] 4. 品牌与命名清理（交付前必须完成）：
-  - [x] 用户可见（UI 文案/标题/帮助文档）不出现 `ai2ppt/AI2PPT`。
-  - [x] 代码实现（前端+后端）不出现 `ai2ppt/AI2PPT` 字符串：
-    1. teachdo-frontend：移除注释/变量/模块名中的历史词。
-    2. backend：将 `AI2PPT_*` 环境变量等历史命名替换为 `TEACHDO_*`（并同步更新读取逻辑与文档）。
-- 完成记录（2026-02-16）：
-  - `git commit`：`2b99dcb chore(stage-g): release cleanup`
-  - `rg -n "ai2ppt|AI2PPT" teachdo-frontend backend`：无匹配
-  - 前端：`teachdo-frontend` 执行 `npm run typecheck && npm run lint && npm run build` 通过
-  - 后端：执行 `venv/bin/python -m pytest backend -q` 通过
+### 4.2 行为一致性（Behavior Consistency）与可访问性（A11y，P0）
+
+#### 问题 4.2.1 图标按钮缺少可访问名称（aria-label），键盘用户难以操作
+- 现象/影响：
+  - 当前 LucideIcon 默认 `aria-hidden=true`，若按钮只有 icon 且无文本，则屏幕阅读器无法读出按钮含义。
+- 证据（代码位置，示例）：
+  - 移动端打开侧边栏按钮（icon-only）：`teachdo-frontend/src/views/CourseWorkspaceView.vue`
+  - 侧边栏关闭按钮（icon-only）：`teachdo-frontend/src/components/workspace/UnitSidebar.vue`
+  - 顶部主题切换按钮（icon-only）：`teachdo-frontend/src/components/layout/AppTopBar.vue`
+  - 发送按钮（icon-only）：`teachdo-frontend/src/components/workspace/AssistantView.vue`
+- 修复方案：
+  1. 新增 `IconButton`（或统一的 button wrapper）组件：强制要求 `aria-label`，并统一尺寸（≥44×44）、focus ring、disabled 样式；
+  2. 全量替换项目内 icon-only 按钮为 `IconButton`，或在原按钮上补 `aria-label` + `focus-visible:*`。
 - DoD：
-  - [x] 1. 核心流程通过，构建通过（2026-02-16：已回归确认）。
-  - [x] 2. 文档可支撑新成员按文档启动与联调。
-  - [x] 3. 用户可见页面和对外帮助文档中不出现 `ai2ppt/AI2PPT`（迁移说明文档可保留）。
-  - [x] 4. 在新仓库执行 `rg -n \"ai2ppt|AI2PPT\" teachdo-frontend backend` 无匹配结果（文档目录不做此约束）。
+  - 任意 icon-only 按钮都可被读屏正确读出含义；
+  - 键盘 Tab 可遍历所有可交互元素，且焦点可见（focus ring 明确）。
 
-### 阶段 H：部署与 Docker（开发完成后再做）
-1. 修改 `docker-compose.yml`：frontend 构建上下文切换为 `./teachdo-frontend`。
-2. 为 `teachdo-frontend` 补齐生产容器化文件：
-- 增加 `teachdo-frontend/Dockerfile`（构建 dist + 静态托管）。
-- 增加 `teachdo-frontend/nginx.conf`，反代 `/api/` 到 `main_api:6800`，并关闭 buffering 以兼容 SSE。
-3. 验证 `docker compose up --build` 可运行，且 SSE 在代理下不被缓冲截断。
+#### 问题 4.2.2 存在“可点击但非语义化元素”（div/article）导致键盘不可达
+- 现象/影响：鼠标可用，但键盘/读屏不可用；也会导致行为一致性差（同类“卡片”有的可聚焦有的不可聚焦）。
+- 证据（代码位置，示例）：
+  - 课程卡片用 `<article @click>`：`teachdo-frontend/src/views/CourseSelectionView.vue`
+  - KB 上传区域用 `<div @click>`：`teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue`
+  - 模板选择卡片用 `<div @click>`：`teachdo-frontend/src/components/workspace/PPTView.vue`
+- 修复方案：
+  1. 将上述交互点改为语义化 `<button type="button">` 或 `<RouterLink>`；
+  2. 若需保留容器结构，则补 `role="button"`、`tabindex="0"`、`@keydown.enter.space`，并加 focus-visible 样式（但优先语义化按钮/链接）。
+- DoD：
+  - 课程选择、KB 上传、模板选择都可全键盘完成；
+  - 交互区域 hover/active/focus 行为一致，且不会造成布局跳动。
 
-## 7. 任务拆分与里程碑建议
+#### 问题 4.2.3 Toast 缺少 aria-live / role，关闭按钮过小且使用 emoji
+- 现象/影响：错误提示对读屏用户不可达；关闭按钮命中区域小，不符合 touch target。
+- 证据：`teachdo-frontend/src/components/common/ToastContainer.vue`
+- 修复方案：
+  1. Toast 容器增加 `aria-live="polite"`（成功/信息）与 `role="alert"`（错误）或按类型区分；
+  2. 关闭按钮改为 LucideIcon `x`，并补 `aria-label`、`type="button"`、触控尺寸 ≥44×44；
+  3. Toast 不遮挡关键操作（尤其编辑器左上角返回按钮），必要时在 editor 路由下调整位置。
+- DoD：
+  - 读屏可读出 toast 文本；移动端可轻松关闭；不会遮挡关键 UI。
 
-### M1（基础可运行）
-- 完成阶段 A + B。
-- 产出：新仓库可启动、工作台路由化完成。
+### 4.3 用户路径（User Flow）与闭环（Closed-loop）
 
-### M2（生成可用）
-- 完成阶段 C0 + C + D。
-- 产出：Outline/PPT 真实接口链路打通。
+#### 问题 4.3.1 PPT 页面缺少“无大纲”时的下一步 CTA，且标题复用 lesson 文案不严谨
+- 现象/影响：用户在 PPT Tab 遇到“需要大纲”后无明确入口跳转，操作流断裂；并且标题复用 `lesson.need_outline.title`，概念上不严谨。
+- 证据：`teachdo-frontend/src/components/workspace/PPTView.vue`
+- 修复方案：
+  1. 增加 `ppt.need_outline.title/desc/cta` i18n 文案；
+  2. 在 PPT 空状态加入 CTA（“前往大纲”按钮，跳转到 outline tab），并保持与 Lesson 空状态一致的布局与按钮层级。
+- DoD：
+  - 用户在 PPT 页无需思考即可完成下一步跳转（不出现死胡同）。
 
-### M3（编辑闭环）
-- 完成阶段 E。
-- 产出：工作台预览 + 独立编辑器 + 导出闭环。
+#### 问题 4.3.2 SSE 生成缺少“取消/中止”，中途出错/想停止会造成强割裂
+- 现象/影响：生成过程只能等待完成；网络或模型异常会放大挫败感，破坏心流（Flow）。
+- 证据：
+  - Outline 生成：`teachdo-frontend/src/components/workspace/OutlineView.vue`
+  - PPT 生成：`teachdo-frontend/src/components/workspace/PPTView.vue`
+- 修复方案：
+  1. aiService 支持 `AbortController`（为 fetch 透传 `signal`），并统一 cancellation 错误处理；
+  2. UI 增加“取消生成”按钮，取消后恢复到可操作状态（保留已生成内容或明确回滚策略）；
+  3. 取消/失败提示规则统一（toast + 局部提示）。
+- DoD：
+  - Outline 与 PPT 生成都可取消；取消不导致 UI 卡死/脏状态；用户知道发生了什么。
 
-### M4（稳定发布）
-- 完成阶段 F + G。
-- 产出：V1 发布候选版本。
+### 4.4 文案与国际化一致性（Copy & i18n）
 
-## 8. 测试计划
+#### 问题 4.4.1 顶部状态指示与设置页存在硬编码文案，导致语言与风格不一致
+- 现象/影响：同一界面中中英混杂，降低专业感；也不利于后续国际化。
+- 证据（示例）：
+  - 顶部状态按钮硬编码 `Checking/System/Online/Offline`：`teachdo-frontend/src/components/layout/AppTopBar.vue`
+  - 设置页 toast/confirm 硬编码：`teachdo-frontend/src/views/SettingsView.vue`
+  - KB 页标题面包屑文案不准确（assistant/kb 组合）：`teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue`
+- 修复方案：
+  1. 统一改为 i18n key（已有 `nav.status.*` 可复用）；
+  2. 梳理“课程级/单元级”的面包屑/标题策略，避免概念混乱（KB 不应显示成 Assistant 子级）。
+- DoD：
+  - 同一语言模式下无硬编码异语言文案；KB/Assistant 标题与信息架构一致。
 
-### 8.1 功能测试
-1. 路由：
-- 非法 `courseId`、`unitId`、`tab` 均可回退到可用页面。
-2. 大纲：
-- 主题模式可流式生成并保存。
-3. PPT：
-- 模板拉取成功，流式生成成功，预览页可见。
-4. 编辑：
-- 可进入编辑器、修改并返回，状态可持久化。
-5. 导出：
-- PPTX 可导出且文件可打开。
+### 4.5 安全与渲染一致性（补充，P0 风险）
 
-### 8.2 自动化测试（最低要求）
-1. SSE 解析单元测试（必须）：
-- 覆盖 `\n\n` 与 `\r\n\r\n` 分隔、多行 `data:` 拼接、```json 围栏、`[DONE]`、跨 chunk 缓冲等用例。
-2. 路由守卫单元测试（建议）。
-3. 关键 store 状态迁移测试（建议）。
-
-### 8.3 最低质量门槛
-- `npm run typecheck` 通过。
-- `npm run lint` 通过。
-- `npm run build` 通过。
-
-### 8.4 一键验证（由助手执行，不需要手工点 UI）
-> 目标：在每个里程碑结束时，我可以用脚本完成“可运行性 + 关键接口”验证，减少人工点页面回归。
-
-#### 8.4.1 脚本
-- `scripts/verify_endpoints.py`：
-1. 支持直连后端（默认）或通过前端 `/api` 代理验证。
-2. 覆盖接口：
-- `/healthz`
-- `/templates`
-- `/tools/aippt_outline_unified`（SSE，默认启用；可 `--skip-outline` 跳过）
-- `/tools/aippt`（SSE，默认启用；可 `--skip-ppt` 跳过）
-- `/kb/*`（仅当阶段 C0 完成后启用；用 `--require-kb` 强制校验）
-
-#### 8.4.2 使用方式（示例）
-1. 验证前端 `/api` 代理是否正确（阶段 A 必做）：
-- 前提：`teachdo-frontend` dev server 已在 `5174` 启动，后端 main_api 已在 `6800` 启动。
-- 命令：`python3 scripts/verify_endpoints.py --base-url http://127.0.0.1:5174 --prefix /api --skip-outline --skip-ppt`
-2. 验证后端直连基础接口（不依赖前端）：
-- 命令：`python3 scripts/verify_endpoints.py --base-url http://127.0.0.1:6800`
-3. 若当前环境未配置模型/外网，仅做前端联调冒烟（用 mock_api 提供固定 SSE 数据）：
-- 启动：`python3 -m uvicorn backend.mock_api.mock_main:app --host 127.0.0.1 --port 6800`
-- 校验：`python3 scripts/verify_endpoints.py --base-url http://127.0.0.1:6800 --skip-outline`
-4. 阶段 C0 完成后校验 KB BFF（会自动上传一个临时小文件并在结束时删除）：
-- 命令：`python3 scripts/verify_endpoints.py --base-url http://127.0.0.1:6800 --require-kb --kb-user-id course-smoke`
-
-
-## 9. 风险与应对
-1. 编辑器依赖体量大：
-- 通过 `editor-runtime` 命名空间隔离迁入，分批验证。
-2. 样式冲突：
-- 不迁移历史页面样式，只迁能力代码；控制样式作用域。
-3. 流式协议边界：
-- 先完善解析器测试，再做联调压测。
-4. 仓库迁移遗漏：
-- 在迁移清单中加入启动脚本、compose、env、文档四项核对。
-5. KB 依赖 personaldb（配置/可用性）：
-- 通过阶段 C0 的“KB 降级策略”保证 personaldb 不可用时不阻断 PPT 主链路，仅关闭 KB 检索。
-
-## 10. 回退方案
-- 若编辑器集成阻塞：
-1. 保留 `PPTView` 预览页生成能力先上线。
-2. 编辑器路由以 feature flag 受控灰度开启。
-- 若 SSE 解析不稳定：
-1. 先降级为完整响应后一次性渲染。
-2. 同步保留流式解析分支继续修复。
-
-## 11. 交付清单
-1. 新仓库 `teachdo`（含历史迁移说明）。
-2. `teachdo-frontend` 单前端可启动/可构建。
-3. 工作台全标签路由化。
-4. Outline/PPT/Editor 主链路可用。
-5. 更新后的开发文档与发布说明。
-
-## 12. 默认假设
-1. V1 不新增 `/teachdo/*` 后端接口，以现有 `main_api` 能力为准。
-2. `teachdo-frontend` 为唯一前端入口，`frontend/` 退出运行链路。
-3. 优先保证 TeachDo 核心链路完整可用，非 PPT 模块按可运行收敛。
-
-## 13. 已确认补充
-1. 编辑器迁移工具链：采用策略 A（保留 TeachDo 工具链，逐步引入旧编辑器依赖修复编译问题）。
-2. 不在新仓库保留旧前端源码备份（这里的“源码备份”指把旧 `frontend/` 作为 `legacy/` 复制进新仓库用于对照；已决定不复制，迁移对照使用原 ai2ppt 仓库）。
-3. 命名清理边界：文档可出现 `ai2ppt/AI2PPT`（迁移说明），但代码实现不出现 `ai2ppt/AI2PPT`。
-4. 业务策略：大纲只按主题生成；KB 仅在 PPT 生成阶段启用（大纲阶段不引用 KB）。
+#### 问题 4.5.1 多处使用 `v-html` 渲染模型/用户输入，存在 XSS 风险与渲染不可控
+- 现象/影响：一旦输入或模型输出包含 HTML，将直接注入 DOM；不仅是安全问题，也会造成样式与结构“不可预期”，破坏一致性。
+- 证据：
+  - Outline：`teachdo-frontend/src/components/workspace/OutlineView.vue`
+  - Assistant：`teachdo-frontend/src/components/workspace/AssistantView.vue`
+- 修复方案：
+  1. 引入安全的渲染策略：要么使用可信 Markdown 渲染器并开启 sanitize，要么使用 DOMPurify 对输出做白名单清洗；
+  2. 明确允许的标签集合（p/ul/li/strong/em/code/heading 等），禁用 script/style/事件属性；
+  3. 补单测覆盖典型注入 payload（`<script>`、`onerror` 等）。
+- DoD：
+  - 用户输入/模型输出无法注入脚本；渲染结构稳定可控，样式一致。
