@@ -47,21 +47,21 @@ def resolve_root_relative(path_str: str) -> Path:
 
 
 def get_cache_dir(service: str) -> Path:
-    base = os.getenv("AI2PPT_CACHE_DIR", "var/cache")
+    base = os.getenv("TEACHDO_CACHE_DIR", "var/cache")
     cache_dir = resolve_root_relative(base) / service
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
 
 def get_tmp_dir(service: str) -> Path:
-    base = os.getenv("AI2PPT_TMP_DIR", "var/tmp")
+    base = os.getenv("TEACHDO_TMP_DIR", "var/tmp")
     tmp_dir = resolve_root_relative(base) / service
     tmp_dir.mkdir(parents=True, exist_ok=True)
     return tmp_dir
 
 
 def get_log_file(service: str, filename: str) -> Path:
-    base = os.getenv("AI2PPT_LOG_DIR", "logs")
+    base = os.getenv("TEACHDO_LOG_DIR", "logs")
     log_dir = resolve_root_relative(base)
     log_dir.mkdir(parents=True, exist_ok=True)
 

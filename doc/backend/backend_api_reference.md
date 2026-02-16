@@ -13,7 +13,7 @@
 ### main_api（FastAPI 网关）
 
 - 直连后端：`http://127.0.0.1:6800`
-- 通过前端代理（Vite/Nginx）：`http://127.0.0.1:5173/api`（或同域 `/api`）
+- 通过前端代理（Vite/Nginx）：`http://127.0.0.1:5174/api`（或同域 `/api`）
 
 ### personaldb（知识库）
 
@@ -81,9 +81,9 @@ curl -N -X POST 'http://127.0.0.1:6800/tools/aippt_outline' \
 cURL（通过前端代理 `/api`）：
 
 ```bash
-curl -N -X POST 'http://127.0.0.1:5173/api/tools/aippt_outline_unified' \
-  -H 'Accept: text/event-stream' \
-  -F 'content=AI 在医疗的应用' \
+	curl -N -X POST 'http://127.0.0.1:5174/api/tools/aippt_outline_unified' \
+	  -H 'Accept: text/event-stream' \
+	  -F 'content=AI 在医疗的应用' \
   -F 'language=chinese' \
   -F 'user_id=123' \
   -F 'file=@/path/to/doc.pdf'

@@ -10,12 +10,12 @@ docker compose up --build
 ```
 
 启动后访问：
-- 前端（Nginx）：`http://127.0.0.1:5173`
+- 前端（Nginx）：`http://127.0.0.1:5174`
 - 主 API：`http://127.0.0.1:6800`
 
 > 前端统一通过 `/api/` 反向代理到 `main_api`（容器内地址：`http://main_api:6800`）。
 >
-> 若本机 `5173` 端口被占用，可临时改用其他端口（不需要改 compose 文件）：
+> 若本机 `5174` 端口被占用，可临时改用其他端口（不需要改 compose 文件）：
 >
 > ```bash
 > FRONTEND_PORT=12345 docker compose up --build
@@ -31,4 +31,4 @@ docker compose up --build
 ## 3) 本地开发（非 Docker）说明
 
 如果你用 Vite 本地启动前端（`npm run dev`），并在宿主机启动后端服务，请根据实际 IP/端口调整代理配置：
-- `frontend/vite.config.ts`
+- `teachdo-frontend/vite.config.ts`

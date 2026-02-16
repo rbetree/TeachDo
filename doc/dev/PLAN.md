@@ -240,9 +240,9 @@
 #### 5.5.3.1 KB 持久化与目录约定（落盘，新增）
 - personaldb 已使用 `chromadb.PersistentClient` 落盘存储。
 - 默认落盘目录（相对 repo root）：`var/cache/personaldb/chromadb`。
-1. 当前仓库使用 `AI2PPT_CACHE_DIR` 控制基路径（默认 `var/cache`），详见 `backend/personaldb/runtime_paths.py:get_cache_dir()`。
-2. 当前仓库临时文件目录基路径由 `AI2PPT_TMP_DIR` 控制（默认 `var/tmp`）。
-3. TeachDo 新仓库交付前会把上述环境变量命名替换为 `TEACHDO_CACHE_DIR`、`TEACHDO_TMP_DIR`、`TEACHDO_LOG_DIR`（代码实现不保留 `AI2PPT_*`）。
+1. 当前仓库使用 `TEACHDO_CACHE_DIR` 控制基路径（默认 `var/cache`），详见 `backend/personaldb/runtime_paths.py:get_cache_dir()`。
+2. 当前仓库临时文件目录基路径由 `TEACHDO_TMP_DIR` 控制（默认 `var/tmp`）。
+3. 交付版本统一使用 `TEACHDO_CACHE_DIR`、`TEACHDO_TMP_DIR`、`TEACHDO_LOG_DIR`。
 - 本地开发时：只要不删除 `var/cache`，personaldb 重启后 KB 仍可检索命中。
 - Docker/部署（阶段 H 再做）：
 1. 需要将 `var/cache/personaldb` 挂载为 volume，否则容器重建会丢失 KB 数据。
@@ -304,8 +304,8 @@
   - [x] 已完成阶段 B（工作台路由化）
   - [x] 已完成阶段 C0（KB 后端打底：代码实现）
   - [x] 已完成阶段 C（大纲模块重构）
-  - [ ] 阶段 C0 联调/验收（按 DoD）
-  - [ ] 下一步优先级：阶段 D（PPT 模块替换）-> 阶段 E（编辑器独立页 + 工作台预览）
+  - [x] 阶段 C0 联调/验收（按 DoD，2026-02-16 已完成）
+  - [ ] 下一步优先级：补齐阶段 D/E 联调验证（回显/编辑/导出）-> 阶段 G（回归与发布）
 
 ### 阶段 A：仓库与启动链路切换
 - [ ] 1. 创建新仓库 `teachdo`（干净历史）：
@@ -354,8 +354,8 @@
   - [x] 记录日志但不中断生成。
 - DoD：
   - [x] 已补充后端单元测试覆盖（KB BFF + `/tools/aippt` KB 降级）：`venv/bin/python -m pytest backend -q`。
-  - [ ] `/api/kb/upload`、`/api/kb/files/*`、`/api/kb/vectorize/text`、`/api/kb/files/*`(DELETE) **真实服务联调**通过（建议用 `scripts/verify_endpoints.py --require-kb` 校验）。
-  - [ ] `PERSONAL_DB` 缺失或 personaldb 停止时，PPT 生成仍可用（仅自动禁用 KB 生成；建议用冒烟脚本 + 手工验证 SSE）。
+  - [x] `/api/kb/upload`、`/api/kb/files/*`、`/api/kb/vectorize/text`、`/api/kb/files/*`(DELETE) **真实服务联调**通过（2026-02-16：`venv/bin/python scripts/verify_endpoints.py --require-kb`，并通过前端 `/api` 代理验证）。
+  - [x] `PERSONAL_DB` 缺失或 personaldb 停止时，PPT 生成仍可用（2026-02-16：模拟 personaldb 不可达后，`/tools/aippt` 在 `generateFromUploadedFile=true` 下仍可完成 SSE 输出，并自动禁用 KB）。
 
 ### 阶段 C：大纲模块重构
 - [x] 1. 在 `OutlineView` 中接入 `/api/tools/aippt_outline_unified`。
@@ -437,12 +437,12 @@
   - [x] 支持拉取后端文件列表（`/api/kb/files/{course.id}`）做一致性校准。
   - [x] 支持删除文件（通过 `/api/kb/files/{user_id}/{file_id}`），删除后不再被检索命中。
   - [x] PPT 生成页读取 `kbFiles` 状态联动 `generateFromUploadedFile`（默认打开，无可用 ready 文件时禁用）。
-- [ ] 联调与回归：
-  - [ ] 验证“产物入库”写入后，PPT 生成阶段在启用 KB 时能命中检索（可通过 personaldb `/search` 验证）。
+ - [x] 联调与回归：
+  - [x] 验证“产物入库”写入后，PPT 生成阶段在启用 KB 时能命中检索（2026-02-16：向量化后通过 personaldb `/search` 命中 `folder_id=1` 文档）。
 - DoD：
   - [x] 三个页面均可正常进入且无 runtime error。
   - [x] 不影响 outline/ppt 主链路。
-  - [ ] 产物入库命中检索（待联调验证）。
+  - [x] 产物入库命中检索（2026-02-16：通过 personaldb `/search` 验证）。
 
 ### 阶段 G：回归与发布
 1. 链路回归：大纲、模板、流式生成、编辑、导出全流程。

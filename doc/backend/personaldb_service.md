@@ -60,7 +60,7 @@ def _get_markdown_content(file_path: str, file_name: str) -> str:
 **位置**: [`embedding_utils.py:44`](../../backend/personaldb/embedding_utils.py#L44)
 
 - 基于参数 MD5 哈希的自动缓存
-- 默认保存为 pickle 到 `var/cache/personaldb/`（可通过 `AI2PPT_CACHE_DIR` 调整）
+- 默认保存为 pickle 到 `var/cache/personaldb/`（可通过 `TEACHDO_CACHE_DIR` 调整）
 - 应用于文档转换和向量嵌入
 
 ### 2. 文件级缓存（`FileCacheManager`）
@@ -73,7 +73,7 @@ def _get_markdown_content(file_path: str, file_name: str) -> str:
 
 ### 3. 临时文件保留
 
-**临时目录**：默认 `var/tmp/personaldb/`（可通过 `AI2PPT_TMP_DIR` 调整）
+**临时目录**：默认 `var/tmp/personaldb/`（可通过 `TEACHDO_TMP_DIR` 调整）
 
 - 文件上传（`POST /upload/` 的 `file` 分支）：当前实现会将上传内容落到临时目录，**处理完成后不会自动删除**（便于调试，删除逻辑在代码中被注释掉）。
 - URL 下载（`POST /upload/` 的 `url` 分支）：下载的临时文件会在处理完成后删除。
@@ -112,7 +112,7 @@ def _chunk_text(text: str, max_chars: int = 1200, overlap: int = 200):
 
 **位置**: [`embedding_utils.py:95`](../../backend/personaldb/embedding_utils.py#L95)
 
-- 持久化到 `var/cache/personaldb/chromadb/`（可通过 `AI2PPT_CACHE_DIR` 调整）
+- 持久化到 `var/cache/personaldb/chromadb/`（可通过 `TEACHDO_CACHE_DIR` 调整）
 - 用户隔离：每用户一个 collection（`user_{userId}`）
 - 余弦相似度检索
 - 支持关键词混合搜索

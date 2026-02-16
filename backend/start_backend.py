@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-TrainPPTAgent 后端服务启动脚本
+TeachDo 后端服务启动脚本
 支持一键启动所有后端服务，包括端口清理和环境检查
 """
 
@@ -74,7 +74,7 @@ class BackendStarter:
     def print_banner(self):
         """打印启动横幅"""
         print("=" * 60)
-        print("🚀 TrainPPTAgent 后端服务启动器")
+        print("🚀 TeachDo 后端服务启动器")
         print("=" * 60)
         print()
         

@@ -37,7 +37,7 @@ TeachDo 是一套面向教师的智能备课平台，当前仓库提供 **Vite +
 - **语言**：TypeScript，组件统一使用 `<script setup lang="ts">`
 - **状态持久化**：Pinia + LocalStorage，同步主题、语言与课程上下文
 - **UI 与交互**：Tailwind CSS 运行时模式、Lucide 图标、自定义 Toast/i18n
-- **后端交互**：`services/` 封装 fetch/streaming 逻辑，通过 `VITE_API_BASE` 指定 Gateway
+- **后端交互**：`services/` 封装 fetch/streaming 逻辑，统一通过相对路径 `/api` 访问（Dev：Vite proxy；Prod：Nginx 反代）
 
 ---
 
@@ -47,14 +47,14 @@ TeachDo 是一套面向教师的智能备课平台，当前仓库提供 **Vite +
    npm install
    ```
 2. **配置环境变量**
-   - 在仓库根目录创建 `.env.local`
-   - 至少配置 `VITE_API_BASE=http://localhost:6800`（后端主 API 默认端口；若后端另有端口，以后端实际为准）
+   - 默认无需额外配置：前端统一走相对路径 `/api`，由 `vite.config.ts` 代理到后端 `http://127.0.0.1:6800`
+   - 如需修改后端地址/端口，请调整 `vite.config.ts` 中的 `server.proxy['/api'].target`
 3. **启动前端**
    ```bash
    npm run dev
    ```
    默认监听 `http://localhost:5174`（已在 `vite.config.ts` 配置，如需变更可自定义）。
-4. **启动后端（TeachDo/ai2ppt Gateway，默认监听 `http://localhost:6800`）**
+4. **启动后端（TeachDo 后端服务，默认监听 `http://localhost:6800`）**
    - 建议按照 `teachdo_local_dev.md` 中的说明使用虚拟环境运行 `python start.py`
 5. **构建/预览**
    ```bash

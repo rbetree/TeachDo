@@ -654,7 +654,7 @@ const handleGenerate = async () => {
 	                </ul>
 	              </div>
 	              <div class="mt-auto flex justify-between items-end border-t border-slate-100 dark:border-slate-800 pt-6">
-	                <div class="text-sm font-bold text-slate-400 uppercase tracking-widest">TeachDo x AI2PPT</div>
+	                <div class="text-sm font-bold text-slate-400 uppercase tracking-widest">TeachDo</div>
 	                <div class="text-sm font-bold text-slate-400">{{ currentSlideIndex + 1 }} / {{ slides.length }}</div>
 	              </div>
 	            </div>

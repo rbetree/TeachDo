@@ -50,7 +50,7 @@
 - 现象：`main_api`/`simpleOutline`/`slide_agent`/`mock_api` 目前均设置 `allow_origins=["*"]`。
 - 风险：对公网暴露时，浏览器侧跨域访问会被完全放开，易造成滥用或数据泄露风险（取决于接口是否含敏感数据）。
 - 建议修复：
-  - 用环境变量控制：`CORS_ALLOW_ORIGINS=http://localhost:5173,http://127.0.0.1:5173`。
+  - 用环境变量控制：`CORS_ALLOW_ORIGINS=http://localhost:5174,http://127.0.0.1:5174`。
   - 生产环境只允许你的前端域名。
 
 ---

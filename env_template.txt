@@ -60,13 +60,13 @@ EMBEDDING_MODEL=doubao-embedding-text-240715
 # ====================================================================
 
 # 缓存目录（会按服务名再分一层子目录）
-AI2PPT_CACHE_DIR=var/cache
+TEACHDO_CACHE_DIR=var/cache
 
 # 临时目录（会按服务名再分一层子目录）
-AI2PPT_TMP_DIR=var/tmp
+TEACHDO_TMP_DIR=var/tmp
 
 # 日志目录
-AI2PPT_LOG_DIR=logs
+TEACHDO_LOG_DIR=logs
 
 
 # ====================================================================

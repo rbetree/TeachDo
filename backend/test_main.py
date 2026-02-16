@@ -45,10 +45,10 @@ class PPTBaseTestCase(unittest.IsolatedAsyncioTestCase):
         """
         这些用例为端到端/集成测试：
         - 默认不跑（避免本地无服务时失败、避免误触发模型调用产生耗时/成本）
-        - 需要时设置：AI2PPT_INTEGRATION_TESTS=1，并确保 main_api 已启动
+        - 需要时设置：TEACHDO_INTEGRATION_TESTS=1，并确保 main_api 已启动
         """
-        if not _truthy_env("AI2PPT_INTEGRATION_TESTS"):
-            raise unittest.SkipTest("跳过集成测试：设置 AI2PPT_INTEGRATION_TESTS=1 以启用")
+        if not _truthy_env("TEACHDO_INTEGRATION_TESTS"):
+            raise unittest.SkipTest("跳过集成测试：设置 TEACHDO_INTEGRATION_TESTS=1 以启用")
         if not _is_service_reachable(cls.base_url):
             raise unittest.SkipTest(f"跳过集成测试：main_api 不可达 {cls.base_url}")
 

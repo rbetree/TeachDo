@@ -16,7 +16,7 @@
 - `slide_agent`（内容 Agent）：`http://127.0.0.1:10011`
 - `personaldb`（知识库）：`http://127.0.0.1:9100`
 
-> Docker 部署下，前端通常通过 `http://127.0.0.1:5173`（Nginx 容器）访问，并以 `/api/` 反向代理到 `main_api`。
+> Docker 部署下，前端通常通过 `http://127.0.0.1:5174`（Nginx 容器）访问，并以 `/api/` 反向代理到 `main_api`。
 
 ---
 

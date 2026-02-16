@@ -3,17 +3,17 @@
 ## 1. 背景与目标
 TeachDo 目前以前端 **Vite + Vue 3 + TypeScript** 为主工程形态，目标是保证：
 - 前端可独立运行（路由、构建、静态检查均可稳定通过）
-- 与后端 Gateway（TeachDo/ai2ppt）联调顺畅
+- 与后端服务联调顺畅
 - 代码与文档保持一致，避免遗留 React/旧脚手架描述导致误用
 
 ---
 
 ## 2. 环境准备
 - **Node.js ≥ 18.18**（建议配合 `npm ci` 使用 `package-lock.json` 保障可复现）
-- **Python/后端服务**：按后端仓库说明创建虚拟环境并启动 Gateway（默认 `http://localhost:6800`）
+- **Python/后端服务**：按后端仓库说明创建虚拟环境并启动后端（默认 `http://localhost:6800`）
 - **前端依赖**：仓库根目录执行 `npm install` 或 `npm ci`
-- **环境变量**：在 `.env.local`（或 shell）中配置：
-  - `VITE_API_BASE=http://localhost:6800`（指向后端主 API；仅 `VITE_` 前缀可被前端读取）
+- **接口代理**：前端统一通过相对路径 `/api` 访问后端（开发环境由 `vite.config.ts` 代理到 `http://127.0.0.1:6800`）
+  - 若后端端口/地址不同：修改 `vite.config.ts` 的 `server.proxy['/api'].target`
 
 ---
 
@@ -35,7 +35,7 @@ TeachDo 目前以前端 **Vite + Vue 3 + TypeScript** 为主工程形态，目�
 ## 5. 日常开发流程
 1. 安装依赖：`npm ci`
 2. 启动前端：`npm run dev`
-3. 并行启动后端：确保 `VITE_API_BASE` 可访问（例如 `GET /healthz`）
+3. 并行启动后端：确保后端可访问（例如 `GET http://127.0.0.1:6800/healthz`，或你在 `vite.config.ts` 中配置的 proxy target）
 4. 分层约束：视图组件不得直接 `fetch`，统一通过 `src/services/*`
 5. 提交前至少执行：`npm run lint && npm run typecheck && npm run build`
 
@@ -50,5 +50,5 @@ TeachDo 目前以前端 **Vite + Vue 3 + TypeScript** 为主工程形态，目�
 
 ## 7. 常见问题与处理
 1. **刷新后 404**：检查部署环境是否启用 `historyApiFallback`（回退到 `index.html`）
-2. **后端不可用**：确认 `VITE_API_BASE` 是否正确、`/healthz` 是否可访问，以及后端 CORS 是否允许来自 `http://localhost:5174`
+2. **后端不可用**：确认 `vite.config.ts` 的 `server.proxy['/api'].target` 是否正确、后端 `/healthz` 是否可访问；如绕过 `/api` 直连后端再检查 CORS
 3. **本地存储不兼容**：若调整 `CourseGroup/CourseUnit` 结构，需提供兼容/迁移逻辑，或提醒清空 localStorage

@@ -2102,7 +2102,7 @@ graph LR
 ```mermaid
 graph TB
     subgraph "开发机器"
-        A[Frontend Dev Server<br/>Vite :5173]
+        A[Frontend Dev Server<br/>Vite :5174]
         B[Main API<br/>:6800]
         C[Outline Service<br/>:10001]
         D[Content Service<br/>:10011]
@@ -2117,8 +2117,8 @@ graph TB
 
 **启动命令**:
 ```bash
-# 前端
-cd frontend && npm run dev
+# 前端（TeachDo）
+cd teachdo-frontend && npm run dev
 
 # 后端（方式一：一键启动）
 cd backend && python start_backend.py

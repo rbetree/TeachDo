@@ -2,7 +2,7 @@
   <nav class="navbar">
     <div class="navbar-left">
       <button class="logo-btn" type="button" @click="goHome">
-        <span class="logo-text">ai2ppt</span>
+        <span class="logo-text">TeachDo</span>
       </button>
     </div>
 

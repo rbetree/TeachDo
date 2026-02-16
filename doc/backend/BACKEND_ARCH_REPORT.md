@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     outline_api: AnyHttpUrl | None = None
     content_api: AnyHttpUrl | None = None
     personaldb_api: AnyHttpUrl | None = None
-    cors_origins: list[str] = ["http://127.0.0.1:5173"]
+    cors_origins: list[str] = ["http://127.0.0.1:5174"]
     http_timeout: float = 15.0
     proxy_allowed_hosts: list[str] = ["images.unsplash.com", "example.com"]
     upload_max_bytes: int = 15 * 1024 * 1024

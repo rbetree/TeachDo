@@ -1,4 +1,4 @@
-# 🚀 TrainPPTAgent 生产环境部署指南
+# 🚀 TeachDo 生产环境部署指南
 
 ## ✨ 新增功能
 
@@ -64,7 +64,7 @@ python start.py
 ### 3. 访问应用
 
 生产环境启动后：
-- **前端界面**: http://your-server-ip:5173
+- **前端界面**: http://your-server-ip:5174
 - **主API**: http://your-server-ip:6800
 - **大纲服务**: http://your-server-ip:10001
 - **内容生成**: http://your-server-ip:10011
@@ -72,7 +72,7 @@ python start.py
 ## 📁 项目结构更新
 
 ```
-TrainPPTAgent/
+TeachDo/
 ├── .env                      # 🆕 统一环境配置
 ├── env_template.txt         # 🆕 配置模板
 ├── start.py                 # 🆕 一键启动脚本
@@ -84,7 +84,7 @@ TrainPPTAgent/
 ├── backend/
 │   ├── start_backend.py   # 原开发模式启动脚本
 │   └── ...
-└── frontend/
+└── teachdo-frontend/
     ├── dist/              # 构建后的静态文件
     └── ...
 ```
@@ -103,7 +103,7 @@ HOST=0.0.0.0
 MAIN_API_PORT=6800
 OUTLINE_API_PORT=10001
 CONTENT_API_PORT=10011
-FRONTEND_PORT=5173
+FRONTEND_PORT=5174
 ```
 
 ### AI模型配置
@@ -154,7 +154,7 @@ cd backend
 python start_backend.py
 
 # 前端开发启动
-cd frontend
+cd teachdo-frontend
 npm run dev
 ```
 
@@ -210,10 +210,10 @@ sudo kill -9 <PID>
 ### 2. 前端构建失败
 ```bash
 # 检查Node.js版本
-node --version  # 需要 v16+
+node --version  # 需要 v18.18+
 
 # 手动构建
-cd frontend
+cd teachdo-frontend
 npm install
 npm run build
 ```

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-TrainPPTAgent dev环境一键启动脚本，生产环境需要使用npm run build或者docker
+TeachDo dev 环境一键启动脚本，生产环境需要使用 `npm run build` 或 Docker
 支持前端构建、后端服务启动、进程管理和监控
 """
 
@@ -402,7 +402,7 @@ class ProductionStarter:
         """打印启动横幅"""
         banner = f"""
 {'='*80}
-TrainPPTAgent 生产环境启动器
+TeachDo 生产环境启动器
 {'='*80}
 启动时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 项目目录: {self.project_root}
@@ -1150,7 +1150,7 @@ TrainPPTAgent 生产环境启动器
 
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description="TrainPPTAgent 一键启动脚本（主窗口干净启动，副窗口 tail 日志）")
+    parser = argparse.ArgumentParser(description="TeachDo 一键启动脚本（主窗口干净启动，副窗口 tail 日志）")
     parser.add_argument("--tail", action="store_true", help="只做日志聚合跟随（不安装/不启动服务）")
     parser.add_argument("--tail-all", action="store_true", help="--tail 时包含 install_*.log")
     parser.add_argument("--no-install", action="store_true", help="跳过依赖安装（仅启动服务）")

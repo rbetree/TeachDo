@@ -1,4 +1,4 @@
-# AI2PPT 文档索引
+# TeachDo 文档索引
 
 > 约定：
 > - `doc/`：官方文档（建议提交到 git，协作者 clone 后即可阅读）
@@ -8,10 +8,10 @@
 
 ## 1. 建议阅读路径（从快到全）
 
-1. 先读：**架构与能力边界**（见第 2 节）
-2. 再读：**后端接口/部署**（见第 3 节）
-3. 然后：**前端实现**（见第 4 节）
-4. 最后：**模板/结构**（见第 6 节）+ **部署与运行入口**（见第 7 节）
+1. 先读：项目入口与启动（`README.md` / `README_PRODUCTION.md`）
+2. 再读：迁移与实施计划（`doc/dev/PLAN.md`）
+3. 然后：后端接口/部署（第 3 节）与前端 API 映射（第 4 节）
+4. 最后：模板/结构（第 6 节）+ Docker 部署（第 7 节）
 5. `legacy/` 仅在排查历史/对照抓包记录时使用（见第 10 节）
 
 ## 2. 架构与能力边界（维护版）
@@ -34,7 +34,8 @@
 
 ## 4. 前端（架构 / API 调用）
 
-- 前端统一技术文档（维护版）：`doc/dev/FRONTEND_GUIDE.md`
+- TeachDo 前端入口与开发：`teachdo-frontend/README.md`、`teachdo-frontend/teachdo_local_dev.md`
+- 前端统一技术文档（历史/对照）：`doc/dev/FRONTEND_GUIDE.md`
 - 前端 API 调用与封装（services 层）：`doc/dev/FRONTEND_API_CALLS.md`
 - 前端未使用页面审计：`doc/dev/FRONTEND_UNUSED_PAGES_AUDIT.md`
 

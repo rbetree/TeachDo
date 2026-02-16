@@ -39,9 +39,9 @@ cp env_template.txt .env
 
 ### 3.3 运行期目录（建议保持默认）
 
-- `AI2PPT_CACHE_DIR`：缓存目录（默认 `var/cache`，会按服务名分目录）
-- `AI2PPT_TMP_DIR`：临时目录（默认 `var/tmp`，会按服务名分目录）
-- `AI2PPT_LOG_DIR`：日志目录（默认 `logs`）
+- `TEACHDO_CACHE_DIR`：缓存目录（默认 `var/cache`，会按服务名分目录）
+- `TEACHDO_TMP_DIR`：临时目录（默认 `var/tmp`，会按服务名分目录）
+- `TEACHDO_LOG_DIR`：日志目录（默认 `logs`）
 
 ### 3.4 功能开关
 

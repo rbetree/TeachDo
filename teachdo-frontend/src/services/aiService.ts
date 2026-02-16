@@ -3,10 +3,10 @@ import { SseParser, stripJsonCodeFence } from "@/utils/sse";
 import type { AIPPTSlide } from "@/editor-runtime/types/AIPPT";
 
 /**
- * AI Service Layer - TeachDo x ai2ppt Integration
+ * AI Service Layer - TeachDo Integration
  * 
  * Unified entry point for all LLM interactions.
- * All requests are routed through the backend (ai2ppt/TeachDo API).
+ * All requests are routed through the backend (TeachDo API).
  * No client-side API keys are used.
  */
 
@@ -69,7 +69,7 @@ export const aiService = {
           }));
         }
       } catch (e) {
-        console.warn("Failed to fetch templates from ai2ppt, using mock.", e);
+        console.warn("Failed to fetch templates from backend, using mock.", e);
       }
     }
     return MOCK_TEMPLATES;
@@ -468,7 +468,7 @@ export const aiService = {
 };
 
 /**
- * Mapper function to convert ai2ppt slide structure to TeachDo simplified preview structure
+ * Mapper function to convert AIPPT slide structure to TeachDo simplified preview structure
  */
 function mapBackendSlideToFrontend(backendSlide: any, eventType: string): any | null {
   // Logic to extract title and text content from 'elements' array
