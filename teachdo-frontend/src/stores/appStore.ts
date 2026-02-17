@@ -7,13 +7,40 @@ import type {
   Language,
 } from '#root/types';
 import { setLocale } from '@/i18n';
+import { loadCourseLarge, loadUnitLargeByCourse, saveCourseLarge, saveUnitLarge } from '@/utils/appStoreIdb';
 
 const STORAGE_KEY = 'teachdo_app_store';
+const STORAGE_VERSION = 2 as const;
 
 type ThemeMode = 'light' | 'dark';
 
 export interface AppStoreState {
   courses: CourseGroup[];
+  currentCourseId: string | null;
+  currentUnitId: string | null;
+  theme: ThemeMode;
+  language: Language;
+}
+
+interface PersistedCourseUnitLiteV2 {
+  id: string;
+  title: string;
+  objectives: string;
+  selectedTemplateId?: string;
+}
+
+interface PersistedCourseLiteV2 {
+  id: string;
+  name: string;
+  subject: string;
+  description: string;
+  createdAt: string;
+  units: PersistedCourseUnitLiteV2[];
+}
+
+interface PersistedAppStoreLiteV2 {
+  version: typeof STORAGE_VERSION;
+  courses: PersistedCourseLiteV2[];
   currentCourseId: string | null;
   currentUnitId: string | null;
   theme: ThemeMode;
@@ -93,6 +120,51 @@ function reviveCourses(raw: unknown): CourseGroup[] {
   })) as CourseGroup[];
 }
 
+function reviveCoursesLiteV2(raw: unknown): CourseGroup[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((course) => ({
+    id: typeof course?.id === 'string' ? course.id : `course-${Date.now()}`,
+    name: typeof course?.name === 'string' ? course.name : '',
+    subject: typeof course?.subject === 'string' ? course.subject : '',
+    description: typeof course?.description === 'string' ? course.description : '',
+    createdAt: course?.createdAt ? new Date(course.createdAt) : new Date(),
+    units: Array.isArray(course?.units)
+      ? course.units.map((unit: CourseUnit) => ({
+          id: typeof unit?.id === 'string' ? unit.id : `unit-${Date.now()}`,
+          title: typeof unit?.title === 'string' ? unit.title : '',
+          objectives: typeof unit?.objectives === 'string' ? unit.objectives : '',
+          selectedTemplateId: typeof (unit as any)?.selectedTemplateId === 'string' ? (unit as any).selectedTemplateId : undefined,
+        }))
+      : [],
+    // 大对象会在 setupAppStore 中异步从 IndexedDB 回填
+    kbFiles: [],
+    chatHistory: [],
+  })) as CourseGroup[];
+}
+
+function toLiteStateV2(state: AppStoreState): PersistedAppStoreLiteV2 {
+  return {
+    version: STORAGE_VERSION,
+    theme: state.theme,
+    language: state.language,
+    currentCourseId: state.currentCourseId,
+    currentUnitId: state.currentUnitId,
+    courses: state.courses.map((course) => ({
+      id: course.id,
+      name: course.name,
+      subject: course.subject,
+      description: course.description,
+      createdAt: (course.createdAt instanceof Date ? course.createdAt : new Date(course.createdAt)).toISOString(),
+      units: (course.units || []).map((unit) => ({
+        id: unit.id,
+        title: unit.title,
+        objectives: unit.objectives,
+        selectedTemplateId: typeof unit.selectedTemplateId === 'string' ? unit.selectedTemplateId : undefined,
+      })),
+    })),
+  };
+}
+
 function loadState(): AppStoreState {
   if (!isBrowser) {
     return { ...defaultState };
@@ -107,6 +179,17 @@ function loadState(): AppStoreState {
     const language: Language = parsed.language === 'en' ? 'en' : 'zh';
     const currentCourseId = typeof parsed.currentCourseId === 'string' ? parsed.currentCourseId : null;
     const currentUnitId = typeof parsed.currentUnitId === 'string' ? parsed.currentUnitId : null;
+    // v2：localStorage 仅存轻量元数据（大对象走 IndexedDB）
+    if (parsed.version === STORAGE_VERSION) {
+      return {
+        ...defaultState,
+        theme,
+        language,
+        currentCourseId,
+        currentUnitId,
+        courses: reviveCoursesLiteV2(parsed.courses),
+      };
+    }
     return {
       ...defaultState,
       theme,
@@ -123,7 +206,20 @@ function loadState(): AppStoreState {
 
 function persistState(state: AppStoreState) {
   if (!isBrowser) return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toLiteStateV2(state)));
+  } catch (e) {
+    console.warn('写入 localStorage 失败（已忽略）', e);
+  }
+}
+
+function persistLegacyState(state: AppStoreState) {
+  if (!isBrowser) return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn('写入 localStorage(legacy) 失败（已忽略）', e);
+  }
 }
 
 function applyTheme(theme: ThemeMode) {
@@ -159,14 +255,41 @@ export const useAppStore = defineStore('app', {
         this.currentCourseId = null;
         this.currentUnitId = null;
       }
+
+      // 大对象异步写入 IndexedDB（不阻断 UI）
+      void (async () => {
+        for (const course of courses) {
+          await saveCourseLarge(course);
+          for (const unit of course.units || []) {
+            await saveUnitLarge(course.id, unit);
+          }
+        }
+      })();
     },
     upsertCourse(course: CourseGroup) {
       const index = this.courses.findIndex((item) => item.id === course.id);
+      const prev = index >= 0 ? this.courses[index] : null;
       if (index >= 0) {
         this.courses[index] = course;
       } else {
         this.courses.push(course);
       }
+
+      // 大对象异步写入 IndexedDB（只写入发生变化的部分）
+      void (async () => {
+        if (!prev || prev.kbFiles !== course.kbFiles || prev.chatHistory !== course.chatHistory) {
+          await saveCourseLarge(course);
+        }
+
+        const prevById = new Map<string, CourseUnit>();
+        for (const u of prev?.units || []) prevById.set(u.id, u);
+        for (const u of course.units || []) {
+          const old = prevById.get(u.id);
+          if (!old || old !== u) {
+            await saveUnitLarge(course.id, u);
+          }
+        }
+      })();
     },
     selectCourse(courseId: string | null) {
       this.currentCourseId = courseId;
@@ -185,11 +308,24 @@ export const useAppStore = defineStore('app', {
       if (index === -1) return;
       const target = this.courses[index];
       if (!target) return;
-      const updated = updater([...target.units]);
+      const prevUnits = target.units || [];
+      const updated = updater([...prevUnits]);
       this.courses[index] = {
         ...target,
         units: updated,
       };
+
+      // 只对变更的 unit 写入 IndexedDB，避免不必要的大写入
+      void (async () => {
+        const prevById = new Map<string, CourseUnit>();
+        for (const u of prevUnits) prevById.set(u.id, u);
+        for (const u of updated) {
+          const old = prevById.get(u.id);
+          if (!old || old !== u) {
+            await saveUnitLarge(courseId, u);
+          }
+        }
+      })();
     },
     setTheme(theme: ThemeMode) {
       this.theme = theme;
@@ -212,11 +348,90 @@ export const setupAppStore = (pinia: Pinia) => {
   }
   applyTheme(store.theme);
   applyLanguage(store.language);
+
+  // 保护 legacy 数据：如果本地还是旧格式（无 version），在完成迁移之前不要覆盖 localStorage，避免在 IndexedDB 不可用时造成数据丢失。
+  let allowLitePersistence = true;
+  let needsMigration = false;
+  const savedAtBoot = window.localStorage.getItem(STORAGE_KEY);
+  if (savedAtBoot) {
+    try {
+      const parsed = JSON.parse(savedAtBoot) as Record<string, unknown>;
+      if (parsed.version !== STORAGE_VERSION) {
+        allowLitePersistence = false;
+        needsMigration = true;
+      }
+    } catch {
+      // 本地数据损坏时允许直接覆盖为 v2
+      allowLitePersistence = true;
+      needsMigration = false;
+    }
+  }
+
   store.$subscribe((_mutation, state) => {
-    persistState(state);
+    if (allowLitePersistence) persistState(state);
+    else persistLegacyState(state);
     applyTheme(state.theme);
     applyLanguage(state.language);
   }, { detached: true });
+
+  // localStorage 旧格式（无 version）的一次性迁移：将大对象写入 IndexedDB，然后把 localStorage 压缩为 v2 轻量结构。
+  void (async () => {
+    if (!needsMigration) return;
+
+    // 迁移的源数据已经在 store 中（loadState 已复活 Date）
+    let ok = true;
+    for (const course of store.courses) {
+      ok = (await saveCourseLarge(course)) && ok;
+      for (const unit of course.units || []) {
+        ok = (await saveUnitLarge(course.id, unit)) && ok;
+      }
+    }
+    if (!ok) {
+      console.warn('IndexedDB 迁移失败：为避免数据丢失，已保留 legacy localStorage（不会压缩为 v2）。');
+      return;
+    }
+
+    // 迁移成功后才允许覆盖 localStorage
+    allowLitePersistence = true;
+    persistState(store.$state);
+  })();
+
+  // 若 localStorage 为 v2 轻量结构，则从 IndexedDB 异步回填大对象字段（outline/lesson/presentation/editorDocument/kb/chat）。
+  void (async () => {
+    if (needsMigration) return;
+    if (!allowLitePersistence) return;
+
+    const patchedCourses = store.courses.map((course) => ({ ...course }));
+    for (const course of patchedCourses) {
+      const courseLarge = await loadCourseLarge(course.id);
+      if (courseLarge) {
+        // 仅在当前内存里为空时回填，避免覆盖用户正在进行的修改
+        if (!Array.isArray(course.kbFiles) || course.kbFiles.length === 0) {
+          course.kbFiles = courseLarge.kbFiles;
+        }
+        if (!Array.isArray(course.chatHistory) || course.chatHistory.length === 0) {
+          course.chatHistory = courseLarge.chatHistory;
+        }
+      }
+
+      const unitLargeMap = await loadUnitLargeByCourse(course.id);
+      if (unitLargeMap.size === 0) continue;
+      course.units = (course.units || []).map((unit) => {
+        const record = unitLargeMap.get(unit.id);
+        if (!record) return unit;
+        return {
+          ...unit,
+          outlineContent: unit.outlineContent || record.outlineContent || unit.outlineContent,
+          lessonPlan: unit.lessonPlan ?? record.lessonPlan ?? unit.lessonPlan,
+          presentation: unit.presentation ?? record.presentation ?? unit.presentation,
+          editorDocument: unit.editorDocument ?? record.editorDocument ?? unit.editorDocument,
+        };
+      });
+    }
+
+    store.courses = patchedCourses;
+  })();
+
   if (!store.courses.length) {
     store.setCourses(createDemoCourses());
   }

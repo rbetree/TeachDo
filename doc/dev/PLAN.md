@@ -19,8 +19,9 @@
 ### 阶段 I：前端架构收敛与稳定性（P0）
 目标：先解决结构性风险与边界问题，避免后续优化在“脆弱地基”上叠加。
 
-- [ ] I1. 持久化分层（LocalStorage 轻量化 + 大对象 IndexedDB）
+- [x] I1. 持久化分层（LocalStorage 轻量化 + 大对象 IndexedDB）
   - 背景：当前 `appStore` 将整个 state `JSON.stringify` 写入 localStorage，且无写入失败兜底；`editorDocument.slides` 可能巨大，容易触发配额/卡顿/异常。
+  - 进展（2026-02-17）：已完成 localStorage v2 轻量持久化 + IndexedDB(Dexie) 存储大字段 + legacy 自动迁移与启动回填；localStorage 写入增加失败兜底。
   - 方案：
     1. LocalStorage 仅持久化“轻量元数据”（currentCourseId/currentUnitId、theme、language、课程与单元的轻量字段）。
     2. `editorDocument`、大纲/生成产物等“大文本/大数组”统一走 IndexedDB（可复用 editor-runtime Dexie 或单独建表），并提供迁移与降级策略。
