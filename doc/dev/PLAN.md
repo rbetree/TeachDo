@@ -45,7 +45,8 @@
   - 方案：按领域拆分 `ppt/outline/kb`，统一错误模型（超时/取消/后端不可用提示），清理“已不再使用但仍保留的旧实现”。
   - DoD：同一类错误在所有页面表现一致（文案、toast、重试策略一致）。
 
-- [ ] I4. PPTView 组件拆分（可维护、可测试）
+- [x] I4. PPTView 组件拆分（可维护、可测试）
+  - 进展（2026-02-17）：已完成拆分（模板选择/预览渲染/高级选项弹窗）+ `usePptGeneration` composable + 纯函数工具（slide 映射/Markdown 产物构建），PPTView 仅保留路由与胶水逻辑。
   - 方案：拆为“模板选择/高级选项/生成状态/预览渲染/入库”等子组件 + composable（如 `usePptGeneration`）。
   - DoD：
     1. 生成逻辑从组件中抽离（composable + 状态机/纯函数），不依赖 DOM 也能验证。
