@@ -4,6 +4,7 @@ import type { ChatMessage, CourseGroup, CourseUnit } from '#root/types';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useI18n } from 'vue-i18n';
+import { escapeHtml } from '@/utils/safeHtml';
 
 type AssistantViewVariant = 'page' | 'panel';
 
@@ -39,9 +40,9 @@ const renderInlineStyles = (text: string) => {
   return parts
     .map((part, i) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        return `<strong key="${i}" class="font-semibold text-slate-900 dark:text-white">${part.slice(2, -2)}</strong>`;
+        return `<strong key="${i}" class="font-semibold text-slate-900 dark:text-white">${escapeHtml(part.slice(2, -2))}</strong>`;
       }
-      return part;
+      return escapeHtml(part);
     })
     .join('');
 };
@@ -51,9 +52,9 @@ const renderMessage = (content: string) => {
   const blocks = content.split('\n');
   return blocks
     .map((line, idx) => {
-      if (line.startsWith('### ')) return `<h3 key="${idx}" class="text-base font-bold text-slate-800 dark:text-white mt-4 mb-2">${line.replace('### ', '')}</h3>`;
-      if (line.startsWith('## ')) return `<h2 key="${idx}" class="text-lg font-bold text-indigo-600 dark:text-indigo-400 mt-4 mb-2">${line.replace('## ', '')}</h2>`;
-      if (line.startsWith('# ')) return `<h1 key="${idx}" class="text-xl font-bold text-slate-900 dark:text-white mt-4 mb-3 border-b pb-2">${line.replace('# ', '')}</h1>`;
+      if (line.startsWith('### ')) return `<h3 key="${idx}" class="text-base font-bold text-slate-800 dark:text-white mt-4 mb-2">${escapeHtml(line.replace('### ', ''))}</h3>`;
+      if (line.startsWith('## ')) return `<h2 key="${idx}" class="text-lg font-bold text-indigo-600 dark:text-indigo-400 mt-4 mb-2">${escapeHtml(line.replace('## ', ''))}</h2>`;
+      if (line.startsWith('# ')) return `<h1 key="${idx}" class="text-xl font-bold text-slate-900 dark:text-white mt-4 mb-3 border-b pb-2">${escapeHtml(line.replace('# ', ''))}</h1>`;
 
       if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
         const text = line.replace(/^(\s*)([-*])\s+/, '');

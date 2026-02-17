@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import type { CourseGroup, CourseUnit, Presentation, PPTTemplate } from '#root/types';
@@ -7,9 +7,7 @@ import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import type { AIPPTSlide } from '@/editor-runtime/types/AIPPT';
-import { createAipptGenerator, type ImgPoolItem } from '@/editor-runtime/aippt/aipptGenerator';
-import { useSlidesStore as useEditorSlidesStore } from '@editor/store';
-import ThumbnailSlide from '@editor/views/components/ThumbnailSlide/index.vue';
+import type { ImgPoolItem } from '@/editor-runtime/aippt/aipptGenerator';
 import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
 
 interface Props {
@@ -27,6 +25,8 @@ const { t } = useI18n();
 const router = useRouter();
 const ui = useWorkspaceUiStore();
 
+const ThumbnailSlide = defineAsyncComponent(() => import('@editor/views/components/ThumbnailSlide/index.vue'));
+
 const loading = ref(false);
 const presentation = ref<Presentation | null>(null);
 const currentSlideIndex = ref(0);
@@ -39,7 +39,29 @@ const selectedTemplate = computed(() => templates.value.find((item) => item.id =
 const slides = computed(() => presentation.value?.slides ?? []);
 const currentSlide = computed(() => slides.value[currentSlideIndex.value]);
 
-const editorSlidesStore = useEditorSlidesStore();
+const editorPreviewReady = ref(false);
+const editorSlidesStoreLoaded = ref(false);
+let editorSlidesStoreInstance: any | null = null;
+let editorSlidesStoreLoading: Promise<any> | null = null;
+
+const ensureEditorSlidesStore = async () => {
+  if (editorSlidesStoreInstance) return editorSlidesStoreInstance;
+  if (editorSlidesStoreLoading) return editorSlidesStoreLoading;
+
+  editorSlidesStoreLoading = (async () => {
+    const mod = await import('@editor/store');
+    editorSlidesStoreInstance = mod.useSlidesStore();
+    editorSlidesStoreLoaded.value = true;
+    return editorSlidesStoreInstance;
+  })();
+
+  try {
+    return await editorSlidesStoreLoading;
+  } finally {
+    editorSlidesStoreLoading = null;
+  }
+};
+
 const editorDocument = computed(() => props.currentUnit?.editorDocument ?? null);
 const editorSlides = computed<any[]>(() => (editorDocument.value?.slides ?? []) as any[]);
 const hasEditorSlides = computed(() => editorSlides.value.length > 0);
@@ -120,13 +142,16 @@ const hasAdvancedOverrides = computed(
 
 watch(
   editorDocument,
-  (doc) => {
+  async (doc) => {
+    editorPreviewReady.value = false;
     if (!doc) return;
     const width = Number(doc.width || doc.viewport?.size || 960);
     const ratio = Number(doc.viewport?.ratio || (doc.width && doc.height ? doc.height / doc.width : 0.5625));
-    if (width) editorSlidesStore.setViewportSize(width);
-    if (ratio) editorSlidesStore.setViewportRatio(ratio);
-    if (doc.theme) editorSlidesStore.setTheme(doc.theme as any);
+    const store = await ensureEditorSlidesStore();
+    if (width) store.setViewportSize(width);
+    if (ratio) store.setViewportRatio(ratio);
+    if (doc.theme) store.setTheme(doc.theme as any);
+    editorPreviewReady.value = true;
   },
   { immediate: true },
 );
@@ -152,6 +177,12 @@ watch(
 const goToKnowledgeBase = () => {
   ui.setRightPanelTab('kb');
   advancedOpen.value = false;
+};
+
+const goToOutline = () => {
+  const unit = props.currentUnit;
+  if (!unit) return;
+  router.push({ name: 'course-unit', params: { courseId: props.currentCourse.id, unitId: unit.id, tab: 'outline' } });
 };
 
 const openAdvanced = () => {
@@ -399,6 +430,7 @@ const handleGenerate = async () => {
   viewState.value = 'PREVIEW';
 
   try {
+    const { createAipptGenerator } = await import('@/editor-runtime/aippt/aipptGenerator');
     const templateData = await aiService.getTemplateFileData(template.id);
     const templateSlides = (templateData?.slides || []) as any[];
     const width = Number(templateData?.width || 960);
@@ -491,8 +523,16 @@ const handleGenerate = async () => {
     <div class="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center mb-4">
       <LucideIcon name="presentation" :size="32" class="opacity-60" />
     </div>
-    <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300">{{ t('lesson.need_outline.title') }}</h3>
-    <p class="text-sm mt-2 mb-6 max-w-md text-center text-slate-500">{{ t('ppt.empty_outline') }}</p>
+    <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300">{{ t('ppt.need_outline.title') }}</h3>
+    <p class="text-sm mt-2 mb-6 max-w-md text-center text-slate-500">{{ t('ppt.need_outline.desc') }}</p>
+    <button
+      type="button"
+      class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-base shadow-lg hover:shadow-indigo-500/30 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
+      @click="goToOutline"
+    >
+      <LucideIcon name="layout-list" :size="18" />
+      <span>{{ t('ppt.need_outline.cta') }}</span>
+    </button>
   </div>
 
   <div v-else class="h-full flex flex-col gap-6 min-h-0">
@@ -614,6 +654,13 @@ const handleGenerate = async () => {
 	      </div>
 	
 		      <div v-else-if="hasEditorSlides" class="flex-1 min-h-0 flex gap-6 overflow-hidden">
+		        <div v-if="!editorPreviewReady || !editorSlidesStoreLoaded" class="flex-1 flex items-center justify-center bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+		          <div class="text-center opacity-40">
+		            <LucideIcon name="loader-2" :size="48" class="animate-spin mx-auto mb-4" />
+		            <p class="font-bold">{{ t('common.loading') }}</p>
+		          </div>
+		        </div>
+		        <template v-else>
 		        <div ref="thumbnailListRef" class="w-60 min-h-0 flex-shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto custom-scrollbar p-3 space-y-3">
 		          <button
 		            v-for="(slide, i) in editorSlides"
@@ -640,6 +687,7 @@ const handleGenerate = async () => {
 		            </div>
 		          </div>
 		        </div>
+		      </template>
 		      </div>
 
 	      <div v-else class="flex-1 min-h-0 flex gap-6 overflow-hidden">

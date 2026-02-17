@@ -28,9 +28,9 @@
     1. 无论 slides 体量多大，刷新/切换路由不出现 localStorage 配额错误与明显卡顿。
     2. “预览回显/编辑器回显”稳定（支持加载失败降级到 `presentation`）。
 
-- [ ] I2. 依赖边界与首屏瘦身（避免 editor-runtime 侵入工作台首屏）
+- [x] I2. 依赖边界与首屏瘦身（避免 editor-runtime 侵入工作台首屏）
   - 背景：当前 `teachdo-frontend/src/main.ts` 全局 `app.use(EditorIconPlugin/EditorDirectivePlugin)`，且工作台 `teachdo-frontend/src/components/workspace/PPTView.vue` 直接 import `@editor/*`，会把 editor-runtime 依赖链带进首屏/工作台。
-  - 进展（2026-02-17）：已完成方案 1/2（插件按编辑器路由加载 + 工作台 Tab 懒加载），方案 3 待完成（PPT 预览解除 `@editor/*` 静态依赖）。
+  - 进展（2026-02-17）：已完成方案 1/2/3（插件按编辑器路由加载 + 工作台 Tab 懒加载 + PPT 预览解除 `@editor/*` 静态依赖，改为按需加载缩略图/生成器/Store）。
   - 方案：
     1. 将 editor-runtime 相关插件/依赖改为“仅在编辑器路由按需加载与注册”（进入编辑器再 import/use）。
     2. 工作台 Tab（Outline/Lesson/PPT）改为懒加载（async component 或子路由 code-splitting）。
@@ -158,6 +158,7 @@
 #### 问题 3.3.1 PPT 页面缺少“无大纲”时的下一步 CTA，且标题复用 lesson 文案不严谨
 - 现象/影响：用户在 PPT Tab 遇到“需要大纲”后无明确入口跳转，操作流断裂；并且标题复用 `lesson.need_outline.title`，概念上不严谨。
 - 证据：`teachdo-frontend/src/components/workspace/PPTView.vue`
+- 进展（2026-02-17）：已补齐 `ppt.need_outline.*` i18n，并在 PPT 空状态加入“前往大纲”CTA。
 - 修复方案：
   1. 增加 `ppt.need_outline.title/desc/cta` i18n 文案；
   2. 在 PPT 空状态加入 CTA（“前往大纲”按钮，跳转到 outline tab），并保持与 Lesson 空状态一致的布局与按钮层级。
@@ -197,6 +198,7 @@
 - 证据：
   - Outline：`teachdo-frontend/src/components/workspace/OutlineView.vue`
   - Assistant：`teachdo-frontend/src/components/workspace/AssistantView.vue`
+- 进展（2026-02-17）：已对渲染内容做 HTML 转义（确保 `v-html` 仅输出受控标签），避免注入脚本/事件属性。
 - 修复方案：
   1. 引入安全的渲染策略：要么使用可信 Markdown 渲染器并开启 sanitize，要么使用 DOMPurify 对输出做白名单清洗；
   2. 明确允许的标签集合（p/ul/li/strong/em/code/heading 等），禁用 script/style/事件属性；

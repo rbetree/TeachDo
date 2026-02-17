@@ -5,6 +5,7 @@ import type { CourseGroup, CourseUnit } from '#root/types';
 import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
+import { escapeHtml } from '@/utils/safeHtml';
 
 interface Props {
   currentCourse: CourseGroup;
@@ -125,9 +126,9 @@ const renderInlineStyles = (text: string) => {
   const parts = text.split(/(\*\*.*?\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return `<strong key="${i}" class="font-bold text-slate-900 dark:text-white bg-indigo-50 dark:bg-indigo-900/30 px-1 rounded mx-0.5">${part.slice(2, -2)}</strong>`;
+      return `<strong key="${i}" class="font-bold text-slate-900 dark:text-white bg-indigo-50 dark:bg-indigo-900/30 px-1 rounded mx-0.5">${escapeHtml(part.slice(2, -2))}</strong>`;
     }
-    return part;
+    return escapeHtml(part);
   }).join('');
 };
 
@@ -138,13 +139,13 @@ const renderMarkdown = (content: string) => {
   const lines = content.split('\n');
   return lines.map((line, idx) => {
     if (line.startsWith('# ')) {
-      return `<h1 key="${idx}" class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mt-8 mb-4 border-b pb-3 border-slate-200 dark:border-slate-700">${line.replace('# ', '')}</h1>`;
+      return `<h1 key="${idx}" class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mt-8 mb-4 border-b pb-3 border-slate-200 dark:border-slate-700">${escapeHtml(line.replace('# ', ''))}</h1>`;
     }
     if (line.startsWith('## ')) {
-      return `<h2 key="${idx}" class="text-lg md:text-xl font-bold text-indigo-600 dark:text-indigo-400 mt-6 mb-3">${line.replace('## ', '')}</h2>`;
+      return `<h2 key="${idx}" class="text-lg md:text-xl font-bold text-indigo-600 dark:text-indigo-400 mt-6 mb-3">${escapeHtml(line.replace('## ', ''))}</h2>`;
     }
     if (line.startsWith('### ')) {
-      return `<h3 key="${idx}" class="text-base md:text-lg font-bold text-slate-700 dark:text-slate-300 mt-4 mb-2">${line.replace('### ', '')}</h3>`;
+      return `<h3 key="${idx}" class="text-base md:text-lg font-bold text-slate-700 dark:text-slate-300 mt-4 mb-2">${escapeHtml(line.replace('### ', ''))}</h3>`;
     }
 
     if (line.startsWith('- ') || line.startsWith('* ')) {
