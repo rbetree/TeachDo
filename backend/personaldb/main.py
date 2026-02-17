@@ -81,6 +81,7 @@ class SearchQuery(BaseModel):
     query: str
     keyword: Optional[str] = ""
     topk: Optional[int] = 3
+    fileIds: Optional[List[str]] = None
 
 @app.post("/search")
 def search_personal_knowledge_base(query: SearchQuery):
@@ -97,7 +98,8 @@ def search_personal_knowledge_base(query: SearchQuery):
             collection=collection_name,
             query_documents=[query.query],
             keyword=query.keyword,
-            topk=query.topk
+            topk=query.topk,
+            file_ids=query.fileIds,
         )
         logger.info(f"搜索成功: {result}")
         return result

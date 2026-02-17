@@ -1,23 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import type { CourseGroup, CourseUnit } from '#root/types';
+import type { TeachingMaterial } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import KnowledgeBaseView from '@/components/workspace/KnowledgeBaseView.vue';
 import AssistantView from '@/components/workspace/AssistantView.vue';
 import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
 
 interface Props {
-  currentCourse: CourseGroup;
-  currentUnit: CourseUnit | null;
-}
-
-interface Emits {
-  (e: 'updateCourse', updates: Partial<CourseGroup>): void;
+  currentMaterial: TeachingMaterial | null;
 }
 
 const props = defineProps<Props>();
-const emit = defineEmits<Emits>();
 const { t } = useI18n();
 
 const ui = useWorkspaceUiStore();
@@ -26,12 +20,25 @@ const collapsed = computed(() => ui.rightPanelCollapsed);
 const activeTab = computed(() => ui.rightPanelTab);
 
 const panelWidthClass = computed(() => (collapsed.value ? 'w-14' : 'w-[360px]'));
+const panelPositionClass = computed(() => (collapsed.value ? '' : 'fixed top-16 left-0 bottom-0 z-50 shadow-2xl md:static md:shadow-none'));
+
+onMounted(() => {
+  if (typeof window === 'undefined') return;
+  if (window.matchMedia('(max-width: 767px)').matches) {
+    ui.collapseRightPanel();
+  }
+});
 </script>
 
 <template>
+  <div
+    v-if="!collapsed"
+    class="fixed inset-0 top-16 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden"
+    @click="ui.collapseRightPanel()"
+  ></div>
   <aside
-    class="h-full border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col overflow-hidden"
-    :class="panelWidthClass"
+    class="h-full shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col overflow-hidden"
+    :class="[panelWidthClass, panelPositionClass]"
   >
     <div class="border-b border-slate-100 dark:border-slate-800">
       <div v-if="collapsed" class="p-2 flex flex-col items-center gap-2">
@@ -41,7 +48,7 @@ const panelWidthClass = computed(() => (collapsed.value ? 'w-14' : 'w-[360px]'))
           :aria-label="t('common.expand')"
           @click="ui.toggleRightPanelCollapsed()"
         >
-          <LucideIcon name="arrow-left" class="w-5 h-5" />
+          <LucideIcon name="arrow-right" class="w-5 h-5" />
         </button>
 
         <button
@@ -79,7 +86,7 @@ const panelWidthClass = computed(() => (collapsed.value ? 'w-14' : 'w-[360px]'))
             :aria-label="t('common.collapse')"
             @click="ui.toggleRightPanelCollapsed()"
           >
-            <LucideIcon name="arrow-right" class="w-5 h-5" />
+            <LucideIcon name="arrow-left" class="w-5 h-5" />
           </button>
           <div class="text-xs font-bold text-slate-400 uppercase tracking-wider truncate">
             {{ t('sidebar.modules') }}
@@ -114,24 +121,9 @@ const panelWidthClass = computed(() => (collapsed.value ? 'w-14' : 'w-[360px]'))
       </div>
     </div>
 
-    <div v-if="!collapsed" class="flex-1 min-h-0 overflow-hidden p-3">
-      <div class="h-full overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/40">
-        <div class="h-full overflow-hidden">
-          <KnowledgeBaseView
-            v-if="activeTab === 'kb'"
-            :current-course="props.currentCourse"
-            variant="panel"
-            @update-course="(updates) => emit('updateCourse', updates)"
-          />
-          <AssistantView
-            v-else
-            :current-course="props.currentCourse"
-            :current-unit="props.currentUnit"
-            variant="panel"
-            @update-course="(updates) => emit('updateCourse', updates)"
-          />
-        </div>
-      </div>
+    <div v-if="!collapsed" class="flex-1 min-h-0 overflow-hidden">
+      <KnowledgeBaseView v-if="activeTab === 'kb'" variant="panel" />
+      <AssistantView v-else :current-material="props.currentMaterial" variant="panel" />
     </div>
   </aside>
 </template>

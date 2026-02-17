@@ -20,15 +20,15 @@ const lastCheckAt = ref(0);
 
 const healthUrl = '/api/healthz';
 
-const currentCourseName = computed(() => {
-  const param = route.params.courseId;
-  const courseId = Array.isArray(param) ? param[0] : param;
-  if (!courseId) return '';
-  const target = store.courses.find((course) => course.id === courseId);
-  return target?.name ?? '';
+const currentMaterialTitle = computed(() => {
+  const param = route.params.materialId;
+  const materialId = Array.isArray(param) ? param[0] : param;
+  if (!materialId) return '';
+  const target = store.materials.find((material) => material.id === materialId);
+  return target?.title ?? '';
 });
 
-const isHome = computed(() => ['workspace', 'course', 'course-tab', 'course-unit'].includes((route.name as string) ?? ''));
+const isHome = computed(() => ['workspace', 'material', 'material-tab'].includes((route.name as string) ?? ''));
 const isAbout = computed(() => route.name === 'about');
 const isSettings = computed(() => route.name === 'settings');
 
@@ -77,7 +77,7 @@ onMounted(() => {
         <div class="hidden md:flex items-center gap-2 text-sm">
           <span class="text-slate-300 dark:text-slate-600">/</span>
           <span class="font-medium text-slate-700 dark:text-slate-200 truncate max-w-[220px]">
-            {{ currentCourseName || t('nav.workspace') }}
+            {{ currentMaterialTitle || t('nav.workspace') }}
           </span>
         </div>
       </div>

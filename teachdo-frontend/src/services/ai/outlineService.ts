@@ -1,13 +1,13 @@
-import type { CourseGroup, CourseUnit } from '#root/types';
+import type { TeachingMaterial } from '#root/types';
 import { SseParser } from '@/utils/sse';
 import { ApiError, ensureBackendAvailable, requestRaw } from '@/services/apiClient';
+import { KB_USER_ID } from '@/stores/appStore';
 
 /**
  * POST /tools/aippt_outline_unified (SSE Text)
  */
 export async function generateOutline(
-  course: CourseGroup,
-  unit: CourseUnit,
+  material: TeachingMaterial,
   onStream?: (text: string) => void,
   opts: { signal?: AbortSignal } = {},
 ): Promise<string> {
@@ -16,14 +16,14 @@ export async function generateOutline(
   }
   await ensureBackendAvailable();
 
-  const topic = unit.title?.trim();
+  const topic = material.title?.trim();
   if (!topic) throw new ApiError('unknown', 'Unit title is required to generate outline.');
 
   const content = [
     `主题：${topic}`,
-    `课程：${course.name}`,
-    course.description ? `课程背景：${course.description}` : '',
-    unit.objectives ? `教学目标：${unit.objectives}` : '',
+    material.subject ? `学科：${material.subject}` : '',
+    material.description ? `背景/简介：${material.description}` : '',
+    material.objectives ? `教学目标：${material.objectives}` : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -31,7 +31,7 @@ export async function generateOutline(
   const formData = new FormData();
   formData.append('content', content);
   formData.append('language', 'chinese');
-  formData.append('user_id', course.id);
+  formData.append('user_id', KB_USER_ID);
 
   const response = await requestRaw(
     '/tools/aippt_outline_unified',
@@ -79,4 +79,3 @@ export async function generateOutline(
 
   return fullText;
 }
-

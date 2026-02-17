@@ -9,6 +9,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/appStore';
 import { aiService } from '@/services/aiService';
+import { KB_USER_ID } from '@/stores/appStore';
 
 import EditorView from '@editor/views/Editor/index.vue';
 import ScreenView from '@editor/views/Screen/index.vue';
@@ -36,20 +37,12 @@ const normalizeParam = (value: unknown): string | null => {
   return typeof value === 'string' ? value : null;
 };
 
-const courseId = computed(() => normalizeParam(route.params.courseId));
-const unitId = computed(() => normalizeParam(route.params.unitId));
+const materialId = computed(() => normalizeParam(route.params.materialId));
 
-const currentCourse = computed(() => {
-  const id = courseId.value;
+const currentMaterial = computed(() => {
+  const id = materialId.value;
   if (!id) return null;
-  return appStore.courses.find((c) => c.id === id) ?? null;
-});
-
-const currentUnit = computed(() => {
-  const course = currentCourse.value;
-  const id = unitId.value;
-  if (!course || !id) return null;
-  return course.units.find((u) => u.id === id) ?? null;
+  return appStore.materials.find((m) => m.id === id) ?? null;
 });
 
 const resetEditorStores = () => {
@@ -66,11 +59,10 @@ const resetEditorStores = () => {
   editorMainStore.setGenerating(false);
 };
 
-const initEditorForUnit = async () => {
-  const course = currentCourse.value;
-  const unit = currentUnit.value;
+const initEditorForMaterial = async () => {
+  const material = currentMaterial.value;
 
-  if (!course || !unit) {
+  if (!material) {
     await router.replace({ name: 'workspace' });
     return;
   }
@@ -81,13 +73,13 @@ const initEditorForUnit = async () => {
   await db.snapshots.clear();
   await db.writingBoardImgs.clear();
 
-  const doc = unit.editorDocument;
+  const doc = material.editorDocument;
   const width = Number(doc?.width || doc?.viewport?.size || 960);
   const ratio = Number(
     doc?.viewport?.ratio || (doc?.width && doc?.height ? doc.height / doc.width : 0.5625),
   );
 
-  editorSlidesStore.setTitle(doc?.title || unit.title || editorSlidesStore.title);
+  editorSlidesStore.setTitle(doc?.title || material.title || editorSlidesStore.title);
   editorSlidesStore.setViewportSize(width);
   editorSlidesStore.setViewportRatio(ratio);
   if (doc?.theme) {
@@ -101,14 +93,14 @@ const initEditorForUnit = async () => {
   }
   editorSlidesStore.updateSlideIndex(0);
 
-  // 编辑器的 sessionId 统一跟随课程，保持与生成链路一致
-  editorMainStore.sessionId = course.id;
+  // 编辑器的 sessionId 与全局 KB userId 保持一致
+  editorMainStore.sessionId = KB_USER_ID;
 
   await snapshotStore.initSnapshotDatabase();
 };
 
-watch([courseId, unitId], () => void initEditorForUnit(), { immediate: true });
-watch([courseId, unitId], () => {
+watch([materialId], () => void initEditorForMaterial(), { immediate: true });
+watch([materialId], () => {
   exitPersisted.value = false;
 });
 
@@ -121,8 +113,8 @@ const extractTextFromHtml = (html: string): string => {
   }
 };
 
-const buildSlidesMarkdownFromEditor = (unitTitle: string, slides: Slide[]): string => {
-  const chunks: string[] = [`# ${unitTitle}`];
+const buildSlidesMarkdownFromEditor = (materialTitle: string, slides: Slide[]): string => {
+  const chunks: string[] = [`# ${materialTitle}`];
 
   slides.forEach((slide, index) => {
     const texts: string[] = [];
@@ -152,18 +144,17 @@ const buildSlidesMarkdownFromEditor = (unitTitle: string, slides: Slide[]): stri
   return chunks.join('\n\n');
 };
 
-const persistEditorDocument = (courseIdValue: string, unitIdValue: string) => {
-  const course = appStore.courses.find((c) => c.id === courseIdValue);
-  const unit = course?.units.find((u) => u.id === unitIdValue);
-  if (!course || !unit) return;
+const persistEditorDocument = (materialIdValue: string) => {
+  const material = appStore.materials.find((m) => m.id === materialIdValue);
+  if (!material) return;
 
   const width = Number(editorSlidesStore.viewportSize || 960);
   const ratio = Number(editorSlidesStore.viewportRatio || 0.5625);
   const height = width * ratio;
 
   const editorDocument = {
-    title: editorSlidesStore.title || unit.title,
-    templateId: unit.editorDocument?.templateId || unit.selectedTemplateId || '',
+    title: editorSlidesStore.title || material.title,
+    templateId: material.editorDocument?.templateId || material.selectedTemplateId || '',
     width,
     height,
     theme: JSON.parse(JSON.stringify(editorSlidesStore.theme)),
@@ -175,17 +166,15 @@ const persistEditorDocument = (courseIdValue: string, unitIdValue: string) => {
     updatedAt: Date.now(),
   };
 
-  appStore.updateCourseUnits(courseIdValue, (units) =>
-    units.map((u) => (u.id === unitIdValue ? { ...u, editorDocument } : u)),
-  );
+  appStore.patchMaterial(materialIdValue, { editorDocument });
 
   // 产物入库（失败不阻断）
-  const md = buildSlidesMarkdownFromEditor(unit.title, editorDocument.slides as Slide[]);
+  const md = buildSlidesMarkdownFromEditor(material.title, editorDocument.slides as Slide[]);
   void aiService
     .vectorizeTextToKb({
-      userId: courseIdValue,
-      fileId: `gen:${courseIdValue}:${unitIdValue}:slides_final`,
-      fileName: `幻灯片最终版-${unit.title}.md`,
+      userId: KB_USER_ID,
+      fileId: `gen:${KB_USER_ID}:${materialIdValue}:slides_final`,
+      fileName: `幻灯片最终版-${material.title}.md`,
       content: md,
       fileType: 'md',
       folderId: 1,
@@ -194,26 +183,26 @@ const persistEditorDocument = (courseIdValue: string, unitIdValue: string) => {
 };
 
 const handleBackToWorkspace = async () => {
-  if (!courseId.value || !unitId.value) {
+  if (!materialId.value) {
     await router.push({ name: 'workspace' });
     return;
   }
 
   saving.value = true;
   try {
-    persistEditorDocument(courseId.value, unitId.value);
+    persistEditorDocument(materialId.value);
     exitPersisted.value = true;
   } finally {
     saving.value = false;
   }
 
-  await router.push({ name: 'course-unit', params: { courseId: courseId.value, unitId: unitId.value, tab: 'ppt' } });
+  await router.push({ name: 'material-tab', params: { materialId: materialId.value, tab: 'ppt' } });
 };
 
 onBeforeRouteLeave(() => {
-  if (!courseId.value || !unitId.value) return true;
+  if (!materialId.value) return true;
   if (exitPersisted.value) return true;
-  persistEditorDocument(courseId.value, unitId.value);
+  persistEditorDocument(materialId.value);
   return true;
 });
 

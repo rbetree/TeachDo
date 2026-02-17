@@ -3,24 +3,20 @@ import type { Pinia } from 'pinia';
 import { useAppStore } from '@/stores/appStore';
 
 const MainLayout = () => import('@/layouts/MainLayout.vue');
-const CourseSelectionView = () => import('@/views/CourseSelectionView.vue');
-const CourseWorkspaceView = () => import('@/views/CourseWorkspaceView.vue');
+const TeachingMaterialSelectionView = () => import('@/views/TeachingMaterialSelectionView.vue');
+const TeachingMaterialWorkspaceView = () => import('@/views/TeachingMaterialWorkspaceView.vue');
 const PPTEditorView = () => import('@/views/PPTEditorView.vue');
 const AboutView = () => import('@/views/AboutView.vue');
 const SettingsView = () => import('@/views/SettingsView.vue');
 
 declare module 'vue-router' {
   interface RouteMeta {
-    requiresCourse?: boolean;
-    requiresUnit?: boolean;
+    requiresMaterial?: boolean;
   }
 }
 
-const UNIT_TABS = new Set(['outline', 'lesson', 'ppt'] as const);
-const COURSE_TABS = new Set(['kb', 'assistant'] as const);
-
-type UnitTab = 'outline' | 'lesson' | 'ppt';
-type CourseTab = 'kb' | 'assistant';
+const MATERIAL_TABS = new Set(['outline', 'lesson', 'ppt'] as const);
+type MaterialTab = 'outline' | 'lesson' | 'ppt';
 
 const normalizeParam = (value: unknown): string | null => {
   if (Array.isArray(value)) return value.length ? value[0] ?? null : null;
@@ -29,10 +25,10 @@ const normalizeParam = (value: unknown): string | null => {
 
 const routes: RouteRecordRaw[] = [
   {
-    path: '/course/:courseId/unit/:unitId/ppt/editor',
-    name: 'course-unit-ppt-editor',
+    path: '/material/:materialId/ppt/editor',
+    name: 'material-ppt-editor',
     component: PPTEditorView,
-    meta: { requiresCourse: true, requiresUnit: true },
+    meta: { requiresMaterial: true },
   },
   {
     path: '/',
@@ -41,25 +37,19 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'workspace',
-        component: CourseSelectionView,
+        component: TeachingMaterialSelectionView,
       },
       {
-        path: 'course/:courseId',
-        name: 'course',
-        component: CourseWorkspaceView,
-        meta: { requiresCourse: true },
+        path: 'material/:materialId',
+        name: 'material',
+        component: TeachingMaterialWorkspaceView,
+        meta: { requiresMaterial: true },
       },
       {
-        path: 'course/:courseId/:tab',
-        name: 'course-tab',
-        component: CourseWorkspaceView,
-        meta: { requiresCourse: true },
-      },
-      {
-        path: 'course/:courseId/unit/:unitId/:tab',
-        name: 'course-unit',
-        component: CourseWorkspaceView,
-        meta: { requiresCourse: true, requiresUnit: true },
+        path: 'material/:materialId/:tab',
+        name: 'material-tab',
+        component: TeachingMaterialWorkspaceView,
+        meta: { requiresMaterial: true },
       },
       {
         path: 'about',
@@ -88,84 +78,32 @@ export const createAppRouter = (pinia: Pinia) => {
   router.beforeEach((to) => {
     const store = useAppStore(pinia);
 
-    if (!to.meta.requiresCourse) {
-      store.selectCourse(null);
+    if (to.name === 'workspace') {
+      store.selectMaterial(null);
       return true;
     }
 
-    const courseId = normalizeParam(to.params.courseId);
-    if (!courseId) return { name: 'workspace' };
+    if (!to.meta.requiresMaterial) return true;
 
-    const course = store.courses.find((item) => item.id === courseId);
-    if (!course) return { name: 'workspace' };
+    const materialId = normalizeParam(to.params.materialId);
+    if (!materialId) return { name: 'workspace' };
 
-    if (store.currentCourseId !== courseId) {
-      store.selectCourse(courseId);
-    } else if (store.currentUnitId && !course.units.some((u) => u.id === store.currentUnitId)) {
-      store.selectUnit(course.units[0]?.id ?? null);
+    const materialExists = store.materials.some((m) => m.id === materialId);
+    if (!materialExists) return { name: 'workspace' };
+
+    if (store.currentMaterialId !== materialId) {
+      store.selectMaterial(materialId);
     }
 
-    if (to.meta.requiresUnit && to.name !== 'course-unit') {
-      const unitIdParam = normalizeParam(to.params.unitId);
-      const unitId = unitIdParam && course.units.some((u) => u.id === unitIdParam) ? unitIdParam : course.units[0]?.id;
-
-      if (!unitId) {
-        return { name: 'course', params: { courseId } };
-      }
-
-      if (store.currentUnitId !== unitId) {
-        store.selectUnit(unitId);
-      }
-
-      if (unitId !== unitIdParam) {
-        return {
-          name: to.name as string,
-          params: { ...to.params, courseId, unitId },
-          query: to.query,
-          hash: to.hash,
-        };
-      }
+    if (to.name === 'material') {
+      return { name: 'material-tab', params: { materialId, tab: 'outline' satisfies MaterialTab } };
     }
 
-    if (to.name === 'course') {
-      if (course.units.length === 0) {
-        return true;
-      }
-      const unitId = store.currentUnitId ?? course.units[0]?.id;
-      if (!unitId) return true;
-      return { name: 'course-unit', params: { courseId, unitId, tab: 'outline' satisfies UnitTab } };
-    }
-
-    if (to.name === 'course-tab') {
+    if (to.name === 'material-tab') {
       const tabRaw = normalizeParam(to.params.tab)?.toLowerCase();
-      if (!tabRaw || !COURSE_TABS.has(tabRaw as CourseTab)) {
-        return { name: 'course', params: { courseId } };
-      }
-      return true;
-    }
-
-    if (to.name === 'course-unit') {
-      const unitIdParam = normalizeParam(to.params.unitId);
-      const tabRaw = normalizeParam(to.params.tab)?.toLowerCase();
-
-      if (tabRaw && COURSE_TABS.has(tabRaw as CourseTab)) {
-        return { name: 'course-tab', params: { courseId, tab: tabRaw } };
-      }
-
-      const unitId = unitIdParam && course.units.some((u) => u.id === unitIdParam) ? unitIdParam : course.units[0]?.id;
-      if (!unitId) {
-        return { name: 'course', params: { courseId } };
-      }
-
-      const tab: UnitTab = tabRaw && UNIT_TABS.has(tabRaw as UnitTab) ? (tabRaw as UnitTab) : 'outline';
-
-      if (store.currentUnitId !== unitId) {
-        store.selectUnit(unitId);
-      }
-
-      const needsRedirect = unitId !== unitIdParam || tab !== tabRaw;
-      if (needsRedirect) {
-        return { name: 'course-unit', params: { courseId, unitId, tab } };
+      const tab: MaterialTab = tabRaw && MATERIAL_TABS.has(tabRaw as MaterialTab) ? (tabRaw as MaterialTab) : 'outline';
+      if (tabRaw !== tab) {
+        return { name: 'material-tab', params: { materialId, tab } };
       }
     }
 
@@ -174,3 +112,4 @@ export const createAppRouter = (pinia: Pinia) => {
 
   return router;
 };
+

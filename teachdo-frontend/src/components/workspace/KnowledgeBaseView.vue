@@ -1,25 +1,21 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import type { CourseGroup, KBFile } from '#root/types';
+import type { KBFile } from '#root/types';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useI18n } from 'vue-i18n';
 import { aiService } from '@/services/aiService';
+import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 
 type KnowledgeBaseViewVariant = 'page' | 'panel';
 
 interface Props {
-  currentCourse: CourseGroup;
   variant?: KnowledgeBaseViewVariant;
 }
 
-interface Emits {
-  (e: 'updateCourse', updates: Partial<CourseGroup>): void;
-}
-
 const props = defineProps<Props>();
-const emit = defineEmits<Emits>();
 const { t } = useI18n();
+const store = useAppStore();
 
 const isPanel = computed(() => props.variant === 'panel');
 
@@ -30,7 +26,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 const syncing = ref(false);
 const exportingFileId = ref<string | null>(null);
 
-const files = computed(() => props.currentCourse.kbFiles || []);
+const files = computed(() => store.kbFiles || []);
 
 const filteredFiles = computed(() => {
   const query = searchQuery.value.toLowerCase();
@@ -68,7 +64,7 @@ const getDisplayName = (file: KBFile) => {
 };
 
 const updateFiles = (next: KBFile[]) => {
-  emit('updateCourse', { kbFiles: next });
+  store.setKbFiles(next);
 };
 
 const mergeServerFiles = (
@@ -94,7 +90,7 @@ const mergeServerFiles = (
 const refreshFromBackend = async () => {
   syncing.value = true;
   try {
-    const list = await aiService.kbListFiles({ userId: props.currentCourse.id });
+    const list = await aiService.kbListFiles({ userId: KB_USER_ID });
     mergeServerFiles(list);
   } catch (e) {
     console.warn('知识库列表同步失败（已忽略）', e);
@@ -162,7 +158,7 @@ const uploadFile = async (file: File) => {
     updateFileStatus(localId, 'processing', 95);
 
     const res = await aiService.kbUpload({
-      userId: props.currentCourse.id,
+      userId: KB_USER_ID,
       file,
       folderId: 0,
     });
@@ -218,7 +214,7 @@ const handleDelete = async (id: string) => {
   }
 
   try {
-    await aiService.kbDeleteFile({ userId: props.currentCourse.id, fileId: id });
+    await aiService.kbDeleteFile({ userId: KB_USER_ID, fileId: id });
     updateFiles(files.value.filter((f) => f.id !== id));
     toast.success(t('kb.action.delete'));
     await refreshFromBackend();
@@ -232,7 +228,7 @@ const handleExport = async (file: KBFile) => {
   if (file.status !== 'ready') return;
   exportingFileId.value = file.id;
   try {
-    const { blob, filename } = await aiService.kbExportFile({ userId: props.currentCourse.id, fileId: file.id });
+    const { blob, filename } = await aiService.kbExportFile({ userId: KB_USER_ID, fileId: file.id });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -277,7 +273,7 @@ onBeforeUnmount(() => {
           <div class="min-w-0">
             <div class="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">{{ t('kb.title') }}</div>
             <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              {{ props.currentCourse.name }} · {{ t('kb.stats.total') }} {{ files.length }}
+              {{ t('kb.global') }} · {{ t('kb.stats.total') }} {{ files.length }}
             </div>
           </div>
         </div>
@@ -329,7 +325,7 @@ onBeforeUnmount(() => {
           {{ t('kb.title') }}
         </h2>
         <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          {{ t('nav.assistant') }} / {{ t('nav.kb') }} · {{ props.currentCourse.name }}
+          {{ t('nav.assistant') }} / {{ t('nav.kb') }} · {{ t('kb.global') }}
         </p>
       </div>
       <div class="flex items-center gap-3 w-full md:w-auto">
@@ -383,16 +379,16 @@ onBeforeUnmount(() => {
               <p class="text-sm">{{ t('kb.empty') }}</p>
             </div>
 
-            <div v-else class="divide-y divide-slate-200/60 dark:divide-slate-800/60">
-              <div
-                v-for="file in filteredFiles"
-                :key="file.id"
-                class="px-3 py-3 hover:bg-white/60 dark:hover:bg-slate-900/30 transition-colors"
-              >
-	                <div class="flex items-start gap-3">
-	                  <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 flex items-center justify-center text-indigo-700 dark:text-indigo-200 flex-shrink-0 font-bold text-[10px] uppercase border border-indigo-100 dark:border-indigo-800/40">
-	                    {{ getDisplayType(file) }}
-	                  </div>
+	            <div v-else class="px-3 pb-3 space-y-2">
+		              <div
+		                v-for="file in filteredFiles"
+		                :key="file.id"
+		                class="group rounded-2xl border border-slate-200/70 dark:border-slate-800/60 bg-[rgb(117,138,230)]/10 dark:bg-[rgb(117,138,230)]/12 p-3 shadow-sm transition-colors hover:bg-[rgb(117,138,230)]/14 dark:hover:bg-[rgb(117,138,230)]/18 hover:border-indigo-200 dark:hover:border-indigo-700/40 focus-within:ring-2 focus-within:ring-indigo-500/40"
+		              >
+			                <div class="flex items-start gap-3">
+			                  <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 flex items-center justify-center text-indigo-700 dark:text-indigo-200 flex-shrink-0 font-bold text-[10px] uppercase border border-indigo-100 dark:border-indigo-800/40">
+			                    {{ getDisplayType(file) }}
+			                  </div>
 	
 	                  <div class="min-w-0 flex-1">
 	                    <div class="font-bold text-sm text-slate-800 dark:text-slate-100 truncate" :title="getDisplayName(file)">{{ getDisplayName(file) }}</div>
@@ -439,25 +435,25 @@ onBeforeUnmount(() => {
                       <LucideIcon name="alert-circle" :size="12" /> {{ t('kb.status.error') }}
                     </span>
 
-	                    <div class="flex items-center gap-1">
-	                      <button
-	                        type="button"
-	                        class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-	                        :aria-label="t('kb.action.export')"
-	                        :title="t('kb.action.export')"
-	                        :disabled="file.status !== 'ready' || exportingFileId === file.id"
-	                        @click="handleExport(file)"
-	                      >
-	                        <LucideIcon name="download" :size="16" />
-	                      </button>
-	                      <button
-	                        type="button"
-	                        class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-	                        :aria-label="t('kb.action.delete')"
-	                        :title="t('kb.action.delete')"
-	                        :disabled="file.status === 'uploading'"
-	                        @click="handleDelete(file.id)"
-	                      >
+		                    <div class="flex items-center gap-1">
+		                      <button
+		                        type="button"
+		                        class="w-11 h-11 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+		                        :aria-label="t('kb.action.export')"
+		                        :title="t('kb.action.export')"
+		                        :disabled="file.status !== 'ready' || exportingFileId === file.id"
+		                        @click="handleExport(file)"
+		                      >
+		                        <LucideIcon name="download" :size="16" />
+		                      </button>
+		                      <button
+		                        type="button"
+		                        class="w-11 h-11 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+		                        :aria-label="t('kb.action.delete')"
+		                        :title="t('kb.action.delete')"
+		                        :disabled="file.status === 'uploading'"
+		                        @click="handleDelete(file.id)"
+		                      >
 	                        <LucideIcon name="trash-2" :size="16" />
 	                      </button>
 	                    </div>

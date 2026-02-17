@@ -124,3 +124,82 @@ def test_personaldb_file_content_endpoint_exports_merged_text(monkeypatch):
     body = resp.json()
     assert body["file_id"] == "upload:course-1:001"
     assert body["content"] == "# Hello\n\nworld"
+
+
+def test_personaldb_search_endpoint_accepts_file_ids(monkeypatch):
+    import backend.personaldb.main as personaldb
+
+    class _DummyEmbedder:
+        pass
+
+    class _DummyChroma:
+        def __init__(self, _embedder):
+            pass
+
+        def query2collection(self, collection, query_documents, keyword="", topk=3, file_ids=None):  # noqa: ARG002
+            assert collection == "user_default_user"
+            assert query_documents == ["hello"]
+            assert keyword == ""
+            assert topk == 3
+            assert file_ids == ["upload:test:001", "gen:test:slides"]
+            return {
+                "documents": [["doc-a"]],
+                "metadatas": [[{"file_id": "upload:test:001"}]],
+                "distances": [[0.01]],
+            }
+
+    monkeypatch.setattr(personaldb.embedding_utils, "EmbeddingModel", _DummyEmbedder)
+    monkeypatch.setattr(personaldb.embedding_utils, "ChromaDB", _DummyChroma)
+
+    client = TestClient(personaldb.app)
+    resp = client.post(
+        "/search",
+        json={
+            "userId": "default_user",
+            "query": "hello",
+            "keyword": "",
+            "topk": 3,
+            "fileIds": ["upload:test:001", "gen:test:slides"],
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["documents"][0][0] == "doc-a"
+    assert body["metadatas"][0][0]["file_id"] == "upload:test:001"
+
+
+def test_personaldb_chromadb_query2collection_uses_where_in(monkeypatch, tmp_path):
+    from backend.personaldb import embedding_utils
+
+    class _DummyEmbedder:
+        def do_embedding(self, texts):  # noqa: ARG002
+            return {"data": [{"embedding": [0.0, 0.0, 0.0]}]}
+
+    seen = {}
+
+    class _DummyCollection:
+        def query(self, **kwargs):
+            seen["where"] = kwargs.get("where")
+            seen["where_document"] = kwargs.get("where_document")
+            return {"documents": [["doc"]], "metadatas": [[{"file_id": "f1"}]], "distances": [[0.1]]}
+
+    class _DummyClient:
+        def __init__(self, *args, **kwargs):  # noqa: ARG002
+            pass
+
+        def get_or_create_collection(self, _name, metadata=None):  # noqa: ARG002
+            return _DummyCollection()
+
+    monkeypatch.setattr(embedding_utils.chromadb, "PersistentClient", _DummyClient)
+
+    chroma = embedding_utils.ChromaDB(_DummyEmbedder(), db_dir=tmp_path)
+    _ = chroma.query2collection(
+        collection="user_default_user",
+        query_documents=["q"],
+        keyword="",
+        topk=3,
+        file_ids=["f1", "f2"],
+    )
+
+    assert seen["where"] == {"file_id": {"$in": ["f1", "f2"]}}
+    assert seen["where_document"] is None

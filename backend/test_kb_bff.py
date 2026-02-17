@@ -246,9 +246,11 @@ def test_tools_aippt_disables_kb_when_personaldb_not_configured(main_api_client,
         generateFromWebSearch: bool,
         user_id: str,
         kb_folder_ids=None,
+        kb_file_ids=None,
     ):
         seen["generateFromUploadedFile"] = generateFromUploadedFile
         seen["kb_folder_ids"] = kb_folder_ids
+        seen["kb_file_ids"] = kb_file_ids
         yield b"data: [DONE]\n\n"
 
     monkeypatch.setattr(main_api, "stream_content_response", _fake_stream_content_response)
@@ -260,6 +262,7 @@ def test_tools_aippt_disables_kb_when_personaldb_not_configured(main_api_client,
         "generateFromUploadedFile": True,
         "generateFromWebSearch": False,
         "kb_folder_ids": [0, 1],
+        "kb_file_ids": ["upload:test:fid0"],
     }
     with main_api_client.stream("POST", "/tools/aippt", json=payload) as resp:
         assert resp.status_code == 200
@@ -267,6 +270,7 @@ def test_tools_aippt_disables_kb_when_personaldb_not_configured(main_api_client,
 
     assert seen["generateFromUploadedFile"] is False
     assert seen["kb_folder_ids"] is None
+    assert seen["kb_file_ids"] is None
 
 
 def test_tools_aippt_disables_kb_when_personaldb_not_ready(main_api_client, monkeypatch):
@@ -286,9 +290,11 @@ def test_tools_aippt_disables_kb_when_personaldb_not_ready(main_api_client, monk
         generateFromWebSearch: bool,
         user_id: str,
         kb_folder_ids=None,
+        kb_file_ids=None,
     ):
         seen["generateFromUploadedFile"] = generateFromUploadedFile
         seen["kb_folder_ids"] = kb_folder_ids
+        seen["kb_file_ids"] = kb_file_ids
         yield b"data: [DONE]\n\n"
 
     monkeypatch.setattr(main_api, "_is_personaldb_ready", _fake_is_ready)
@@ -301,6 +307,7 @@ def test_tools_aippt_disables_kb_when_personaldb_not_ready(main_api_client, monk
         "generateFromUploadedFile": True,
         "generateFromWebSearch": False,
         "kb_folder_ids": [0],
+        "kb_file_ids": ["upload:test:fid0"],
     }
     with main_api_client.stream("POST", "/tools/aippt", json=payload) as resp:
         assert resp.status_code == 200
@@ -308,6 +315,7 @@ def test_tools_aippt_disables_kb_when_personaldb_not_ready(main_api_client, monk
 
     assert seen["generateFromUploadedFile"] is False
     assert seen["kb_folder_ids"] is None
+    assert seen["kb_file_ids"] is None
 
 
 def test_tools_aippt_keeps_kb_when_personaldb_ready(main_api_client, monkeypatch):
@@ -327,9 +335,11 @@ def test_tools_aippt_keeps_kb_when_personaldb_ready(main_api_client, monkeypatch
         generateFromWebSearch: bool,
         user_id: str,
         kb_folder_ids=None,
+        kb_file_ids=None,
     ):
         seen["generateFromUploadedFile"] = generateFromUploadedFile
         seen["kb_folder_ids"] = kb_folder_ids
+        seen["kb_file_ids"] = kb_file_ids
         yield b"data: [DONE]\n\n"
 
     monkeypatch.setattr(main_api, "_is_personaldb_ready", _fake_is_ready)
@@ -342,6 +352,7 @@ def test_tools_aippt_keeps_kb_when_personaldb_ready(main_api_client, monkeypatch
         "generateFromUploadedFile": True,
         "generateFromWebSearch": False,
         "kb_folder_ids": [0, 1],
+        "kb_file_ids": ["upload:test:fid0", "gen:test:slides"],
     }
     with main_api_client.stream("POST", "/tools/aippt", json=payload) as resp:
         assert resp.status_code == 200
@@ -349,3 +360,4 @@ def test_tools_aippt_keeps_kb_when_personaldb_ready(main_api_client, monkeypatch
 
     assert seen["generateFromUploadedFile"] is True
     assert seen["kb_folder_ids"] == [0, 1]
+    assert seen["kb_file_ids"] == ["upload:test:fid0", "gen:test:slides"]

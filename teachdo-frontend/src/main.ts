@@ -16,7 +16,7 @@ setupAppStore(pinia);
 const router = createAppRouter(pinia);
 
 router.beforeEach(async (to) => {
-  if (to.name !== 'course-unit-ppt-editor') return true;
+  if (to.name !== 'material-ppt-editor') return true;
   try {
     await ensureEditorRuntimePlugins(app);
     return true;

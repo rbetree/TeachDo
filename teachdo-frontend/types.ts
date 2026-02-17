@@ -79,24 +79,24 @@ export interface EditorDocument {
   updatedAt: number;
 }
 
-export interface CourseUnit {
+export interface TeachingMaterial {
   id: string;
   title: string;
+  subject: string;
+  description: string;
   objectives: string;
+  createdAt: Date;
+  /**
+   * 引用的知识库文件 IDs（全局 KB 的 file_id）
+   *
+   * 说明：
+   * - 创建教学资料时可选
+   * - 生成 PPT/大纲时可临时覆盖
+   */
+  kbFileIds: string[];
   outlineContent?: string;
   lessonPlan?: LessonPlan;
   presentation?: Presentation;
   selectedTemplateId?: string;
   editorDocument?: EditorDocument;
-}
-
-export interface CourseGroup {
-  id: string;
-  name: string;
-  subject: string;
-  description: string;
-  createdAt: Date;
-  units: CourseUnit[];
-  kbFiles?: KBFile[];
-  chatHistory?: ChatMessage[];
 }

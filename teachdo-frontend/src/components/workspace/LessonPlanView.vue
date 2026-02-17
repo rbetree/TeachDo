@@ -1,19 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import type { CourseGroup, CourseUnit, LessonPlan } from '#root/types';
-import { ViewState } from '#root/types';
+import type { LessonPlan, TeachingMaterial } from '#root/types';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 
 interface Props {
-  currentCourse: CourseGroup;
-  currentUnit: CourseUnit | null;
+  currentMaterial: TeachingMaterial;
 }
 
 interface Emits {
-  (e: 'updateUnit', unitId: string, updates: Partial<CourseUnit>): void;
-  (e: 'navigate', view: ViewState): void;
+  (e: 'updateMaterial', updates: Partial<TeachingMaterial>): void;
+  (e: 'navigate', tab: 'outline'): void;
 }
 
 const props = defineProps<Props>();
@@ -24,13 +22,13 @@ const loading = ref(false);
 const plan = ref<LessonPlan | null>(null);
 const copied = ref(false);
 
-const hasOutline = computed(() => !!props.currentUnit?.outlineContent);
+const hasOutline = computed(() => !!props.currentMaterial?.outlineContent);
 
-// Sync state if unit changes
+// Sync state if material changes
 watch(
-  () => props.currentUnit,
-  (unit) => {
-    plan.value = unit?.lessonPlan || null;
+  () => props.currentMaterial,
+  (material) => {
+    plan.value = material?.lessonPlan || null;
   },
   { immediate: true }
 );
@@ -118,7 +116,7 @@ const downloadDocx = () => {
 };
 
 const goToOutline = () => {
-  emit('navigate', ViewState.OUTLINE);
+  emit('navigate', 'outline');
 };
 </script>
 

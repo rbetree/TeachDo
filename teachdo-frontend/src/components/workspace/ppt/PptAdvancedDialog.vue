@@ -8,9 +8,9 @@ interface Props {
   loading: boolean;
   hasReadyKbFiles: boolean;
   readyKbFileCount: number;
+  selectedKbFileCount: number;
   generateFromWebSearch: boolean;
   generateFromUploadedFile: boolean;
-  includeGeneratedKb: boolean;
   restoreFocusEl: HTMLElement | null;
 }
 
@@ -18,7 +18,7 @@ interface Emits {
   (e: 'update:open', value: boolean): void;
   (e: 'update:generateFromWebSearch', value: boolean): void;
   (e: 'update:generateFromUploadedFile', value: boolean): void;
-  (e: 'update:includeGeneratedKb', value: boolean): void;
+  (e: 'openKbFilePicker'): void;
   (e: 'goToKnowledgeBase'): void;
 }
 
@@ -38,11 +38,6 @@ const webSearchModel = computed({
 const uploadedFileModel = computed({
   get: () => props.generateFromUploadedFile,
   set: (v: boolean) => emit('update:generateFromUploadedFile', v),
-});
-
-const includeGeneratedModel = computed({
-  get: () => props.includeGeneratedKb,
-  set: (v: boolean) => emit('update:includeGeneratedKb', v),
 });
 
 const onKeydown = (e: KeyboardEvent) => {
@@ -143,18 +138,19 @@ onBeforeUnmount(() => {
 
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/30">
               <div class="min-w-0">
-                <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.kb_scope') }}</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ t('ppt.advanced.kb_scope_desc') }}</div>
+                <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('ppt.advanced.kb_files') }}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {{ t('ppt.advanced.kb_files_desc', { count: props.selectedKbFileCount }) }}
+                </div>
               </div>
-              <label class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-                <input
-                  v-model="includeGeneratedModel"
-                  :disabled="props.loading"
-                  type="checkbox"
-                  class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
-                />
-                <span>{{ t('ppt.advanced.kb_include_generated') }}</span>
-              </label>
+              <button
+                type="button"
+                class="px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-200 font-bold text-xs hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
+                :disabled="props.loading || !props.hasReadyKbFiles"
+                @click="emit('openKbFilePicker')"
+              >
+                {{ t('kb.picker.open') }}
+              </button>
             </div>
 
             <div class="flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">

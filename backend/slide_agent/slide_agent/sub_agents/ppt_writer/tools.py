@@ -222,6 +222,12 @@ def KnowledgeBaseSearch(keyword: str, tool_context: ToolContext):
         "keyword": "",  # 关键词匹配，是否需要强制包含一些关键词
         "topk": topk
     }
+    kb_file_ids = metadata.get("kb_file_ids")
+    allowed_file_ids: set[str] | None = None
+    if isinstance(kb_file_ids, list) and kb_file_ids:
+        allowed_file_ids = {str(x) for x in kb_file_ids if str(x).strip()}
+        if allowed_file_ids:
+            data["fileIds"] = sorted(allowed_file_ids)
     headers = {'content-type': 'application/json'}
     kb_folder_ids = metadata.get("kb_folder_ids")
     allowed_folder_ids: set[int] | None = None
@@ -263,6 +269,29 @@ def KnowledgeBaseSearch(keyword: str, tool_context: ToolContext):
                     except Exception:
                         continue
                     if folder_id in allowed_folder_ids:
+                        row_docs.append(doc)
+                        row_metas.append(meta)
+                filtered_documents.append(row_docs)
+                filtered_metadatas.append(row_metas)
+            documents = filtered_documents
+            metadatas = filtered_metadatas
+
+        # 过滤：仅保留允许的 file_id（更精确的检索范围）
+        if allowed_file_ids is not None and isinstance(documents, list) and isinstance(metadatas, list):
+            filtered_documents = []
+            filtered_metadatas = []
+            for docs_row, metas_row in zip(documents, metadatas):
+                if not isinstance(docs_row, list) or not isinstance(metas_row, list):
+                    continue
+                row_docs = []
+                row_metas = []
+                for doc, meta in zip(docs_row, metas_row):
+                    if not isinstance(meta, dict):
+                        continue
+                    file_id = meta.get("file_id")
+                    if file_id is None:
+                        continue
+                    if str(file_id) in allowed_file_ids:
                         row_docs.append(doc)
                         row_metas.append(meta)
                 filtered_documents.append(row_docs)

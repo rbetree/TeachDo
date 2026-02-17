@@ -198,33 +198,106 @@ class ChromaDB(object):
         )
         return "success"
 
-    def query2collection(self, collection, query_documents, keyword="", topk=3):
+    def query2collection(self, collection, query_documents, keyword="", topk=3, file_ids: List[str] | None = None):
         """
         查询向量，混合搜索
         Args:
             collection ():
             query_documents (): list[str]
             keyword: 是否同时对documents执行关键字搜索
+            file_ids: 限定检索范围，仅从这些 file_id 的向量中检索
         Returns:
         """
         col = self.client.get_or_create_collection(collection)
         vectors_result = self.embedder.do_embedding(texts=query_documents)
         vectors = vectors_result["data"]
         embeddings = [one["embedding"] for one in vectors]
-        if keyword:
-            query_result = col.query(
-                query_embeddings=embeddings,
-                n_results=topk,
-                where_document={"$contains": keyword},
-                include=["metadatas", "documents", "distances"]
-            )
-        else:
-            query_result = col.query(
-                query_embeddings=embeddings,
-                n_results=topk,
-                include=["metadatas", "documents", "distances"]
-            )
-        return query_result
+
+        try:
+            resolved_topk = int(topk) if topk is not None else 3
+        except Exception:
+            resolved_topk = 3
+        if resolved_topk <= 0:
+            resolved_topk = 3
+
+        resolved_file_ids: list[str] = []
+        if isinstance(file_ids, list) and file_ids:
+            for x in file_ids:
+                s = str(x).strip()
+                if s:
+                    resolved_file_ids.append(s)
+
+        def _query(*, where: dict | None):
+            kwargs = {
+                "query_embeddings": embeddings,
+                "n_results": resolved_topk,
+                "include": ["metadatas", "documents", "distances"],
+            }
+            if keyword:
+                kwargs["where_document"] = {"$contains": keyword}
+            if where is not None:
+                kwargs["where"] = where
+            return col.query(**kwargs)
+
+        if not resolved_file_ids:
+            return _query(where=None)
+
+        if len(resolved_file_ids) == 1:
+            return _query(where={"file_id": resolved_file_ids[0]})
+
+        # 优先走服务端 where 过滤（更精准）。若 Chroma 不支持 $in，则回退为逐个 file_id 查询并按距离合并。
+        try:
+            return _query(where={"file_id": {"$in": resolved_file_ids}})
+        except Exception:
+            results = []
+            for fid in resolved_file_ids:
+                results.append(_query(where={"file_id": fid}))
+
+            if not results:
+                return _query(where=None)
+
+            # 合并：对每个 query（通常只有 1 个）按距离升序取前 topk
+            first = results[0] or {}
+            row_count = 0
+            docs_any = first.get("documents")
+            if isinstance(docs_any, list):
+                row_count = len(docs_any)
+
+            merged = {"documents": [], "metadatas": [], "distances": []}
+            has_ids = any(isinstance(r.get("ids"), list) for r in results)
+            if has_ids:
+                merged["ids"] = []
+
+            for row_idx in range(row_count):
+                candidates = []
+                for r in results:
+                    docs = r.get("documents") if isinstance(r, dict) else None
+                    metas = r.get("metadatas") if isinstance(r, dict) else None
+                    dists = r.get("distances") if isinstance(r, dict) else None
+                    ids = r.get("ids") if isinstance(r, dict) else None
+
+                    docs_row = docs[row_idx] if isinstance(docs, list) and row_idx < len(docs) and isinstance(docs[row_idx], list) else []
+                    metas_row = metas[row_idx] if isinstance(metas, list) and row_idx < len(metas) and isinstance(metas[row_idx], list) else []
+                    dists_row = dists[row_idx] if isinstance(dists, list) and row_idx < len(dists) and isinstance(dists[row_idx], list) else []
+                    ids_row = ids[row_idx] if isinstance(ids, list) and row_idx < len(ids) and isinstance(ids[row_idx], list) else []
+
+                    for i in range(len(docs_row)):
+                        doc = docs_row[i]
+                        meta = metas_row[i] if i < len(metas_row) else None
+                        dist = dists_row[i] if i < len(dists_row) else None
+                        doc_id = ids_row[i] if i < len(ids_row) else None
+                        candidates.append((dist, doc_id, doc, meta))
+
+                candidates.sort(key=lambda x: float(x[0]) if x[0] is not None else float("inf"))
+                chosen = candidates[:resolved_topk]
+
+                merged["documents"].append([c[2] for c in chosen])
+                merged["metadatas"].append([c[3] for c in chosen])
+                merged["distances"].append([c[0] for c in chosen])
+                if has_ids:
+                    merged["ids"].append([c[1] for c in chosen])
+
+            return merged
 
 
     def delete_file_vectors(self, user_id: int | str, file_id: int | str):

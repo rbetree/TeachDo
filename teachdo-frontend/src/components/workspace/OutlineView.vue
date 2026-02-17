@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import type { CourseGroup, CourseUnit } from '#root/types';
+import type { TeachingMaterial } from '#root/types';
 import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { escapeHtml } from '@/utils/safeHtml';
+import { KB_USER_ID } from '@/stores/appStore';
 
 interface Props {
-  currentCourse: CourseGroup;
-  currentUnit: CourseUnit | null;
+  currentMaterial: TeachingMaterial;
 }
 
 interface Emits {
-  (e: 'updateUnit', unitId: string, updates: Partial<CourseUnit>): void;
+  (e: 'updateMaterial', updates: Partial<TeachingMaterial>): void;
 }
 
 const props = defineProps<Props>();
@@ -25,31 +25,35 @@ const outlineText = ref('');
 const newOutlineText = ref('');
 const mode = ref<'EDIT' | 'PREVIEW' | 'COMPARE'>('PREVIEW');
 
-// Sync state if unit changes externally
+// Sync state if material changes externally
 watch(
-  () => props.currentUnit,
-  (unit) => {
-    if (unit && unit.outlineContent !== outlineText.value && mode.value !== 'COMPARE' && mode.value !== 'EDIT') {
-      outlineText.value = unit.outlineContent || '';
+  () => props.currentMaterial.id,
+  () => {
+    if (mode.value !== 'COMPARE' && mode.value !== 'EDIT') {
+      outlineText.value = props.currentMaterial.outlineContent || '';
     }
-    // Initial load setup
-    if (unit?.id && unit.outlineContent && !outlineText.value) {
-      outlineText.value = unit.outlineContent;
-    }
+    newOutlineText.value = '';
+    mode.value = 'PREVIEW';
   },
-  { immediate: true }
+  { immediate: true },
+);
+
+watch(
+  () => props.currentMaterial.outlineContent,
+  (next) => {
+    if (mode.value === 'COMPARE' || mode.value === 'EDIT') return;
+    outlineText.value = next || '';
+  },
 );
 
 const handleGenerateWrapper = async () => {
-  if (!props.currentUnit) return;
-
   if (outlineText.value && outlineText.value.trim().length > 0) {
     // --- COMPARE MODE ---
     mode.value = 'COMPARE';
     newOutlineText.value = '';
     loading.value = true;
     try {
-      await aiService.generateOutline(props.currentCourse, props.currentUnit, (text) => {
+      await aiService.generateOutline(props.currentMaterial, (text) => {
         newOutlineText.value = text;
       });
       toast.success(t('outline.toast.new'));
@@ -65,10 +69,10 @@ const handleGenerateWrapper = async () => {
     loading.value = true;
     mode.value = 'PREVIEW';
     try {
-      const finalText = await aiService.generateOutline(props.currentCourse, props.currentUnit, (text) => {
+      const finalText = await aiService.generateOutline(props.currentMaterial, (text) => {
         outlineText.value = text;
       });
-      emit('updateUnit', props.currentUnit.id, { outlineContent: finalText });
+      emit('updateMaterial', { outlineContent: finalText });
       vectorizeOutlineToKb(finalText);
       toast.success(t('outline.toast.generated'));
     } catch (e) {
@@ -81,15 +85,14 @@ const handleGenerateWrapper = async () => {
 };
 
 const vectorizeOutlineToKb = (content: string) => {
-  if (!props.currentUnit) return;
   const trimmed = content?.trim();
   if (!trimmed) return;
 
   void aiService
     .vectorizeTextToKb({
-      userId: props.currentCourse.id,
-      fileId: `gen:${props.currentCourse.id}:${props.currentUnit.id}:outline`,
-      fileName: `大纲-${props.currentUnit.title}.md`,
+      userId: KB_USER_ID,
+      fileId: `gen:${KB_USER_ID}:${props.currentMaterial.id}:outline`,
+      fileName: `大纲-${props.currentMaterial.title}.md`,
       content: trimmed,
       fileType: 'md',
       folderId: 1,
@@ -105,18 +108,14 @@ const handleConfirmChoice = (choice: 'OLD' | 'NEW') => {
   mode.value = 'PREVIEW';
 
   // Persist choice
-  if (props.currentUnit) {
-    emit('updateUnit', props.currentUnit.id, { outlineContent: finalText });
-    vectorizeOutlineToKb(finalText);
-  }
+  emit('updateMaterial', { outlineContent: finalText });
+  vectorizeOutlineToKb(finalText);
   toast.info(choice === 'NEW' ? t('outline.replace_new') : t('outline.keep_original'));
 };
 
 const handleSave = () => {
-  if (props.currentUnit) {
-    emit('updateUnit', props.currentUnit.id, { outlineContent: outlineText.value });
-    vectorizeOutlineToKb(outlineText.value);
-  }
+  emit('updateMaterial', { outlineContent: outlineText.value });
+  vectorizeOutlineToKb(outlineText.value);
   mode.value = 'PREVIEW';
   toast.success(t('outline.toast.saved'));
 };
@@ -211,7 +210,7 @@ const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
             <span>{{ t('outline.regenerate') }}</span>
           </button>
           <button
-            v-if="mode === 'EDIT' && currentUnit?.outlineContent !== outlineText"
+            v-if="mode === 'EDIT' && props.currentMaterial.outlineContent !== outlineText"
             class="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-md transition-all"
             @click="handleSave"
           >
@@ -291,7 +290,7 @@ const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
       <div v-if="mode === 'PREVIEW'" class="h-full min-h-0 overflow-y-auto custom-scrollbar p-8 md:p-12 max-w-4xl mx-auto bg-white dark:bg-slate-900">
         <article class="prose dark:prose-invert prose-indigo max-w-none">
           <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8 border-b border-slate-100 dark:border-slate-800 pb-4">
-            {{ t('outline.course_outline_title', { title: currentUnit?.title }) }}
+            {{ t('outline.course_outline_title', { title: props.currentMaterial.title }) }}
           </div>
           <div v-if="outlineText" class="space-y-4 font-serif text-slate-800 dark:text-slate-200 leading-relaxed text-sm md:text-base" v-html="markdownHtml"></div>
           <div v-else class="flex flex-col items-center justify-center h-96 text-center">

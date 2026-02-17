@@ -60,6 +60,7 @@ export async function streamAipptSlides(input: {
   generateFromWebSearch?: boolean;
   generateFromUploadedFile?: boolean;
   kbFolderIds?: number[] | null;
+  kbFileIds?: string[] | null;
   onSlide?: (slide: AIPPTSlide) => void;
   signal?: AbortSignal;
 }): Promise<AIPPTSlide[]> {
@@ -75,6 +76,7 @@ export async function streamAipptSlides(input: {
     generateFromWebSearch: input.generateFromWebSearch ?? true,
     generateFromUploadedFile: input.generateFromUploadedFile ?? false,
     kb_folder_ids: input.kbFolderIds ?? null,
+    kb_file_ids: input.kbFileIds ?? null,
   };
 
   const response = await requestRaw(
@@ -142,4 +144,3 @@ export async function streamAipptSlides(input: {
 
   return slides;
 }
-

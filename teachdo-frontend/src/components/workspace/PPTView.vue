@@ -2,21 +2,22 @@
 import { computed, ref, toRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import type { CourseGroup, CourseUnit } from '#root/types';
+import type { TeachingMaterial } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
+import { useAppStore } from '@/stores/appStore';
 import PptAdvancedDialog from '@/components/workspace/ppt/PptAdvancedDialog.vue';
 import PptPreviewPanel from '@/components/workspace/ppt/PptPreviewPanel.vue';
 import PptTemplateSelector from '@/components/workspace/ppt/PptTemplateSelector.vue';
 import { usePptGeneration } from '@/components/workspace/ppt/usePptGeneration';
+import KbFilePickerDialog from '@/components/workspace/KbFilePickerDialog.vue';
 
 interface Props {
-  currentCourse: CourseGroup;
-  currentUnit: CourseUnit | null;
+  currentMaterial: TeachingMaterial;
 }
 
 interface Emits {
-  (e: 'updateUnit', unitId: string, updates: Partial<CourseUnit>): void;
+  (e: 'updateMaterial', updates: Partial<TeachingMaterial>): void;
 }
 
 const props = defineProps<Props>();
@@ -24,9 +25,9 @@ const emit = defineEmits<Emits>();
 const { t } = useI18n();
 const router = useRouter();
 const ui = useWorkspaceUiStore();
+const store = useAppStore();
 
-const currentCourseRef = toRef(props, 'currentCourse');
-const currentUnitRef = toRef(props, 'currentUnit');
+const currentMaterialRef = toRef(props, 'currentMaterial');
 
 const {
   loading,
@@ -38,23 +39,22 @@ const {
   hasAdvancedOverrides,
   generateFromWebSearch,
   generateFromUploadedFile,
-  includeGeneratedKb,
+  selectedKbFileIds,
   readyKbFileCount,
   hasReadyKbFiles,
   handleGenerate,
 } = usePptGeneration({
-  currentCourse: currentCourseRef,
-  currentUnit: currentUnitRef,
+  currentMaterial: currentMaterialRef,
   t,
-  emitUpdateUnit: (unitId, updates) => emit('updateUnit', unitId, updates),
+  emitUpdateMaterial: (updates) => emit('updateMaterial', updates),
 });
 
-const hasOutline = computed(() => !!props.currentUnit?.outlineContent);
+const hasOutline = computed(() => !!props.currentMaterial?.outlineContent);
 
 const currentSlideIndex = ref(0);
 
 watch(
-  () => props.currentUnit?.id,
+  () => props.currentMaterial?.id,
   () => {
     currentSlideIndex.value = 0;
   },
@@ -62,6 +62,9 @@ watch(
 
 const advancedOpen = ref(false);
 const lastFocusedEl = ref<HTMLElement | null>(null);
+
+const kbPickerOpen = ref(false);
+const kbPickerRestoreFocusEl = ref<HTMLElement | null>(null);
 
 const setAdvancedOpen = (value: boolean) => {
   advancedOpen.value = value;
@@ -75,13 +78,18 @@ const setGenerateFromUploadedFile = (value: boolean) => {
   generateFromUploadedFile.value = value;
 };
 
-const setIncludeGeneratedKb = (value: boolean) => {
-  includeGeneratedKb.value = value;
-};
-
 const openAdvanced = () => {
   lastFocusedEl.value = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   advancedOpen.value = true;
+};
+
+const openKbFilePicker = () => {
+  kbPickerRestoreFocusEl.value = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  kbPickerOpen.value = true;
+};
+
+const handleKbFilePickerConfirm = (ids: string[]) => {
+  selectedKbFileIds.value = ids;
 };
 
 const goToKnowledgeBase = () => {
@@ -90,17 +98,13 @@ const goToKnowledgeBase = () => {
 };
 
 const goToOutline = () => {
-  const unit = props.currentUnit;
-  if (!unit) return;
-  router.push({ name: 'course-unit', params: { courseId: props.currentCourse.id, unitId: unit.id, tab: 'outline' } });
+  router.push({ name: 'material-tab', params: { materialId: props.currentMaterial.id, tab: 'outline' } });
 };
 
 const goToEditor = () => {
-  const unit = props.currentUnit;
-  if (!unit) return;
   router.push({
-    name: 'course-unit-ppt-editor',
-    params: { courseId: props.currentCourse.id, unitId: unit.id },
+    name: 'material-ppt-editor',
+    params: { materialId: props.currentMaterial.id },
   });
 };
 
@@ -108,9 +112,14 @@ const goToTemplateSelect = () => {
   viewState.value = 'SELECT_TEMPLATE';
 };
 
-const handleGenerateWrapper = async () => {
+const handleGenerateFirst = async () => {
   currentSlideIndex.value = 0;
-  await handleGenerate();
+  await handleGenerate({ reason: 'generate' });
+};
+
+const handleRegenerate = async () => {
+  currentSlideIndex.value = 0;
+  await handleGenerate({ reason: 'regenerate' });
 };
 </script>
 
@@ -139,7 +148,7 @@ const handleGenerateWrapper = async () => {
       :loading="loading"
       :has-advanced-overrides="hasAdvancedOverrides"
       @open-advanced="openAdvanced"
-      @generate="handleGenerateWrapper"
+      @generate="handleGenerateFirst"
     />
 
     <PptPreviewPanel
@@ -149,11 +158,11 @@ const handleGenerateWrapper = async () => {
       :has-advanced-overrides="hasAdvancedOverrides"
       :presentation="presentation"
       :selected-template="selectedTemplate"
-      :editor-document="props.currentUnit?.editorDocument ?? null"
+      :editor-document="props.currentMaterial?.editorDocument ?? null"
       @open-advanced="openAdvanced"
       @go-to-editor="goToEditor"
       @change-template="goToTemplateSelect"
-      @regenerate="handleGenerateWrapper"
+      @regenerate="handleRegenerate"
     />
 
     <PptAdvancedDialog
@@ -161,15 +170,24 @@ const handleGenerateWrapper = async () => {
       :loading="loading"
       :has-ready-kb-files="hasReadyKbFiles"
       :ready-kb-file-count="readyKbFileCount"
+      :selected-kb-file-count="selectedKbFileIds.length"
       :generate-from-web-search="generateFromWebSearch"
       :generate-from-uploaded-file="generateFromUploadedFile"
-      :include-generated-kb="includeGeneratedKb"
       :restore-focus-el="lastFocusedEl"
       @update:open="setAdvancedOpen"
       @update:generate-from-web-search="setGenerateFromWebSearch"
       @update:generate-from-uploaded-file="setGenerateFromUploadedFile"
-      @update:include-generated-kb="setIncludeGeneratedKb"
+      @open-kb-file-picker="openKbFilePicker"
       @go-to-knowledge-base="goToKnowledgeBase"
+    />
+
+    <KbFilePickerDialog
+      :open="kbPickerOpen"
+      :files="store.kbFiles"
+      :selected-ids="selectedKbFileIds"
+      :restore-focus-el="kbPickerRestoreFocusEl"
+      @update:open="(v) => (kbPickerOpen = v)"
+      @confirm="handleKbFilePickerConfirm"
     />
   </div>
 </template>

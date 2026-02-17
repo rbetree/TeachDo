@@ -1,48 +1,34 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type {
-  ChatMessage,
-  CourseGroup,
-  CourseUnit,
-  EditorDocument,
-  KBFile,
-  LessonPlan,
-  Presentation,
-} from '#root/types';
+import type { EditorDocument, KBFile, LessonPlan, Presentation } from '#root/types';
 
 /**
  * TeachDo 持久化（IndexedDB）
  *
  * 目标：
  * - localStorage 只存轻量元数据（避免配额/卡顿）
- * - 大对象（editorDocument、presentation、lessonPlan、outline、chatHistory、kbFiles）写入 IndexedDB
+ * - 大对象（outline/lesson/presentation/editorDocument/kbFiles）写入 IndexedDB
  *
  * 说明：
  * - 这里尽量使用结构化数据（不做 JSON stringify），避免序列化成本
  * - Date 统一转为 number(ms) 存储，读取时再恢复为 Date
  */
 
-const DB_NAME = 'TeachDoApp';
+export const DB_NAME = 'TeachDoAppMaterial';
+const APP_LARGE_ID = 'app' as const;
 
 export interface PersistedKBFile extends Omit<KBFile, 'uploadedAt' | 'folderId'> {
   uploadedAt: number;
   folderId: number;
 }
 
-export interface PersistedChatMessage extends Omit<ChatMessage, 'timestamp'> {
-  timestamp: number;
-}
-
-export interface CourseLargeRecord {
-  courseId: string;
+export interface AppLargeRecord {
+  id: typeof APP_LARGE_ID;
   kbFiles: PersistedKBFile[];
-  chatHistory: PersistedChatMessage[];
   updatedAt: number;
 }
 
-export interface UnitLargeRecord {
-  id: string; // `${courseId}:${unitId}`
-  courseId: string;
-  unitId: string;
+export interface MaterialLargeRecord {
+  materialId: string;
   outlineContent: string;
   lessonPlan: LessonPlan | null;
   presentation: Presentation | null;
@@ -51,14 +37,14 @@ export interface UnitLargeRecord {
 }
 
 class TeachDoAppDb extends Dexie {
-  courseLarge!: EntityTable<CourseLargeRecord, 'courseId'>;
-  unitLarge!: EntityTable<UnitLargeRecord, 'id'>;
+  appLarge!: EntityTable<AppLargeRecord, 'id'>;
+  materialLarge!: EntityTable<MaterialLargeRecord, 'materialId'>;
 
   constructor() {
     super(DB_NAME);
     this.version(1).stores({
-      courseLarge: 'courseId, updatedAt',
-      unitLarge: 'id, courseId, unitId, updatedAt',
+      appLarge: 'id, updatedAt',
+      materialLarge: 'materialId, updatedAt',
     });
   }
 }
@@ -72,10 +58,6 @@ function getDb(): TeachDoAppDb | null {
   if (dbInstance) return dbInstance;
   dbInstance = new TeachDoAppDb();
   return dbInstance;
-}
-
-export function makeUnitKey(courseId: string, unitId: string): string {
-  return `${courseId}:${unitId}`;
 }
 
 function toTimestamp(value: unknown): number {
@@ -114,90 +96,91 @@ function deserializeKbFiles(list: PersistedKBFile[] | undefined): KBFile[] {
   }));
 }
 
-function serializeChatHistory(list: ChatMessage[] | undefined): PersistedChatMessage[] {
-  if (!Array.isArray(list)) return [];
-  return list.map((msg) => ({
-    role: msg.role === 'user' ? 'user' : 'model',
-    text: msg.text,
-    timestamp: toTimestamp((msg as any).timestamp),
-  }));
+export async function deleteLegacyIndexedDb(): Promise<void> {
+  if (!isBrowser) return;
+  try {
+    // 旧结构数据库（course/unit）
+    await Dexie.delete('TeachDoApp');
+  } catch {
+    // ignore
+  }
 }
 
-function deserializeChatHistory(list: PersistedChatMessage[] | undefined): ChatMessage[] {
-  if (!Array.isArray(list)) return [];
-  return list.map((msg) => ({
-    role: msg.role === 'user' ? 'user' : 'model',
-    text: msg.text,
-    timestamp: new Date(msg.timestamp),
-  }));
-}
-
-export async function saveCourseLarge(course: CourseGroup): Promise<boolean> {
+export async function saveAppLarge(input: { kbFiles: KBFile[] }): Promise<boolean> {
   const db = getDb();
   if (!db) return false;
   try {
-    await db.courseLarge.put({
-      courseId: course.id,
-      kbFiles: serializeKbFiles(course.kbFiles),
-      chatHistory: serializeChatHistory(course.chatHistory),
+    await db.appLarge.put({
+      id: APP_LARGE_ID,
+      kbFiles: serializeKbFiles(input.kbFiles),
       updatedAt: Date.now(),
     });
     return true;
   } catch (e) {
-    console.warn('[TeachDoAppDb] 保存 courseLarge 失败', e);
+    console.warn('[TeachDoAppDb] 保存 appLarge 失败', e);
     return false;
   }
 }
 
-export async function saveUnitLarge(courseId: string, unit: CourseUnit): Promise<boolean> {
-  const db = getDb();
-  if (!db) return false;
-  try {
-    await db.unitLarge.put({
-      id: makeUnitKey(courseId, unit.id),
-      courseId,
-      unitId: unit.id,
-      outlineContent: unit.outlineContent ?? '',
-      lessonPlan: unit.lessonPlan ?? null,
-      presentation: unit.presentation ?? null,
-      editorDocument: unit.editorDocument ?? null,
-      updatedAt: Date.now(),
-    });
-    return true;
-  } catch (e) {
-    console.warn('[TeachDoAppDb] 保存 unitLarge 失败', e);
-    return false;
-  }
-}
-
-export async function loadCourseLarge(courseId: string): Promise<{ kbFiles: KBFile[]; chatHistory: ChatMessage[] } | null> {
+export async function loadAppLarge(): Promise<{ kbFiles: KBFile[] } | null> {
   const db = getDb();
   if (!db) return null;
   try {
-    const record = await db.courseLarge.get(courseId);
+    const record = await db.appLarge.get(APP_LARGE_ID);
     if (!record) return null;
     return {
       kbFiles: deserializeKbFiles(record.kbFiles),
-      chatHistory: deserializeChatHistory(record.chatHistory),
     };
   } catch (e) {
-    console.warn('[TeachDoAppDb] 读取 courseLarge 失败', e);
+    console.warn('[TeachDoAppDb] 读取 appLarge 失败', e);
     return null;
   }
 }
 
-export async function loadUnitLargeByCourse(courseId: string): Promise<Map<string, UnitLargeRecord>> {
+export async function saveMaterialLarge(materialId: string, input: {
+  outlineContent: string;
+  lessonPlan: LessonPlan | null;
+  presentation: Presentation | null;
+  editorDocument: EditorDocument | null;
+}): Promise<boolean> {
   const db = getDb();
-  if (!db) return new Map();
+  if (!db) return false;
   try {
-    const records = await db.unitLarge.where('courseId').equals(courseId).toArray();
-    const map = new Map<string, UnitLargeRecord>();
-    for (const record of records) {
-      map.set(record.unitId, record);
-    }
-    return map;
+    await db.materialLarge.put({
+      materialId,
+      outlineContent: input.outlineContent ?? '',
+      lessonPlan: input.lessonPlan ?? null,
+      presentation: input.presentation ?? null,
+      editorDocument: input.editorDocument ?? null,
+      updatedAt: Date.now(),
+    });
+    return true;
   } catch (e) {
-    console.warn('[TeachDoAppDb] 读取 unitLarge 失败', e);
-    return new Map();
+    console.warn('[TeachDoAppDb] 保存 materialLarge 失败', e);
+    return false;
   }
 }
+
+export async function loadMaterialLarge(materialId: string): Promise<MaterialLargeRecord | null> {
+  const db = getDb();
+  if (!db) return null;
+  try {
+    return (await db.materialLarge.get(materialId)) ?? null;
+  } catch (e) {
+    console.warn('[TeachDoAppDb] 读取 materialLarge 失败', e);
+    return null;
+  }
+}
+
+export async function deleteMaterialLarge(materialId: string): Promise<boolean> {
+  const db = getDb();
+  if (!db) return false;
+  try {
+    await db.materialLarge.delete(materialId);
+    return true;
+  } catch (e) {
+    console.warn('[TeachDoAppDb] 删除 materialLarge 失败', e);
+    return false;
+  }
+}
+

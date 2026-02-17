@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import type { ChatMessage, CourseGroup, CourseUnit } from '#root/types';
+import type { ChatMessage, TeachingMaterial } from '#root/types';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useI18n } from 'vue-i18n';
@@ -9,17 +9,11 @@ import { escapeHtml } from '@/utils/safeHtml';
 type AssistantViewVariant = 'page' | 'panel';
 
 interface Props {
-  currentCourse: CourseGroup;
-  currentUnit: CourseUnit | null;
+  currentMaterial: TeachingMaterial | null;
   variant?: AssistantViewVariant;
 }
 
-interface Emits {
-  (e: 'updateCourse', updates: Partial<CourseGroup>): void;
-}
-
 const props = defineProps<Props>();
-const emit = defineEmits<Emits>();
 const { t } = useI18n();
 
 const isPanel = computed(() => props.variant === 'panel');
@@ -31,8 +25,10 @@ const inputValue = ref('');
 const isTyping = ref(false);
 const messagesListRef = ref<HTMLDivElement | null>(null);
 
+const contextName = computed(() => props.currentMaterial?.title || t('nav.workspace'));
+
 const greeting = computed(() =>
-  assistantEnabled ? t('assistant.greeting', { name: props.currentCourse.name }) : t('assistant.in_progress.greeting', { name: props.currentCourse.name }),
+  assistantEnabled ? t('assistant.greeting', { name: contextName.value }) : t('assistant.in_progress.greeting', { name: contextName.value }),
 );
 
 const renderInlineStyles = (text: string) => {
@@ -82,22 +78,14 @@ const scrollToBottom = () => {
   });
 };
 
-const syncHistory = () => {
-  if (props.currentCourse.chatHistory && props.currentCourse.chatHistory.length > 0) {
-    messages.value = props.currentCourse.chatHistory.map((msg) => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      text: msg.text,
-      timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
-    }));
-  } else {
-    messages.value = [{ role: 'model', text: greeting.value, timestamp: new Date() }];
-  }
+const resetMessages = () => {
+  messages.value = [{ role: 'model', text: greeting.value, timestamp: new Date() }];
 };
 
 watch(
-  () => props.currentCourse.id,
+  () => props.currentMaterial?.id,
   () => {
-    syncHistory();
+    resetMessages();
     scrollToBottom();
   },
   { immediate: true },
@@ -105,8 +93,7 @@ watch(
 
 watch(
   messages,
-  (list) => {
-    emit('updateCourse', { chatHistory: list });
+  () => {
     scrollToBottom();
   },
   { deep: true },
@@ -150,7 +137,7 @@ const handleSend = async () => {
 };
 
 const clearHistory = () => {
-  messages.value = [{ role: 'model', text: greeting.value, timestamp: new Date() }];
+  resetMessages();
 };
 </script>
 
@@ -187,7 +174,7 @@ const clearHistory = () => {
             </span>
           </h3>
           <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
-            {{ t('assistant.context_full', { name: props.currentCourse.name }) }}
+            {{ t('assistant.context_full', { name: contextName }) }}
           </p>
         </div>
       </div>

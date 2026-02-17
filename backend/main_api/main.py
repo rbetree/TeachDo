@@ -432,6 +432,7 @@ class AipptContentRequest(BaseModel):
     generateFromUploadedFile: bool = False  # 是否从上传的文件中生成PPT内容
     generateFromWebSearch: bool = True  # 是否从网络搜索中生成PPT内容
     kb_folder_ids: list[int] | None = None  # 仅当启用知识库检索时生效，用于过滤可检索的 folder_id
+    kb_file_ids: list[str] | None = None  # 仅当启用知识库检索时生效，用于过滤可检索的 file_id（更精确）
 
 def _kb_ok(data):
     return {"ok": True, "data": data}
@@ -493,6 +494,7 @@ async def stream_content_response(
     generateFromWebSearch,
     user_id,
     kb_folder_ids: list[int] | None = None,
+    kb_file_ids: list[str] | None = None,
 ):
     match = re.search(r"(# .*)", markdown_content, flags=re.DOTALL)
     result = markdown_content[match.start():] if match else markdown_content
@@ -509,6 +511,8 @@ async def stream_content_response(
     metadata = {"user_id": user_id, "search_engine": search_engine, "language": language}
     if kb_folder_ids:
         metadata["kb_folder_ids"] = kb_folder_ids
+    if kb_file_ids:
+        metadata["kb_file_ids"] = kb_file_ids
     logger.info(f"前端*内容**=====>metadata数据为：{metadata}")
 
     last_flush = asyncio.get_event_loop().time()
@@ -576,6 +580,7 @@ async def aippt_content(request: AipptContentRequest):
             generateFromWebSearch=request.generateFromWebSearch,
             user_id=user_id,
             kb_folder_ids=request.kb_folder_ids if generate_from_uploaded_file else None,
+            kb_file_ids=request.kb_file_ids if generate_from_uploaded_file else None,
         ):
             yield chunk
 

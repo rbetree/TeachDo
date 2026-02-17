@@ -20,10 +20,10 @@
 > - 状态：`TODO` 待做 / `DOING` 进行中 / `DONE` 已完成 / `BLOCKED` 阻塞
 
 ### P0（先做：结构重构 + PPT 生成链路）
-- [TODO] 前端：移除 course/unit 信息架构，落地单层 `TeachingMaterial`（路由/页面/Store/持久化）
-- [TODO] 前端：全局 KB（`default_user`）+ KB 文件多选引用（`KbFilePickerDialog`）+ PPT 生成透传 `kb_file_ids`
-- [TODO] 后端：`/tools/aippt` 支持 `kb_file_ids` 透传 + `slide_agent` KnowledgeBaseSearch 文件级过滤
-- [TODO] personaldb：`POST /search` 支持 `fileIds` 过滤（服务端向量查询 where 过滤）+ 单测
+- [DONE] 前端：移除 course/unit 信息架构，落地单层 `TeachingMaterial`（路由/页面/Store/持久化）
+- [DONE] 前端：全局 KB（`default_user`）+ KB 文件多选引用（`KbFilePickerDialog`）+ PPT 生成透传 `kb_file_ids`
+- [DONE] 后端：`/tools/aippt` 支持 `kb_file_ids` 透传 + `slide_agent` KnowledgeBaseSearch 文件级过滤
+- [DONE] personaldb：`POST /search` 支持 `fileIds` 过滤（服务端向量查询 where 过滤）+ 单测
 
 ### P1（再做：大纲 KB 增强 + KB 可观测性 + 删除清理）
 - [TODO] 大纲生成：`/tools/aippt_outline_unified` 支持 `kb_file_ids`，并基于 personaldb 检索结果增强 prompt + 单测
@@ -244,6 +244,33 @@
   - `cd teachdo-frontend && npm run typecheck`  
   - `cd teachdo-frontend && npm run lint`  
   - `cd teachdo-frontend && npm run build`
+
+### 快速验收（P0 手工用例）
+> 建议用隐身窗口或先清理站点数据，避免旧 localStorage/IndexedDB 影响。
+
+1. **教学资料列表页（新结构）**
+   - 打开应用首页，应看到“教学资料”列表（不再出现课程/单元两层）。
+   - 点击任意条目进入工作台，地址应为 `/material/:materialId/...`。
+
+2. **创建教学资料（不自动生成大纲）**
+   - 点击“创建教学资料”，填写标题/学科/目标，创建后进入 outline 页。
+   - 确认：不会自动触发大纲生成；outline 为空时展示“生成大纲”按钮。
+
+3. **全局知识库（default_user）**
+   - 右侧面板切到“知识库”，应显示“全局知识库”。
+   - 上传文件后列表出现 `ready` 文件；刷新后仍可见；导出/删除可用。
+
+4. **PPT：按文件选择引用（kb_file_ids）**
+   - 先生成大纲，再进入 PPT 页。
+   - 打开“高级设置”：勾选“引用知识库素材”后点击“选择文件”，多选 1~N 个 `ready` 文件确认。
+   - 生成 PPT 成功后，在浏览器 DevTools → Network 中检查 `/api/tools/aippt` 请求体包含 `kb_file_ids`（且 `sessionId` 为 `default_user`）。
+
+5. **重新生成：回写默认 kbFileIds**
+   - 在 PPT 预览页点击“重新生成”，在高级设置中变更勾选文件后重新生成。
+   - 再次打开高级设置，确认默认选中文件已更新（写回 material.kbFileIds）。
+
+6. **产物入库（folderId=1）**
+   - 生成大纲/PPT 后回到知识库刷新，应看到 `gen:default_user:{materialId}:outline/slides/...` 等产物文件（位于生成产物 folder）。
 
 ### 手工验收场景（必须全部通过）
 1. **创建教学资料（弹窗）**：必填校验正确；创建后进入工作台 outline 页；手动点击“生成大纲”后生成成功。
