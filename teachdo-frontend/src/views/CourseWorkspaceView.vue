@@ -1,12 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import UnitSidebar from '@/components/workspace/UnitSidebar.vue';
-import OutlineView from '@/components/workspace/OutlineView.vue';
-import LessonPlanView from '@/components/workspace/LessonPlanView.vue';
-import PPTView from '@/components/workspace/PPTView.vue';
 import WorkspaceRightPanel from '@/components/workspace/WorkspaceRightPanel.vue';
 import { useAppStore } from '@/stores/appStore';
 import type { CourseGroup, CourseUnit } from '#root/types';
@@ -15,6 +12,10 @@ import type { IconName } from '@/components/common/LucideIcon.vue';
 import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
 import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
+
+const OutlineView = defineAsyncComponent(() => import('@/components/workspace/OutlineView.vue'));
+const LessonPlanView = defineAsyncComponent(() => import('@/components/workspace/LessonPlanView.vue'));
+const PPTView = defineAsyncComponent(() => import('@/components/workspace/PPTView.vue'));
 
 const router = useRouter();
 const route = useRoute();

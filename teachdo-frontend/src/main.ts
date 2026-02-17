@@ -6,8 +6,7 @@ import { setupAppStore } from './stores/appStore';
 import { createAppRouter } from './router';
 import { i18n } from './i18n';
 import { toast } from './utils/toast';
-import EditorIconPlugin from '@editor/plugins/icon';
-import EditorDirectivePlugin from '@editor/plugins/directive';
+import { ensureEditorRuntimePlugins } from './utils/editorRuntime';
 
 const app = createApp(App);
 const pinia = createPinia();
@@ -15,10 +14,20 @@ const pinia = createPinia();
 app.use(pinia);
 setupAppStore(pinia);
 const router = createAppRouter(pinia);
+
+router.beforeEach(async (to) => {
+  if (to.name !== 'course-unit-ppt-editor') return true;
+  try {
+    await ensureEditorRuntimePlugins(app);
+    return true;
+  } catch (err) {
+    console.error('[Editor Runtime Init Failed]', err);
+    toast.error(i18n.global.t('common.error'));
+    return { name: 'workspace' };
+  }
+});
 app.use(router);
 app.use(i18n);
-app.use(EditorIconPlugin);
-app.use(EditorDirectivePlugin);
 
 app.config.errorHandler = (err, instance, info) => {
   console.error('[Vue Error]', err, info);
@@ -30,4 +39,4 @@ window.addEventListener('unhandledrejection', (event) => {
   toast.error(i18n.global.t('common.error'));
 });
 
-app.mount('#app');
+void router.isReady().then(() => app.mount('#app'));
