@@ -42,7 +42,7 @@
 - `streamAipptSlides(payload)` → `POST /api/tools/aippt`
   - `Content-Type: application/json`
   - `Accept: text/event-stream`
-- `generatePPT(course, unit, options)` → 内部调用 `streamAipptSlides`，并在前端完成模板映射与增量状态回写
+  - 说明：历史遗留的 `generatePPT()` 已清理，统一使用 `streamAipptSlides()`（调用方在前端完成状态回写）
 
 ### 2.4 知识库（KB）
 

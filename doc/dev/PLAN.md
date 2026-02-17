@@ -40,7 +40,8 @@
     1. 首屏（课程选择/工作台）不加载 editor-runtime 相关 chunk（以 `vite build` 产物/Network 验证）。
     2. 进入 `/course/:courseId/unit/:unitId/ppt/editor` 后再加载编辑器相关资源。
 
-- [ ] I3. Service 层收敛（aiService 拆分与去重）
+- [x] I3. Service 层收敛（aiService 拆分与去重）
+  - 进展（2026-02-17）：已按领域拆分 `ppt/outline/kb` 服务模块；抽出统一 `apiClient`（超时/取消/HTTP/后端错误模型）；清理未使用的 legacy `generatePPT`。
   - 方案：按领域拆分 `ppt/outline/kb`，统一错误模型（超时/取消/后端不可用提示），清理“已不再使用但仍保留的旧实现”。
   - DoD：同一类错误在所有页面表现一致（文案、toast、重试策略一致）。
 
