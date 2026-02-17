@@ -35,7 +35,8 @@ const selectTemplate = (id: string) => {
 
       <button
         type="button"
-        class="shrink-0 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2 font-bold text-sm"
+        :disabled="props.loading"
+        class="shrink-0 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2 font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
         @click="emit('openAdvanced')"
       >
         <span class="relative inline-flex">
@@ -47,11 +48,14 @@ const selectTemplate = (id: string) => {
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <div
+      <button
         v-for="template in props.templates"
         :key="template.id"
+        type="button"
+        :disabled="props.loading"
+        :aria-pressed="props.selectedTemplateId === template.id"
         :class="[
-          'cursor-pointer group relative rounded-xl overflow-hidden border-2 transition-all',
+          'group relative rounded-xl overflow-hidden border-2 transition-all text-left disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2',
           props.selectedTemplateId === template.id ? 'border-indigo-500 ring-4 ring-indigo-500/20 scale-105' : 'border-slate-200 dark:border-slate-800 hover:border-indigo-300',
         ]"
         @click="selectTemplate(template.id)"
@@ -69,7 +73,7 @@ const selectTemplate = (id: string) => {
         <div v-if="props.selectedTemplateId === template.id" class="absolute top-2 right-2 bg-indigo-500 text-white rounded-full p-1 shadow-lg">
           <LucideIcon name="check" :size="16" />
         </div>
-      </div>
+      </button>
     </div>
 
     <div class="flex justify-center">
@@ -78,11 +82,9 @@ const selectTemplate = (id: string) => {
         class="px-10 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:text-slate-500 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-500/30 transition-all flex items-center gap-3"
         @click="emit('generate')"
       >
-        <LucideIcon v-if="props.loading" name="loader-2" :size="20" class="animate-spin" />
-        <span v-else>✨ {{ t('ppt.generate') }}</span>
-        <span v-if="props.loading">{{ t('ppt.generating') }}</span>
+        <LucideIcon :name="props.loading ? 'loader-2' : 'sparkles'" :size="20" :class="props.loading ? 'animate-spin' : ''" />
+        <span>{{ props.loading ? t('ppt.generating') : t('ppt.generate') }}</span>
       </button>
     </div>
   </div>
 </template>
-

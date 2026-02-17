@@ -106,9 +106,10 @@
 - 证据（代码位置，非穷举）：
   - 工作台空状态：`teachdo-frontend/src/views/CourseWorkspaceView.vue`
   - Outline 空状态与 CTA：`teachdo-frontend/src/components/workspace/OutlineView.vue`
-  - PPT 生成按钮：`teachdo-frontend/src/components/workspace/PPTView.vue`
+  - PPT 生成按钮：`teachdo-frontend/src/components/workspace/ppt/PptTemplateSelector.vue`
   - Lesson 空状态：`teachdo-frontend/src/components/workspace/LessonPlanView.vue`
   - Toast 关闭按钮：`teachdo-frontend/src/components/common/ToastContainer.vue`
+- 进展（2026-02-17）：已移除 Toast 关闭按钮与 PPT 生成按钮中的 UI emoji，改为 LucideIcon。
 - 修复方案：
   1. 统一使用 LucideIcon（例如 `sparkles/file-text/x`）替换 emoji；
   2. 仅允许 emoji 作为“内容”（例如编辑器符号面板插入），禁止作为 UI 图标/按钮文案前缀。
@@ -138,7 +139,8 @@
 - 证据（代码位置，示例）：
   - 课程卡片用 `<article @click>`：`teachdo-frontend/src/views/CourseSelectionView.vue`
   - KB 上传区域用 `<div @click>`：`teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue`
-  - 模板选择卡片用 `<div @click>`：`teachdo-frontend/src/components/workspace/PPTView.vue`
+  - 模板选择卡片用 `<div @click>`：`teachdo-frontend/src/components/workspace/ppt/PptTemplateSelector.vue`
+- 进展（2026-02-17）：上述交互点已改为语义化 `RouterLink/button`，并补齐 focus-visible 样式，可全键盘操作。
 - 修复方案：
   1. 将上述交互点改为语义化 `<button type="button">` 或 `<RouterLink>`；
   2. 若需保留容器结构，则补 `role="button"`、`tabindex="0"`、`@keydown.enter.space`，并加 focus-visible 样式（但优先语义化按钮/链接）。
@@ -149,6 +151,7 @@
 #### 问题 3.2.3 Toast 缺少 aria-live / role，关闭按钮过小且使用 emoji
 - 现象/影响：错误提示对读屏用户不可达；关闭按钮命中区域小，不符合 touch target。
 - 证据：`teachdo-frontend/src/components/common/ToastContainer.vue`
+- 进展（2026-02-17）：Toast 已按类型补齐 `role/aria-live/aria-atomic`；关闭按钮改为 LucideIcon 并补 `aria-label`，触控目标 ≥44×44。
 - 修复方案：
   1. Toast 容器增加 `aria-live="polite"`（成功/信息）与 `role="alert"`（错误）或按类型区分；
   2. 关闭按钮改为 LucideIcon `x`，并补 `aria-label`、`type="button"`、触控尺寸 ≥44×44；

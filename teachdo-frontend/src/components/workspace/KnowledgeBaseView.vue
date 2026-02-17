@@ -309,8 +309,9 @@ onBeforeUnmount(() => {
       >
         <!-- Panel Variant：紧凑上传区 + 列表 -->
         <template v-if="isPanel">
-          <div
-            class="mx-3 mt-3 mb-2 p-4 border border-dashed rounded-xl flex items-center gap-3 transition-colors cursor-pointer"
+          <button
+            type="button"
+            class="mx-3 mt-3 mb-2 p-4 border border-dashed rounded-xl flex items-center gap-3 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
             :class="isDragging
               ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
               : 'border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/20 hover:bg-white/80 dark:hover:bg-slate-900/30'"
@@ -326,7 +327,7 @@ onBeforeUnmount(() => {
               <p class="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{{ t('kb.drop.title') }}</p>
               <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ t('kb.drop.desc') }}</p>
             </div>
-          </div>
+          </button>
 
           <div class="flex-1 overflow-y-auto custom-scrollbar">
             <div v-if="filteredFiles.length === 0" class="flex flex-col items-center justify-center py-10 text-slate-400">

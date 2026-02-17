@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /* global setTimeout, clearTimeout */
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import BrandLogo from '@/components/common/BrandLogo.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
@@ -9,9 +8,8 @@ import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useAppStore } from '@/stores/appStore';
 import type { CourseGroup } from '#root/types';
 
-const router = useRouter();
 const store = useAppStore();
-  const { t } = useI18n();
+const { t } = useI18n();
 
 const courses = computed(() => store.courses);
 const isCreating = ref(false);
@@ -59,9 +57,6 @@ const handleCreateCourse = () => {
   isCreating.value = false;
 };
 
-const handleEnterWorkspace = (courseId: string) => {
-  router.push({ name: 'course', params: { courseId } });
-};
 </script>
 
 <template>
@@ -168,11 +163,11 @@ const handleEnterWorkspace = (courseId: string) => {
           </template>
 
           <template v-else>
-            <article
+            <RouterLink
               v-for="course in courses"
               :key="course.id"
-              class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col h-56 overflow-hidden group"
-              @click="handleEnterWorkspace(course.id)"
+              :to="{ name: 'course', params: { courseId: course.id } }"
+              class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-56 overflow-hidden group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
             >
               <div class="p-7 flex flex-col h-full gap-4">
                 <div class="flex items-start justify-between">
@@ -198,7 +193,7 @@ const handleEnterWorkspace = (courseId: string) => {
                   </div>
                 </div>
               </div>
-            </article>
+            </RouterLink>
 
             <div
               v-if="!courses.length"
