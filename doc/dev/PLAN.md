@@ -1,6 +1,6 @@
 # TeachDo 开发计划（当前）
 
-> 更新：2026-02-16  
+> 更新：2026-02-17  
 > 历史迁移计划（ai2ppt → TeachDo，阶段 A–G）已归档：`doc/dev/history/PLAN_AI2PPT_TO_TEACHDO_2026-02.md`
 
 ## 0. 文档说明
@@ -30,6 +30,7 @@
 
 - [ ] I2. 依赖边界与首屏瘦身（避免 editor-runtime 侵入工作台首屏）
   - 背景：当前 `teachdo-frontend/src/main.ts` 全局 `app.use(EditorIconPlugin/EditorDirectivePlugin)`，且工作台 `teachdo-frontend/src/components/workspace/PPTView.vue` 直接 import `@editor/*`，会把 editor-runtime 依赖链带进首屏/工作台。
+  - 进展（2026-02-17）：已完成方案 1/2（插件按编辑器路由加载 + 工作台 Tab 懒加载），方案 3 待完成（PPT 预览解除 `@editor/*` 静态依赖）。
   - 方案：
     1. 将 editor-runtime 相关插件/依赖改为“仅在编辑器路由按需加载与注册”（进入编辑器再 import/use）。
     2. 工作台 Tab（Outline/Lesson/PPT）改为懒加载（async component 或子路由 code-splitting）。

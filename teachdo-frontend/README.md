@@ -77,6 +77,7 @@ TeachDo 是一套面向教师的智能备课平台，当前仓库提供 **Vite +
 2. **依赖**：所有库通过 npm 安装并写入 `package.json`，禁止继续引用 CDN
 3. **质量**：重要改动需自测（`npm run build`/lint），并在 PR 中记录后端联调状态
 4. **路由**：统一使用 Vue Router `createWebHistory`，服务端需确保开启 `historyApiFallback`
+5. **编辑器运行时**：`@editor` 相关全局插件仅在编辑器路由按需加载（见 `src/utils/editorRuntime.ts`）；如需在非编辑器页面使用 IconPark 组件/指令，请先确保已执行 `ensureEditorRuntimePlugins()`
 
 ---
 

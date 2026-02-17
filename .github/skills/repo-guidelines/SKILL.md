@@ -60,8 +60,8 @@ TeachDo 仓库的详细工程规范与常用操作手册。
 ## 提交与 PR 规范
 
 - 提交信息遵循 Conventional Commits，例如：
-- `feat(frontend): add outline editor`
-- `fix(backend): keep-alive for SSE`
+- `feat(frontend): 添加大纲编辑器`(默认中文)
+- `fix(backend): keep-alive for SSE`(除非用户指定, 则可以使用非中文)
 - PR 需要包含：
 - 变更摘要
 - 验证步骤
