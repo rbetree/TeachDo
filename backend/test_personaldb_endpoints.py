@@ -96,3 +96,31 @@ def test_personaldb_vectorize_text_endpoint_accepts_string_ids(monkeypatch):
     assert called["id"] == "gen:course-1:unit-1:outline"
     assert called["folder_id"] == 1
 
+
+def test_personaldb_file_content_endpoint_exports_merged_text(monkeypatch):
+    import backend.personaldb.main as personaldb
+
+    class _DummyChroma:
+        def __init__(self, embedder=None, db_dir=None):  # noqa: ARG002
+            pass
+
+        def get_file_content(self, *, user_id: str, file_id: str):
+            assert user_id == "course-1"
+            assert file_id == "upload:course-1:001"
+            return {
+                "user_id": user_id,
+                "file_id": file_id,
+                "file_name": "a.md",
+                "file_type": "md",
+                "file_size": 12,
+                "content": "# Hello\n\nworld",
+            }
+
+    monkeypatch.setattr(personaldb.embedding_utils, "ChromaDB", _DummyChroma)
+
+    client = TestClient(personaldb.app)
+    resp = client.get("/files/course-1/upload:course-1:001/content")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["file_id"] == "upload:course-1:001"
+    assert body["content"] == "# Hello\n\nworld"

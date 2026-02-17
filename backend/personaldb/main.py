@@ -162,6 +162,12 @@ def process_and_vectorize_local_file(
         raise ValueError("分块后内容为空")
     logger.info(f"内容分块成功，共 {len(documents)} 块。")
 
+    # 原始文件大小（字节），用于前端知识库列表展示
+    try:
+        file_size = os.path.getsize(temp_file_path)
+    except OSError:
+        file_size = 0
+
     # 步骤3: 使用embedding_utils生成embedding向量并插入向量（内部会校验 EMBEDDING_* 配置）
     logger.info("初始化embedding模型")
     embedder = embedding_utils.EmbeddingModel()
@@ -174,7 +180,8 @@ def process_and_vectorize_local_file(
         file_type=file_type or "unknown",
         url=url or "",
         folder_id=folder_id or 0,
-        documents=documents
+        documents=documents,
+        file_size=file_size,
     )
     logger.info("向量插入成功")
 
@@ -397,6 +404,11 @@ def process_text_content(
     chroma = embedding_utils.ChromaDB(embedder)
 
     logger.info(f"插入文本向量：fileId={id}, userId={user_id}")
+    # 纯文本的“大小”用 UTF-8 字节数表示（用于前端展示）
+    try:
+        file_size = len((text or "").encode("utf-8"))
+    except Exception:
+        file_size = 0
     embedding_result = chroma.insert_file_vectors(
         file_name=file_name,
         user_id=user_id,
@@ -404,7 +416,8 @@ def process_text_content(
         file_type=file_type or "unknown",
         url=url or "",
         folder_id=folder_id or 0,
-        documents=documents
+        documents=documents,
+        file_size=file_size,
     )
 
     result = {
@@ -466,6 +479,29 @@ def list_user_files(user_id: str):
     except Exception as e:
         logger.error(f"列出用户 {user_id} 的文件失败: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"列出文件失败: {str(e)}")
+
+
+@app.get("/files/{user_id}/{file_id}/content")
+def get_user_file_content(user_id: str, file_id: str):
+    """
+    导出/下载用：按 file_id 聚合返回该文件的内容（Markdown/纯文本）。
+
+    注意：
+    - personaldb 内部存的是分块后的 documents（存在 overlap 重复）
+    - 这里会按 chunk id 顺序拼接并去除相邻重叠
+    """
+    try:
+        logger.info(f"收到导出文件内容请求: user_id={user_id}, file_id={file_id}")
+        chroma = embedding_utils.ChromaDB(embedder=None)
+        result = chroma.get_file_content(user_id=user_id, file_id=file_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="文件不存在")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"导出文件内容失败: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"导出失败: {str(e)}")
 
 
 @app.delete("/files/{user_id}/{file_id}")

@@ -52,6 +52,7 @@ def personaldb_stub() -> Dict[str, Any]:
                 "file_id": "upload:test:fid0",
                 "file_name": "a.txt",
                 "file_type": "txt",
+                "file_size": 5,
                 "folder_id": 0,
             },
             # 兼容 camelCase 字段
@@ -60,11 +61,24 @@ def personaldb_stub() -> Dict[str, Any]:
                 "fileId": "gen:test:fid1",
                 "fileName": "b.md",
                 "fileType": "md",
+                "fileSize": 12,
                 "folderId": 1,
             },
             # 无效项应被 main_api 侧跳过
             "invalid",
         ]
+
+    @app.get("/files/{user_id}/{file_id}/content")
+    async def file_content(user_id: str, file_id: str):
+        # 这里的 content 用于 main_api 的 /kb/.../export 下载
+        return {
+            "user_id": user_id,
+            "file_id": file_id,
+            "file_name": "导出示例.md",
+            "file_type": "md",
+            "file_size": 12,
+            "content": "# Hello\n\nworld",
+        }
 
     @app.post("/vectorize/text")
     async def vectorize_text(request: Request):
@@ -149,6 +163,7 @@ def test_kb_bff_happy_path_with_personaldb_stub(main_api_client, personaldb_stub
     assert body["data"]["user_id"] == "course-1"
     assert body["data"]["file_id"] == "upload:course-1:fixed:001"
     assert body["data"]["folder_id"] == 0
+    assert body["data"]["file_size"] == 5
     assert stub_state["upload_called"] == 1
 
     # 2) list（含 folder_id 过滤 + 字段归一化）
@@ -156,16 +171,21 @@ def test_kb_bff_happy_path_with_personaldb_stub(main_api_client, personaldb_stub
     assert resp.status_code == 200
     items = resp.json()["data"]
     assert {it["file_id"] for it in items} == {"upload:test:fid0", "gen:test:fid1"}
+    by_id = {it["file_id"]: it for it in items}
+    assert by_id["upload:test:fid0"]["file_size"] == 5
+    assert by_id["gen:test:fid1"]["file_size"] == 12
 
     resp = main_api_client.get("/kb/files/course-1?folder_id=0")
     assert resp.status_code == 200
     items = resp.json()["data"]
     assert [it["file_id"] for it in items] == ["upload:test:fid0"]
+    assert items[0]["file_size"] == 5
 
     resp = main_api_client.get("/kb/files/course-1?folder_id=1")
     assert resp.status_code == 200
     items = resp.json()["data"]
     assert [it["file_id"] for it in items] == ["gen:test:fid1"]
+    assert items[0]["file_size"] == 12
 
     # 3) vectorize/text
     resp = main_api_client.post(
@@ -202,6 +222,14 @@ def test_kb_bff_happy_path_with_personaldb_stub(main_api_client, personaldb_stub
     assert resp.status_code == 200
     assert resp.json() == {"ok": True, "data": True}
     assert ("course-1", "upload:test:fid0") in stub_state["deleted"]
+
+    # 5) export（附件下载）
+    resp = main_api_client.get("/kb/files/course-1/upload:test:fid0/export")
+    assert resp.status_code == 200
+    assert resp.text == "# Hello\n\nworld"
+    disposition = resp.headers.get("content-disposition") or ""
+    assert "attachment" in disposition.lower()
+    assert "utf-8" in disposition.lower()
 
 
 def test_tools_aippt_disables_kb_when_personaldb_not_configured(main_api_client, monkeypatch):

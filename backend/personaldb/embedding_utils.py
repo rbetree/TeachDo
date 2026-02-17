@@ -264,6 +264,7 @@ class ChromaDB(object):
         url: str,
         folder_id: int,
         documents: List[str],
+        file_size: int | None = None,
     ):
         """
         将文件内容插入到ChromaDB中，生成并存储embedding向量
@@ -274,6 +275,7 @@ class ChromaDB(object):
             file_type (str): 文件类型
             url (str): 文件URL
             folder_id (int): 文件夹ID
+            file_size (int | None): 文件大小（字节）。用于前端展示与溯源，不参与向量检索。
             documents (List[str]): 文件内容列表
         Returns:
             dict: 包含embedding结果
@@ -288,6 +290,15 @@ class ChromaDB(object):
             vectors_result = self.embedder.do_embedding(texts=documents)
             vectors = vectors_result["data"]
             embeddings = [one["embedding"] for one in vectors]
+            # 统一存储 file_size（字节），便于前端展示；旧数据无该字段时会在 list_files_by_user 中做兜底估算
+            resolved_file_size = None
+            if file_size is not None:
+                try:
+                    resolved_file_size = int(file_size)
+                    if resolved_file_size < 0:
+                        resolved_file_size = 0
+                except Exception:
+                    resolved_file_size = None
             meta = [
                 {
                     "file_name": file_name,
@@ -296,6 +307,7 @@ class ChromaDB(object):
                     "folder_id": int(folder_id or 0),
                     "url": url,
                     "file_type": file_type,
+                    **({"file_size": resolved_file_size} if resolved_file_size is not None else {}),
                 }
                 for _ in documents
             ]
@@ -354,11 +366,14 @@ class ChromaDB(object):
             # 但由于我们是按用户集合来操作的，所以这里获取的是该用户的所有数据
             results = col.get()
 
-            metadatas = results.get('metadatas', [])
+            metadatas = results.get("metadatas") or []
+            documents = results.get("documents") or []
 
             # 文件信息可能重复，需要去重
-            unique_files = {}
-            for meta in metadatas:
+            unique_files: Dict[str, Dict[str, Any]] = {}
+            # 旧数据可能没有 file_size，这里做一次兜底：用 documents 的字节长度粗略估算
+            approx_sizes: Dict[str, int] = {}
+            for idx, meta in enumerate(metadatas):
                 # 确保meta是字典且包含file_id
                 if isinstance(meta, dict) and 'file_id' in meta:
                     file_id = meta.get('file_id')
@@ -379,11 +394,147 @@ class ChromaDB(object):
                                 "user_id": meta.get('user_id'),
                             }
 
+                        # 优先使用显式存储的 file_size（更准确）
+                        raw_size = meta.get("file_size") if meta.get("file_size") is not None else meta.get("fileSize")
+                        if raw_size is not None:
+                            try:
+                                size_int = int(raw_size)
+                                if size_int < 0:
+                                    size_int = 0
+                                prev = unique_files[file_id_key].get("file_size")
+                                if prev is None or size_int > int(prev):
+                                    unique_files[file_id_key]["file_size"] = size_int
+                            except Exception:
+                                # 忽略非法值，继续走兜底估算
+                                pass
+                        else:
+                            doc = documents[idx] if idx < len(documents) else None
+                            if isinstance(doc, str) and doc:
+                                approx_sizes[file_id_key] = approx_sizes.get(file_id_key, 0) + len(doc.encode("utf-8"))
+
+            # 补齐缺失的 file_size（仅对旧数据生效）
+            for fid, size in approx_sizes.items():
+                if fid in unique_files and unique_files[fid].get("file_size") is None:
+                    unique_files[fid]["file_size"] = int(size)
+
             return list(unique_files.values())
         except Exception as e:
             # 如果collection不存在或其他异常
             logger.error(f"为用户 {user_id} 列出文件失败: {str(e)}", exc_info=True)
             return []
+
+    @staticmethod
+    def _merge_overlapping_chunks(chunks: List[str], *, max_overlap_chars: int = 8192) -> str:
+        """
+        将按顺序排列的文本块拼接为完整内容，并尝试去除相邻块的重叠部分。
+
+        说明：当前 personaldb 的分块策略会产生 overlap（重复片段），直接 join 会导致内容重复；
+        此处通过检测「已拼接内容的后缀」与「下一块的前缀」的最长匹配来去重。
+        """
+        merged = ""
+        for chunk in chunks:
+            if not chunk:
+                continue
+            if not merged:
+                merged = chunk
+                continue
+
+            max_k = min(len(chunk), len(merged), max_overlap_chars)
+            overlap = 0
+            for k in range(max_k, 0, -1):
+                if merged.endswith(chunk[:k]):
+                    overlap = k
+                    break
+            merged += chunk[overlap:]
+        return merged
+
+    @staticmethod
+    def _extract_chunk_index(doc_id: Any) -> int:
+        if not isinstance(doc_id, str):
+            return 0
+        tail = doc_id.rsplit("_", 1)[-1]
+        return int(tail) if tail.isdigit() else 0
+
+    def get_file_content(self, *, user_id: int | str, file_id: int | str) -> Optional[Dict[str, Any]]:
+        """
+        根据 user_id + file_id 取回该文件的聚合内容（Markdown/纯文本）。
+
+        返回字段：
+        - user_id, file_id, file_name, file_type, file_size, content
+        """
+        user_id_str = str(user_id)
+        file_id_str = str(file_id)
+        collection_name = f"user_{user_id_str}"
+
+        collections = self.list_exist_collections()
+        if collection_name not in collections:
+            return None
+
+        col = self.client.get_collection(collection_name)
+
+        try:
+            result = col.get(where={"file_id": file_id_str})
+        except Exception:
+            # 兼容旧数据：曾以 int 形式写入 file_id
+            if file_id_str.isdigit():
+                result = col.get(where={"file_id": int(file_id_str)})
+            else:
+                raise
+
+        ids = result.get("ids") or []
+        documents = result.get("documents") or []
+        metadatas = result.get("metadatas") or []
+
+        if not ids or not documents:
+            return None
+
+        ordered_docs: List[tuple[int, str]] = []
+        first_meta: Dict[str, Any] | None = None
+
+        for idx, doc_id in enumerate(ids):
+            doc = documents[idx] if idx < len(documents) else None
+            meta = metadatas[idx] if idx < len(metadatas) else None
+
+            if first_meta is None and isinstance(meta, dict):
+                first_meta = meta
+
+            if not isinstance(doc, str):
+                continue
+
+            ordered_docs.append((self._extract_chunk_index(doc_id), doc))
+
+        if not ordered_docs:
+            return None
+
+        ordered_docs.sort(key=lambda it: it[0])
+        content = self._merge_overlapping_chunks([doc for _, doc in ordered_docs])
+
+        meta0 = first_meta or {}
+        file_name = str(meta0.get("file_name") or meta0.get("fileName") or "").strip()
+        file_type = str(meta0.get("file_type") or meta0.get("fileType") or "").strip()
+
+        raw_size = meta0.get("file_size") if meta0.get("file_size") is not None else meta0.get("fileSize")
+        if raw_size is None:
+            try:
+                file_size = len(content.encode("utf-8"))
+            except Exception:
+                file_size = 0
+        else:
+            try:
+                file_size = int(raw_size)
+                if file_size < 0:
+                    file_size = 0
+            except Exception:
+                file_size = 0
+
+        return {
+            "user_id": user_id_str,
+            "file_id": file_id_str,
+            "file_name": file_name,
+            "file_type": file_type,
+            "file_size": file_size,
+            "content": content,
+        }
 
     def list_exist_collections(self):
         """

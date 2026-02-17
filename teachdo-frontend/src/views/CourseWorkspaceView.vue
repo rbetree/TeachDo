@@ -98,7 +98,7 @@ const handleAddUnit = async (payload: { title: string; objectives: string }) => 
       .vectorizeTextToKb({
         userId: currentCourse.id,
         fileId: `gen:${currentCourse.id}:${newUnit.id}:outline`,
-        fileName: `大纲-${newUnit.title}`,
+        fileName: `大纲-${newUnit.title}.md`,
         content: outline.trim(),
         fileType: 'md',
         folderId: 1,

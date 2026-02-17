@@ -1,4 +1,26 @@
-import { ApiError, ensureBackendAvailable, requestOkWrapper } from '@/services/apiClient';
+import { ApiError, ensureBackendAvailable, requestOkWrapper, requestRaw } from '@/services/apiClient';
+
+function parseContentDispositionFilename(value: string | null): string | null {
+  if (!value) return null;
+
+  // RFC 5987: filename*=UTF-8''...
+  const star = value.match(/filename\*\s*=\s*(?:UTF-8''|utf-8'')?([^;]+)/);
+  if (star?.[1]) {
+    const raw = star[1].trim().replace(/^"|"$/g, '');
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  }
+
+  const plain = value.match(/filename\s*=\s*([^;]+)/i);
+  if (plain?.[1]) {
+    return plain[1].trim().replace(/^"|"$/g, '');
+  }
+
+  return null;
+}
 
 /**
  * POST /kb/upload
@@ -9,6 +31,7 @@ export async function kbUpload(input: { userId: string; file: File; folderId?: n
   file_id: string;
   file_name: string;
   file_type: string;
+  file_size: number;
   folder_id: number;
   status: string;
 }> {
@@ -35,6 +58,7 @@ export async function kbListFiles(input: { userId: string; folderId?: number; si
     file_id: string;
     file_name: string;
     file_type: string;
+    file_size: number;
     folder_id: number;
   }>
 > {
@@ -60,6 +84,32 @@ export async function kbDeleteFile(input: { userId: string; fileId: string; sign
   const userId = encodeURIComponent(input.userId);
   const fileId = encodeURIComponent(input.fileId);
   await requestOkWrapper(`/kb/files/${userId}/${fileId}`, { method: 'DELETE' }, { timeoutMs: 12_000, signal: input.signal });
+}
+
+/**
+ * GET /kb/files/{user_id}/{file_id}/export
+ * 导出知识库文件内容（以附件下载返回）。
+ */
+export async function kbExportFile(input: {
+  userId: string;
+  fileId: string;
+  signal?: AbortSignal;
+}): Promise<{ blob: Blob; filename: string | null }> {
+  if (input.signal?.aborted) {
+    throw new ApiError('abort', 'Request aborted.');
+  }
+  await ensureBackendAvailable();
+
+  const userId = encodeURIComponent(input.userId);
+  const fileId = encodeURIComponent(input.fileId);
+  const res = await requestRaw(
+    `/kb/files/${userId}/${fileId}/export`,
+    { method: 'GET' },
+    { timeoutMs: 30_000, signal: input.signal },
+  );
+  const blob = await res.blob();
+  const filename = parseContentDispositionFilename(res.headers.get('content-disposition'));
+  return { blob, filename };
 }
 
 /**
@@ -97,4 +147,3 @@ export async function vectorizeTextToKb(input: {
     { timeoutMs: 20_000, signal: input.signal },
   );
 }
-

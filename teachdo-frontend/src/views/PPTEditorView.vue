@@ -185,7 +185,7 @@ const persistEditorDocument = (courseIdValue: string, unitIdValue: string) => {
     .vectorizeTextToKb({
       userId: courseIdValue,
       fileId: `gen:${courseIdValue}:${unitIdValue}:slides_final`,
-      fileName: `幻灯片最终版-${unit.title}`,
+      fileName: `幻灯片最终版-${unit.title}.md`,
       content: md,
       fileType: 'md',
       folderId: 1,

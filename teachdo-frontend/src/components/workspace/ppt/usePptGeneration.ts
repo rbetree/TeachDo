@@ -171,7 +171,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
         .vectorizeTextToKb({
           userId: params.currentCourse.value.id,
           fileId: `gen:${params.currentCourse.value.id}:${unit.id}:slides`,
-          fileName: `幻灯片-${unit.title}`,
+          fileName: `幻灯片-${unit.title}.md`,
           content: md,
           fileType: 'md',
           folderId: 1,
@@ -211,4 +211,3 @@ export function usePptGeneration(params: UsePptGenerationParams) {
     syncFromUnit,
   };
 }
-

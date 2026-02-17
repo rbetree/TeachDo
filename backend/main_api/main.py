@@ -11,6 +11,7 @@ import logging
 from pydantic import BaseModel
 import uuid
 import httpx
+from urllib.parse import quote
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -443,6 +444,34 @@ def _kb_error(code: str, message: str, status_code: int = 500):
     )
 
 
+def _kb_safe_filename(name: str) -> str:
+    # 避免 header 注入与路径穿越
+    safe = (name or "").strip().replace("\\", "_").replace("/", "_")
+    safe = safe.replace("\r", "_").replace("\n", "_").replace("\t", "_")
+    return safe
+
+
+def _kb_build_export_filename(file_name: str, file_type: str, file_id: str) -> str:
+    base = _kb_safe_filename(file_name) or _kb_safe_filename(file_id) or "export"
+    base = base or "export"
+
+    lower = base.lower()
+    if "." in Path(base).name:
+        # 已带后缀：若不是可读文本后缀，则追加 .md
+        if lower.endswith((".md", ".txt")):
+            return base
+        return f"{base}.md"
+
+    ext = (file_type or "").strip().lower().lstrip(".")
+    if ext in {"md", "markdown"}:
+        return f"{base}.md"
+    if ext in {"txt", "text"}:
+        return f"{base}.txt"
+    if ext and ext not in {"unknown"}:
+        return f"{base}.{ext}.md"
+    return f"{base}.md"
+
+
 def _get_personaldb_url() -> str | None:
     url = os.environ.get("PERSONAL_DB")
     return url.rstrip("/") if url else None
@@ -593,6 +622,7 @@ async def kb_upload(
     file_bytes = await file.read()
     if not file_bytes:
         return _kb_error("KB_EMPTY_FILE", "文件内容为空", status_code=400)
+    file_size = len(file_bytes)
 
     data = {
         "userId": str(user_id),
@@ -630,6 +660,7 @@ async def kb_upload(
             "file_id": str(resolved_file_id),
             "file_name": file.filename or result.get("file_name") or "uploaded_file",
             "file_type": resolved_file_type or result.get("fileType") or "unknown",
+            "file_size": int(file_size),
             "folder_id": int(folder_id),
             "status": "ready",
         }
@@ -670,6 +701,13 @@ async def kb_list_files(user_id: str, folder_id: int | None = Query(None)):
                 continue
             one_folder_id = item.get("folder_id") if item.get("folder_id") is not None else item.get("folderId")
             one_folder_id_int = int(one_folder_id) if one_folder_id is not None else 0
+            one_file_size = item.get("file_size") if item.get("file_size") is not None else item.get("fileSize")
+            try:
+                one_file_size_int = int(one_file_size) if one_file_size is not None else 0
+                if one_file_size_int < 0:
+                    one_file_size_int = 0
+            except Exception:
+                one_file_size_int = 0
             if folder_id is not None and int(folder_id) != one_folder_id_int:
                 continue
             normalized.append(
@@ -678,6 +716,7 @@ async def kb_list_files(user_id: str, folder_id: int | None = Query(None)):
                     "file_id": fid,
                     "file_name": item.get("file_name") or item.get("fileName") or "",
                     "file_type": item.get("file_type") or item.get("fileType") or "",
+                    "file_size": one_file_size_int,
                     "folder_id": one_folder_id_int,
                 }
             )
@@ -685,6 +724,51 @@ async def kb_list_files(user_id: str, folder_id: int | None = Query(None)):
             continue
 
     return _kb_ok(normalized)
+
+
+@app.get("/kb/files/{user_id}/{file_id}/export")
+async def kb_export_file(user_id: str, file_id: str):
+    """
+    KB BFF：导出知识库文件内容（Markdown/纯文本）。
+
+    - 转发 personaldb GET /files/{user_id}/{file_id}/content
+    - 以 attachment 形式返回，便于前端下载保存
+    """
+    personaldb_url = _get_personaldb_url()
+    if not personaldb_url:
+        return _kb_error("KB_NOT_CONFIGURED", "PERSONAL_DB 未配置", status_code=500)
+
+    url = f"{personaldb_url}/files/{user_id}/{file_id}/content"
+    async with httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(20.0)) as client:
+        try:
+            resp = await client.get(url)
+            if resp.status_code == 404:
+                return _kb_error("KB_FILE_NOT_FOUND", "文件不存在", status_code=404)
+            if resp.status_code >= 400:
+                logger.info("[personaldb %s] %s", resp.status_code, resp.text)
+                return _kb_error("KB_EXPORT_FAILED", resp.text, status_code=resp.status_code)
+            payload = resp.json()
+        except Exception as exc:
+            logger.error("kb_export_file 调用 personaldb 失败: %s", exc, exc_info=True)
+            return _kb_error("KB_EXPORT_FAILED", f"personaldb 调用失败: {exc}", status_code=502)
+
+    content = payload.get("content") if isinstance(payload, dict) else None
+    if not isinstance(content, str):
+        return _kb_error("KB_EXPORT_FAILED", "personaldb 返回格式非法（缺少 content）", status_code=502)
+
+    file_name = payload.get("file_name") if isinstance(payload, dict) else ""
+    file_type = payload.get("file_type") if isinstance(payload, dict) else ""
+    export_name = _kb_build_export_filename(str(file_name or ""), str(file_type or ""), file_id)
+    encoded = quote(export_name)
+
+    return Response(
+        content=content.encode("utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded}",
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 class KbVectorizeTextRequest(BaseModel):

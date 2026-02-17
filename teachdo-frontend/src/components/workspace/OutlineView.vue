@@ -89,7 +89,7 @@ const vectorizeOutlineToKb = (content: string) => {
     .vectorizeTextToKb({
       userId: props.currentCourse.id,
       fileId: `gen:${props.currentCourse.id}:${props.currentUnit.id}:outline`,
-      fileName: `大纲-${props.currentUnit.title}`,
+      fileName: `大纲-${props.currentUnit.title}.md`,
       content: trimmed,
       fileType: 'md',
       folderId: 1,

@@ -28,6 +28,7 @@ const searchQuery = ref('');
 const uploadTimers = new Map<string, number>();
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const syncing = ref(false);
+const exportingFileId = ref<string | null>(null);
 
 const files = computed(() => props.currentCourse.kbFiles || []);
 
@@ -44,11 +45,35 @@ const formatSize = (bytes: number) => {
   return `${value.toFixed(1)} ${units[idx]}`;
 };
 
+const normalizeExt = (value: unknown) => String(value ?? '')
+  .trim()
+  .toLowerCase()
+  .replace(/^\./, '');
+
+const getNameExt = (name: string) => {
+  const trimmed = (name || '').trim();
+  const idx = trimmed.lastIndexOf('.');
+  if (idx <= 0 || idx >= trimmed.length - 1) return '';
+  return normalizeExt(trimmed.slice(idx + 1));
+};
+
+const getDisplayType = (file: KBFile) => normalizeExt(file.type) || getNameExt(file.name) || 'unknown';
+
+const getDisplayName = (file: KBFile) => {
+  const name = (file.name || '').trim() || file.id;
+  if (getNameExt(name)) return name;
+  const ext = getDisplayType(file);
+  if (!ext || ext === 'unknown') return name;
+  return `${name}.${ext}`;
+};
+
 const updateFiles = (next: KBFile[]) => {
   emit('updateCourse', { kbFiles: next });
 };
 
-const mergeServerFiles = (serverFiles: Array<{ file_id: string; file_name: string; file_type: string; folder_id: number }>) => {
+const mergeServerFiles = (
+  serverFiles: Array<{ file_id: string; file_name: string; file_type: string; file_size?: number; folder_id: number }>,
+) => {
   const now = new Date();
   const pending = files.value.filter((f) => f.status === 'uploading' || f.status === 'processing');
   const mapped = serverFiles.map((it) => {
@@ -56,7 +81,7 @@ const mergeServerFiles = (serverFiles: Array<{ file_id: string; file_name: strin
     return {
       id: it.file_id,
       name: it.file_name || it.file_id,
-      size: existing?.size || 0,
+      size: typeof it.file_size === 'number' ? it.file_size : existing?.size || 0,
       type: it.file_type || 'unknown',
       status: 'ready' as const,
       uploadedAt: existing?.uploadedAt || now,
@@ -151,6 +176,7 @@ const uploadFile = async (file: File) => {
             ...f,
             id: res.file_id,
             name: res.file_name || file.name,
+            size: typeof res.file_size === 'number' ? res.file_size : f.size,
             type: res.file_type || f.type,
             status: 'ready',
             progress: 100,
@@ -199,6 +225,28 @@ const handleDelete = async (id: string) => {
   } catch (e) {
     console.error(e);
     toast.error(t('kb.toast.delete_failed'));
+  }
+};
+
+const handleExport = async (file: KBFile) => {
+  if (file.status !== 'ready') return;
+  exportingFileId.value = file.id;
+  try {
+    const { blob, filename } = await aiService.kbExportFile({ userId: props.currentCourse.id, fileId: file.id });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename || getDisplayName(file) || 'export.md';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(t('kb.toast.exported'));
+  } catch (e) {
+    console.error(e);
+    toast.error(t('kb.toast.export_failed'));
+  } finally {
+    if (exportingFileId.value === file.id) exportingFileId.value = null;
   }
 };
 
@@ -341,17 +389,17 @@ onBeforeUnmount(() => {
                 :key="file.id"
                 class="px-3 py-3 hover:bg-white/60 dark:hover:bg-slate-900/30 transition-colors"
               >
-                <div class="flex items-start gap-3">
-                  <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 flex items-center justify-center text-indigo-700 dark:text-indigo-200 flex-shrink-0 font-bold text-[10px] uppercase border border-indigo-100 dark:border-indigo-800/40">
-                    {{ file.type }}
-                  </div>
-
-                  <div class="min-w-0 flex-1">
-                    <div class="font-bold text-sm text-slate-800 dark:text-slate-100 truncate" :title="file.name">{{ file.name }}</div>
-                    <div class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
-                      <span class="font-mono">{{ formatSize(file.size || 0) }}</span>
-                      <span class="text-slate-300 dark:text-slate-700">•</span>
-                      <span>{{ new Date(file.uploadedAt).toLocaleDateString() }}</span>
+	                <div class="flex items-start gap-3">
+	                  <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 flex items-center justify-center text-indigo-700 dark:text-indigo-200 flex-shrink-0 font-bold text-[10px] uppercase border border-indigo-100 dark:border-indigo-800/40">
+	                    {{ getDisplayType(file) }}
+	                  </div>
+	
+	                  <div class="min-w-0 flex-1">
+	                    <div class="font-bold text-sm text-slate-800 dark:text-slate-100 truncate" :title="getDisplayName(file)">{{ getDisplayName(file) }}</div>
+	                    <div class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
+	                      <span class="font-mono">{{ formatSize(file.size || 0) }}</span>
+	                      <span class="text-slate-300 dark:text-slate-700">•</span>
+	                      <span>{{ new Date(file.uploadedAt).toLocaleDateString() }}</span>
                     </div>
 
                     <div v-if="file.status === 'uploading'" class="mt-2 space-y-1">
@@ -365,7 +413,7 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
 
-                  <div class="flex flex-col items-end gap-2 flex-shrink-0">
+	                  <div class="flex flex-col items-end gap-2 flex-shrink-0">
                     <span
                       v-if="file.status === 'ready'"
                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300"
@@ -391,19 +439,31 @@ onBeforeUnmount(() => {
                       <LucideIcon name="alert-circle" :size="12" /> {{ t('kb.status.error') }}
                     </span>
 
-                    <button
-                      type="button"
-                      class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-                      :aria-label="t('kb.action.delete')"
-                      :title="t('kb.action.delete')"
-                      :disabled="file.status === 'uploading'"
-                      @click="handleDelete(file.id)"
-                    >
-                      <LucideIcon name="trash-2" :size="16" />
-                    </button>
-                  </div>
-                </div>
-              </div>
+	                    <div class="flex items-center gap-1">
+	                      <button
+	                        type="button"
+	                        class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+	                        :aria-label="t('kb.action.export')"
+	                        :title="t('kb.action.export')"
+	                        :disabled="file.status !== 'ready' || exportingFileId === file.id"
+	                        @click="handleExport(file)"
+	                      >
+	                        <LucideIcon name="download" :size="16" />
+	                      </button>
+	                      <button
+	                        type="button"
+	                        class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+	                        :aria-label="t('kb.action.delete')"
+	                        :title="t('kb.action.delete')"
+	                        :disabled="file.status === 'uploading'"
+	                        @click="handleDelete(file.id)"
+	                      >
+	                        <LucideIcon name="trash-2" :size="16" />
+	                      </button>
+	                    </div>
+	                  </div>
+	                </div>
+	              </div>
             </div>
           </div>
         </template>
@@ -449,15 +509,15 @@ onBeforeUnmount(() => {
                 :key="file.id"
                 class="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
               >
-                <div class="col-span-6 flex items-center gap-3 overflow-hidden">
-                  <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0 font-bold text-xs uppercase">
-                    {{ file.type }}
-                  </div>
-                  <div class="min-w-0">
-                    <div class="font-bold text-sm text-slate-800 dark:text-slate-200 truncate" :title="file.name">{{ file.name }}</div>
-                    <div class="text-xs text-slate-400">{{ new Date(file.uploadedAt).toLocaleDateString() }}</div>
-                  </div>
-                </div>
+	                <div class="col-span-6 flex items-center gap-3 overflow-hidden">
+	                  <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0 font-bold text-xs uppercase">
+	                    {{ getDisplayType(file) }}
+	                  </div>
+	                  <div class="min-w-0">
+	                    <div class="font-bold text-sm text-slate-800 dark:text-slate-200 truncate" :title="getDisplayName(file)">{{ getDisplayName(file) }}</div>
+	                    <div class="text-xs text-slate-400">{{ new Date(file.uploadedAt).toLocaleDateString() }}</div>
+	                  </div>
+	                </div>
                 <div class="col-span-2 text-sm text-slate-500 font-mono">
                   {{ formatSize(file.size || 0) }}
                 </div>
@@ -489,20 +549,34 @@ onBeforeUnmount(() => {
                   >
                     <LucideIcon name="alert-circle" :size="14" /> {{ t('kb.status.error') }}
                   </span>
-                </div>
-                <div class="col-span-1 text-right">
-                  <button
-                    type="button"
-                    class="text-slate-400 hover:text-red-500 transition-colors"
-                    :disabled="file.status === 'uploading'"
-                    @click="handleDelete(file.id)"
-                  >
-                    <LucideIcon name="trash-2" :size="16" :title="t('kb.action.delete')" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+	                </div>
+	                <div class="col-span-1 text-right">
+	                  <div class="inline-flex items-center justify-end gap-2">
+	                    <button
+	                      type="button"
+	                      class="text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-40"
+	                      :aria-label="t('kb.action.export')"
+	                      :title="t('kb.action.export')"
+	                      :disabled="file.status !== 'ready' || exportingFileId === file.id"
+	                      @click="handleExport(file)"
+	                    >
+	                      <LucideIcon name="download" :size="16" />
+	                    </button>
+	                    <button
+	                      type="button"
+	                      class="text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40"
+	                      :aria-label="t('kb.action.delete')"
+	                      :title="t('kb.action.delete')"
+	                      :disabled="file.status === 'uploading'"
+	                      @click="handleDelete(file.id)"
+	                    >
+	                      <LucideIcon name="trash-2" :size="16" />
+	                    </button>
+	                  </div>
+	                </div>
+	              </div>
+	            </div>
+	          </div>
         </template>
       </div>
 

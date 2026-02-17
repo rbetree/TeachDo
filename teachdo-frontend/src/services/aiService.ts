@@ -1,6 +1,6 @@
 import { getTemplateFileData, getTemplates, streamAipptSlides, MOCK_TEMPLATES } from '@/services/ai/pptService';
 import { generateOutline } from '@/services/ai/outlineService';
-import { kbDeleteFile, kbListFiles, kbUpload, vectorizeTextToKb } from '@/services/ai/kbService';
+import { kbDeleteFile, kbExportFile, kbListFiles, kbUpload, vectorizeTextToKb } from '@/services/ai/kbService';
 
 /**
  * AI Service Layer - TeachDo Integration
@@ -22,9 +22,9 @@ export const aiService = {
   kbUpload,
   kbListFiles,
   kbDeleteFile,
+  kbExportFile,
   vectorizeTextToKb,
 };
 
 // 外部仍可按需引用 mock 模板（调试/兜底用）
 export { MOCK_TEMPLATES };
-
