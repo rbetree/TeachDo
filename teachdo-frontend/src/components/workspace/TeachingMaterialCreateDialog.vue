@@ -2,12 +2,10 @@
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import LucideIcon from '@/components/common/LucideIcon.vue';
-import type { KBFile, TeachingMaterial } from '#root/types';
-import KbFilePickerDialog from '@/components/workspace/KbFilePickerDialog.vue';
+import type { TeachingMaterial } from '#root/types';
 
 interface Props {
   open: boolean;
-  kbFiles: KBFile[];
 }
 
 interface Emits {
@@ -29,10 +27,6 @@ const form = reactive({
   objectives: '',
 });
 
-const pickerOpen = ref(false);
-const pickerRestoreFocusEl = ref<HTMLElement | null>(null);
-const selectedKbFileIds = ref<string[]>([]);
-
 const close = () => emit('update:open', false);
 
 const resetForm = () => {
@@ -40,7 +34,6 @@ const resetForm = () => {
   form.subject = '';
   form.description = '';
   form.objectives = '';
-  selectedKbFileIds.value = [];
 };
 
 const creationDisabled = computed(() => !form.title.trim() || !form.subject.trim() || !form.objectives.trim());
@@ -55,19 +48,10 @@ const handleCreate = () => {
     description: form.description.trim(),
     objectives: form.objectives.trim(),
     createdAt: now,
-    kbFileIds: [...selectedKbFileIds.value],
+    kbFileIds: [],
     outlineContent: '',
   };
   emit('create', material);
-};
-
-const openPicker = () => {
-  pickerRestoreFocusEl.value = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  pickerOpen.value = true;
-};
-
-const onPickerConfirm = (ids: string[]) => {
-  selectedKbFileIds.value = ids;
 };
 
 const onKeydown = (e: KeyboardEvent) => {
@@ -188,20 +172,16 @@ onBeforeUnmount(() => {
             </label>
 
             <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/30 p-3">
-              <div class="flex items-center justify-between gap-3">
+              <div class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 text-indigo-600 dark:text-indigo-300 flex items-center justify-center border border-indigo-100 dark:border-indigo-800/40 flex-shrink-0">
+                  <LucideIcon name="database" :size="18" />
+                </div>
                 <div class="min-w-0">
                   <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ t('material.form.kb_files') }}</div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {{ t('material.form.kb_files_desc', { count: selectedKbFileIds.length }) }}
+                  <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                    {{ t('material.form.kb_files_sidebar_tip') }}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  class="px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-200 font-bold text-xs hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
-                  @click="openPicker"
-                >
-                  {{ t('kb.picker.open') }}
-                </button>
               </div>
             </div>
           </div>
@@ -227,15 +207,6 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
   </Teleport>
-
-  <KbFilePickerDialog
-    :open="pickerOpen"
-    :files="props.kbFiles"
-    :selected-ids="selectedKbFileIds"
-    :restore-focus-el="pickerRestoreFocusEl"
-    @update:open="(v) => (pickerOpen = v)"
-    @confirm="onPickerConfirm"
-  />
 </template>
 
 <style scoped>

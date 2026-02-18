@@ -256,7 +256,6 @@ const handleCreate = (material: TeachingMaterial) => {
 
   <TeachingMaterialCreateDialog
     :open="createOpen"
-    :kb-files="store.kbFiles"
     @update:open="(v) => (createOpen = v)"
     @create="handleCreate"
   />
