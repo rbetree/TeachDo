@@ -4,7 +4,10 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import WorkspaceRightPanel from '@/components/workspace/WorkspaceRightPanel.vue';
-import { useAppStore } from '@/stores/appStore';
+import TeachingMaterialDeleteDialog from '@/components/workspace/TeachingMaterialDeleteDialog.vue';
+import { KB_USER_ID, useAppStore } from '@/stores/appStore';
+import { aiService } from '@/services/aiService';
+import { toast } from '@/utils/toast';
 import type { TeachingMaterial } from '#root/types';
 import type { IconName } from '@/components/common/LucideIcon.vue';
 
@@ -19,6 +22,26 @@ const { t } = useI18n();
 const workspaceActionHost = ref<HTMLElement | null>(null);
 
 const currentMaterial = computed(() => store.currentMaterial);
+const deleteOpen = ref(false);
+const deleting = ref(false);
+
+const relatedKbFileIds = computed(() => {
+  const material = currentMaterial.value;
+  if (!material) return [];
+
+  const prefix = `gen:${KB_USER_ID}:${material.id}:`;
+  const ids = store.kbFiles
+    .filter((file) => {
+      const fileId = file.id || '';
+      const folderId = typeof file.folderId === 'number' ? file.folderId : 0;
+      return folderId === 1 && fileId.startsWith(prefix);
+    })
+    .map((file) => file.id);
+
+  return Array.from(new Set(ids));
+});
+
+const relatedKbCount = computed(() => relatedKbFileIds.value.length);
 
 type MaterialTab = 'outline' | 'lesson' | 'ppt';
 
@@ -57,6 +80,60 @@ const tabConfig = computed(
 const goBack = () => {
   router.push({ name: 'workspace' });
 };
+
+const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
+  const material = currentMaterial.value;
+  if (!material) return;
+  if (deleting.value) return;
+
+  deleting.value = true;
+  try {
+    if (payload.deleteKbFiles) {
+      const prefix = `gen:${KB_USER_ID}:${material.id}:`;
+      let fileIds = relatedKbFileIds.value;
+      if (!fileIds.length) {
+        try {
+          const serverFiles = await aiService.kbListFiles({ userId: KB_USER_ID });
+          fileIds = serverFiles
+            .filter((f) => (typeof f.folder_id === 'number' ? f.folder_id : 0) === 1 && (f.file_id || '').startsWith(prefix))
+            .map((f) => f.file_id);
+        } catch (e) {
+          console.warn('知识库文件列表拉取失败（已忽略）', e);
+          fileIds = [];
+        }
+      }
+      if (fileIds.length) {
+        const ids = new Set(fileIds);
+        store.setKbFiles(store.kbFiles.filter((f) => !ids.has(f.id)));
+
+        const results = await Promise.allSettled(
+          fileIds.map((fileId) => aiService.kbDeleteFile({ userId: KB_USER_ID, fileId })),
+        );
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) {
+          toast.error(t('material.delete.toast.kb_partial_failed', { count: failed }));
+        } else {
+          toast.success(t('material.delete.toast.kb_deleted', { count: fileIds.length }));
+        }
+      }
+    }
+
+    const removed = store.removeMaterial(material.id);
+    if (!removed) {
+      toast.error(t('material.delete.toast.failed'));
+      return;
+    }
+
+    deleteOpen.value = false;
+    toast.success(t('material.delete.toast.deleted'));
+    await router.push({ name: 'workspace' });
+  } catch (e) {
+    console.error(e);
+    toast.error(t('material.delete.toast.failed'));
+  } finally {
+    deleting.value = false;
+  }
+};
 </script>
 
 <template>
@@ -79,15 +156,26 @@ const goBack = () => {
               </span>
             </div>
 
-            <button
-              type="button"
-              class="shrink-0 w-11 h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-              :aria-label="t('workspace.back')"
-              :title="t('workspace.back')"
-              @click="goBack"
-            >
-              <LucideIcon name="arrow-left" class="w-5 h-5 mx-auto" />
-            </button>
+            <div class="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                class="w-11 h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 hover:text-red-600 dark:hover:text-red-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                :aria-label="t('material.delete.title')"
+                :title="t('material.delete.title')"
+                @click="deleteOpen = true"
+              >
+                <LucideIcon name="trash-2" class="w-5 h-5 mx-auto" />
+              </button>
+              <button
+                type="button"
+                class="w-11 h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                :aria-label="t('workspace.back')"
+                :title="t('workspace.back')"
+                @click="goBack"
+              >
+                <LucideIcon name="arrow-left" class="w-5 h-5 mx-auto" />
+              </button>
+            </div>
           </div>
 
           <div class="flex flex-col xl:flex-row xl:items-center gap-3">
@@ -156,4 +244,14 @@ const goBack = () => {
     <p>{{ t('workspace.no_course') }}</p>
     <button type="button" class="px-4 py-2 rounded-lg bg-indigo-600 text-white" @click="goBack">{{ t('workspace.back') }}</button>
   </section>
+
+  <TeachingMaterialDeleteDialog
+    v-if="currentMaterial"
+    :open="deleteOpen"
+    :material="currentMaterial"
+    :related-kb-count="relatedKbCount"
+    :loading="deleting"
+    @update:open="(v) => (deleteOpen = v)"
+    @confirm="handleDeleteConfirm"
+  />
 </template>

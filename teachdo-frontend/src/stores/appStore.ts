@@ -1,7 +1,7 @@
 import { defineStore, type Pinia } from 'pinia';
 import type { KBFile, Language, TeachingMaterial } from '#root/types';
 import { setLocale } from '@/i18n';
-import { deleteLegacyIndexedDb, loadAppLarge, loadMaterialLarge, saveAppLarge, saveMaterialLarge } from '@/utils/appStoreIdb';
+import { deleteLegacyIndexedDb, deleteMaterialLarge, loadAppLarge, loadMaterialLarge, saveAppLarge, saveMaterialLarge } from '@/utils/appStoreIdb';
 
 export const KB_USER_ID = 'default_user' as const;
 
@@ -223,6 +223,18 @@ export const useAppStore = defineStore('app', {
       if (!prev) return;
       this.upsertMaterial({ ...prev, ...updates });
     },
+    removeMaterial(materialId: string): boolean {
+      const index = this.materials.findIndex((m) => m.id === materialId);
+      if (index === -1) return false;
+
+      this.materials = this.materials.filter((m) => m.id !== materialId);
+      if (this.currentMaterialId === materialId) {
+        this.currentMaterialId = null;
+      }
+
+      void deleteMaterialLarge(materialId);
+      return true;
+    },
     setKbFiles(files: KBFile[]) {
       this.kbFiles = files;
       void saveAppLarge({ kbFiles: files });
@@ -292,4 +304,3 @@ export const setupAppStore = (pinia: Pinia) => {
 
   return store;
 };
-
