@@ -873,6 +873,38 @@ async def kb_list_files(user_id: str, folder_id: int | None = Query(None)):
                     one_file_size_int = 0
             except Exception:
                 one_file_size_int = 0
+
+            raw_created_at = item.get("created_at") if item.get("created_at") is not None else item.get("createdAt")
+            created_at_ms: int | None = None
+            if raw_created_at is not None:
+                try:
+                    created_at_ms = int(raw_created_at)
+                    if created_at_ms > 0 and created_at_ms < 1_000_000_000_000:
+                        created_at_ms *= 1000
+                except Exception:
+                    created_at_ms = None
+
+            raw_source_type = item.get("source_type") if item.get("source_type") is not None else item.get("sourceType")
+            source_type = str(raw_source_type).strip().lower() if raw_source_type is not None else ""
+            if source_type not in {"upload", "material"}:
+                source_type = ""
+
+            source_material_id = (
+                str(
+                    item.get("source_material_id")
+                    if item.get("source_material_id") is not None
+                    else item.get("sourceMaterialId")
+                    or ""
+                ).strip()
+            )
+            source_material_title = (
+                str(
+                    item.get("source_material_title")
+                    if item.get("source_material_title") is not None
+                    else item.get("sourceMaterialTitle")
+                    or ""
+                ).strip()
+            )
             if folder_id is not None and int(folder_id) != one_folder_id_int:
                 continue
             normalized.append(
@@ -883,6 +915,10 @@ async def kb_list_files(user_id: str, folder_id: int | None = Query(None)):
                     "file_type": item.get("file_type") or item.get("fileType") or "",
                     "file_size": one_file_size_int,
                     "folder_id": one_folder_id_int,
+                    **({"created_at": created_at_ms} if created_at_ms is not None else {}),
+                    **({"source_type": source_type} if source_type else {}),
+                    **({"source_material_id": source_material_id} if source_material_id else {}),
+                    **({"source_material_title": source_material_title} if source_material_title else {}),
                 }
             )
         except Exception:
@@ -943,6 +979,11 @@ class KbVectorizeTextRequest(BaseModel):
     content: str
     file_type: str = "md"
     folder_id: int = 1
+    # KB 元数据（可选）：用于前端展示“时间 + 来源”，不参与检索
+    created_at: int | None = None
+    source_type: str | None = None
+    source_material_id: str | None = None
+    source_material_title: str | None = None
 
 
 @app.post("/kb/vectorize/text")
@@ -966,6 +1007,17 @@ async def kb_vectorize_text(request: KbVectorizeTextRequest):
         "content": request.content,
         "url": "",
     }
+    if request.created_at is not None:
+        try:
+            payload["createdAt"] = int(request.created_at)
+        except Exception:
+            pass
+    if request.source_type:
+        payload["sourceType"] = str(request.source_type)
+    if request.source_material_id:
+        payload["sourceMaterialId"] = str(request.source_material_id)
+    if request.source_material_title:
+        payload["sourceMaterialTitle"] = str(request.source_material_title)
 
     url = f"{personaldb_url}/vectorize/text"
     async with httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(60.0)) as client:

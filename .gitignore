@@ -80,3 +80,4 @@ logs
 
 # 临时脚本（本地用，不提交）
 /scripts/align_opening_report_ppt.py
+/.venv

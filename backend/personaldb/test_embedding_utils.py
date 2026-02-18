@@ -142,3 +142,33 @@ def test_get_file_content_falls_back_to_utf8_length_when_missing_file_size():
     result = chroma.get_file_content(user_id="course-1", file_id="f2")
     assert result is not None
     assert result["file_size"] == len("你好世界".encode("utf-8"))
+
+
+def test_list_files_by_user_returns_created_at_and_source_fields_when_present():
+    chroma = _build_chroma_for_test(
+        user_id="course-1",
+        metadatas=[
+            {
+                "file_id": "gen:default_user:mat-1:outline",
+                "user_id": "course-1",
+                "file_name": "outline.md",
+                "file_type": "md",
+                "folder_id": 1,
+                "url": "",
+                "file_size": 10,
+                "created_at": 1700000000123,
+                "source_type": "material",
+                "source_material_id": "mat-1",
+                "source_material_title": "教学资料A",
+            }
+        ],
+        documents=["hello"],
+    )
+
+    files = chroma.list_files_by_user("course-1")
+    assert len(files) == 1
+    assert files[0]["file_id"] == "gen:default_user:mat-1:outline"
+    assert files[0]["created_at"] == 1700000000123
+    assert files[0]["source_type"] == "material"
+    assert files[0]["source_material_id"] == "mat-1"
+    assert files[0]["source_material_title"] == "教学资料A"

@@ -212,6 +212,10 @@ export function usePptGeneration(params: UsePptGenerationParams) {
           content: md,
           fileType: 'md',
           folderId: 1,
+          createdAt: Date.now(),
+          sourceType: 'material',
+          sourceMaterialId: material.id,
+          sourceMaterialTitle: material.title,
         })
         .catch((e) => console.warn('PPT 产物入库失败（已忽略）', e));
 
@@ -247,4 +251,3 @@ export function usePptGeneration(params: UsePptGenerationParams) {
     syncFromMaterial,
   };
 }
-

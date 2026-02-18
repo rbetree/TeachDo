@@ -11,6 +11,7 @@ import logging
 import asyncio
 import uuid
 import sys
+import time
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request
 from pydantic import BaseModel, ValidationError
 from typing import List, Optional
@@ -144,6 +145,10 @@ def process_and_vectorize_local_file(
     file_type: str,
     url: str,
     folder_id: int,
+    created_at: int | None = None,
+    source_type: str | None = None,
+    source_material_id: str | None = None,
+    source_material_title: str | None = None,
 ):
     """
     从本地文件路径处理文件、进行向量化并存储
@@ -184,6 +189,10 @@ def process_and_vectorize_local_file(
         folder_id=folder_id or 0,
         documents=documents,
         file_size=file_size,
+        created_at=created_at,
+        source_type=source_type,
+        source_material_id=source_material_id,
+        source_material_title=source_material_title,
     )
     logger.info("向量插入成功")
 
@@ -194,6 +203,10 @@ def process_and_vectorize_local_file(
         "fileType": file_type,
         "url": url,
         "folderId": folder_id,
+        **({"created_at": created_at} if created_at is not None else {}),
+        **({"source_type": source_type} if source_type is not None else {}),
+        **({"source_material_id": source_material_id} if source_material_id is not None else {}),
+        **({"source_material_title": source_material_title} if source_material_title is not None else {}),
         "embedding_result": embedding_result,
         "markdown_content": markdown_content
     }
@@ -201,7 +214,18 @@ def process_and_vectorize_local_file(
     return result
 
 
-def process_file_sync(file_name:str, id: int, user_id: int|str, file_type: str, url: str, folder_id: int):
+def process_file_sync(
+    file_name: str,
+    id: int,
+    user_id: int | str,
+    file_type: str,
+    url: str,
+    folder_id: int,
+    created_at: int | None = None,
+    source_type: str | None = None,
+    source_material_id: str | None = None,
+    source_material_title: str | None = None,
+):
     """
     处理文件下载、读取和生成embedding的同步版本
     """
@@ -228,7 +252,19 @@ def process_file_sync(file_name:str, id: int, user_id: int|str, file_type: str, 
             f.write(response.content)
         logger.info(f"文件下载成功: {temp_file_path}")
 
-        return process_and_vectorize_local_file(file_name, temp_file_path, id, user_id, file_type, url, folder_id)
+        return process_and_vectorize_local_file(
+            file_name=file_name,
+            temp_file_path=temp_file_path,
+            id=id,
+            user_id=user_id,
+            file_type=file_type,
+            url=url,
+            folder_id=folder_id,
+            created_at=created_at,
+            source_type=source_type,
+            source_material_id=source_material_id,
+            source_material_title=source_material_title,
+        )
 
     except requests.exceptions.Timeout as e:
         logger.error(f"下载文件超时: {str(e)}", exc_info=True)
@@ -297,6 +333,30 @@ async def upload_and_vectorize_endpoint(request: Request):
         fileType = data.get("fileType")
         url = data.get("url")
 
+        # --- 可观测性元数据（用于前端展示“时间 + 来源”）---
+        # createdAt: 毫秒时间戳；若不传则使用当前时间
+        raw_created_at = data.get("createdAt") if data.get("createdAt") is not None else data.get("created_at")
+        created_at_ms = embedding_utils.ChromaDB._normalize_timestamp_ms(raw_created_at) or int(time.time() * 1000)
+
+        raw_source_type = data.get("sourceType") if data.get("sourceType") is not None else data.get("source_type")
+        source_type_norm = embedding_utils.ChromaDB._normalize_source_type(raw_source_type) or "upload"
+
+        raw_source_material_id = (
+            data.get("sourceMaterialId") if data.get("sourceMaterialId") is not None else data.get("source_material_id")
+        )
+        source_material_id = str(raw_source_material_id).strip() if raw_source_material_id is not None else None
+        if source_material_id == "":
+            source_material_id = None
+
+        raw_source_material_title = (
+            data.get("sourceMaterialTitle")
+            if data.get("sourceMaterialTitle") is not None
+            else data.get("source_material_title")
+        )
+        source_material_title = str(raw_source_material_title).strip() if raw_source_material_title is not None else None
+        if source_material_title == "":
+            source_material_title = None
+
         # 互斥校验
         has_url = bool(url and str(url).strip())
         has_file = upload_file is not None
@@ -326,7 +386,11 @@ async def upload_and_vectorize_endpoint(request: Request):
                 user_id=userId,
                 file_type=fileType,
                 url="",  # 直接上传无 URL
-                folder_id=folderId
+                folder_id=folderId,
+                created_at=created_at_ms,
+                source_type=source_type_norm,
+                source_material_id=source_material_id,
+                source_material_title=source_material_title,
             )
 
         # 分支：URL 下载处理
@@ -338,7 +402,11 @@ async def upload_and_vectorize_endpoint(request: Request):
                 user_id=userId,
                 file_type=fileType,
                 url=url,
-                folder_id=folderId
+                folder_id=folderId,
+                created_at=created_at_ms,
+                source_type=source_type_norm,
+                source_material_id=source_material_id,
+                source_material_title=source_material_title,
             )
 
     except HTTPException:
@@ -366,6 +434,13 @@ class TextVectorizeBody(BaseModel):
     fileType: Optional[str] = None
     url: Optional[str] = ""
     folderId: Optional[int] = 0
+    # --- KB 元数据（可选）---
+    # 说明：这些字段用于前端展示“时间 + 来源”，不参与向量检索。
+    # createdAt 约定为毫秒时间戳；若不传则由服务端在落库时填充当前时间。
+    createdAt: Optional[int] = None
+    sourceType: Optional[str] = None
+    sourceMaterialId: Optional[str] = None
+    sourceMaterialTitle: Optional[str] = None
 
 
 def _chunk_text(text: str, max_chars: int = 1200, overlap: int = 200) -> List[str]:
@@ -387,7 +462,11 @@ def process_text_content(
     user_id: str = "0",
     file_type: Optional[str] = None,
     folder_id: int = 0,
-    url: str = ""
+    url: str = "",
+    created_at: int | None = None,
+    source_type: str | None = None,
+    source_material_id: str | None = None,
+    source_material_title: str | None = None,
 ):
     """
     直接对纯文本进行向量化并落库（Chroma）。
@@ -420,6 +499,10 @@ def process_text_content(
         folder_id=folder_id or 0,
         documents=documents,
         file_size=file_size,
+        created_at=created_at,
+        source_type=source_type,
+        source_material_id=source_material_id,
+        source_material_title=source_material_title,
     )
 
     result = {
@@ -429,6 +512,10 @@ def process_text_content(
         "fileType": file_type or "unknown",
         "url": url or "",
         "folderId": folder_id or 0,
+        **({"created_at": created_at} if created_at is not None else {}),
+        **({"source_type": source_type} if source_type is not None else {}),
+        **({"source_material_id": source_material_id} if source_material_id is not None else {}),
+        **({"source_material_title": source_material_title} if source_material_title is not None else {}),
         "embedding_result": embedding_result
     }
     logger.info("纯文本向量化完成")
@@ -447,6 +534,16 @@ def vectorize_text_endpoint(body: TextVectorizeBody):
         logger.info(
             f"收到文本向量化请求: fileId={body.fileId}, fileName={body.fileName}, userId={body.userId}"
         )
+        kwargs = {}
+        if body.createdAt is not None:
+            kwargs["created_at"] = body.createdAt
+        if body.sourceType:
+            kwargs["source_type"] = body.sourceType
+        if body.sourceMaterialId:
+            kwargs["source_material_id"] = body.sourceMaterialId
+        if body.sourceMaterialTitle:
+            kwargs["source_material_title"] = body.sourceMaterialTitle
+
         return process_text_content(
             file_name=body.fileName,
             text=body.content,
@@ -454,7 +551,8 @@ def vectorize_text_endpoint(body: TextVectorizeBody):
             user_id=body.userId or "0",
             file_type=body.fileType,
             folder_id=body.folderId or 0,
-            url=body.url or ""
+            url=body.url or "",
+            **kwargs,
         )
     except Exception as e:
         logger.error(f"文本向量化失败: {str(e)}", exc_info=True)

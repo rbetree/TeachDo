@@ -54,6 +54,8 @@ def personaldb_stub() -> Dict[str, Any]:
                 "file_type": "txt",
                 "file_size": 5,
                 "folder_id": 0,
+                "created_at": 1700000000000,
+                "source_type": "upload",
             },
             # 兼容 camelCase 字段
             {
@@ -63,6 +65,10 @@ def personaldb_stub() -> Dict[str, Any]:
                 "fileType": "md",
                 "fileSize": 12,
                 "folderId": 1,
+                "createdAt": 1700000001000,
+                "sourceType": "material",
+                "sourceMaterialId": "mat-1",
+                "sourceMaterialTitle": "示例教学资料",
             },
             # 无效项应被 main_api 侧跳过
             "invalid",
@@ -174,18 +180,26 @@ def test_kb_bff_happy_path_with_personaldb_stub(main_api_client, personaldb_stub
     by_id = {it["file_id"]: it for it in items}
     assert by_id["upload:test:fid0"]["file_size"] == 5
     assert by_id["gen:test:fid1"]["file_size"] == 12
+    assert by_id["upload:test:fid0"]["created_at"] == 1700000000000
+    assert by_id["upload:test:fid0"]["source_type"] == "upload"
+    assert by_id["gen:test:fid1"]["created_at"] == 1700000001000
+    assert by_id["gen:test:fid1"]["source_type"] == "material"
+    assert by_id["gen:test:fid1"]["source_material_id"] == "mat-1"
+    assert by_id["gen:test:fid1"]["source_material_title"] == "示例教学资料"
 
     resp = main_api_client.get("/kb/files/course-1?folder_id=0")
     assert resp.status_code == 200
     items = resp.json()["data"]
     assert [it["file_id"] for it in items] == ["upload:test:fid0"]
     assert items[0]["file_size"] == 5
+    assert items[0]["source_type"] == "upload"
 
     resp = main_api_client.get("/kb/files/course-1?folder_id=1")
     assert resp.status_code == 200
     items = resp.json()["data"]
     assert [it["file_id"] for it in items] == ["gen:test:fid1"]
     assert items[0]["file_size"] == 12
+    assert items[0]["source_type"] == "material"
 
     # 3) vectorize/text
     resp = main_api_client.post(

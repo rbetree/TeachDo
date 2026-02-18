@@ -60,6 +60,10 @@ export async function kbListFiles(input: { userId: string; folderId?: number; si
     file_type: string;
     file_size: number;
     folder_id: number;
+    created_at?: number;
+    source_type?: 'upload' | 'material';
+    source_material_id?: string;
+    source_material_title?: string;
   }>
 > {
   if (input.signal?.aborted) {
@@ -123,6 +127,10 @@ export async function vectorizeTextToKb(input: {
   content: string;
   fileType?: string;
   folderId?: number;
+  createdAt?: number;
+  sourceType?: 'upload' | 'material';
+  sourceMaterialId?: string;
+  sourceMaterialTitle?: string;
   signal?: AbortSignal;
 }): Promise<void> {
   if (input.signal?.aborted) {
@@ -142,6 +150,10 @@ export async function vectorizeTextToKb(input: {
         content: input.content,
         file_type: input.fileType ?? 'md',
         folder_id: input.folderId ?? 1,
+        ...(typeof input.createdAt === 'number' ? { created_at: input.createdAt } : {}),
+        ...(input.sourceType ? { source_type: input.sourceType } : {}),
+        ...(input.sourceMaterialId ? { source_material_id: input.sourceMaterialId } : {}),
+        ...(input.sourceMaterialTitle ? { source_material_title: input.sourceMaterialTitle } : {}),
       }),
     },
     { timeoutMs: 20_000, signal: input.signal },

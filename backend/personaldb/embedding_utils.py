@@ -135,6 +135,55 @@ class ChromaDB(object):
         db_dir_path.mkdir(parents=True, exist_ok=True)
         self.client = chromadb.PersistentClient(path=str(db_dir_path), settings=Settings(anonymized_telemetry=False))
 
+    @staticmethod
+    def _normalize_timestamp_ms(value: Any) -> int | None:
+        """
+        归一化时间戳为「毫秒」级整数。
+
+        - 支持 int/float/str
+        - 若为秒级（< 1e12），自动乘以 1000
+        """
+        if value is None:
+            return None
+        try:
+            ts = int(float(value))
+        except Exception:
+            return None
+        if ts <= 0:
+            return None
+        # 秒级时间戳通常为 10 位；毫秒为 13 位
+        if ts < 1_000_000_000_000:
+            ts *= 1000
+        return ts
+
+    @staticmethod
+    def _normalize_source_type(value: Any) -> str | None:
+        """
+        归一化来源类型。
+        - 目前仅支持：upload/material
+        """
+        if value is None:
+            return None
+        s = str(value).strip().lower()
+        if s in {"upload", "material"}:
+            return s
+        return None
+
+    @staticmethod
+    def _try_parse_material_id_from_gen_file_id(file_id: Any) -> str | None:
+        """
+        从 file_id 解析 materialId（约定：gen:{user}:{materialId}:{kind}）。
+        """
+        if not isinstance(file_id, str):
+            return None
+        if not file_id.startswith("gen:"):
+            return None
+        parts = file_id.split(":")
+        if len(parts) < 4:
+            return None
+        material_id = parts[2].strip()
+        return material_id or None
+
     def delete_one_collection(self, collection):
         """
         删除1个collection
@@ -338,6 +387,10 @@ class ChromaDB(object):
         folder_id: int,
         documents: List[str],
         file_size: int | None = None,
+        created_at: int | None = None,
+        source_type: str | None = None,
+        source_material_id: str | None = None,
+        source_material_title: str | None = None,
     ):
         """
         将文件内容插入到ChromaDB中，生成并存储embedding向量
@@ -349,6 +402,10 @@ class ChromaDB(object):
             url (str): 文件URL
             folder_id (int): 文件夹ID
             file_size (int | None): 文件大小（字节）。用于前端展示与溯源，不参与向量检索。
+            created_at (int | None): 创建时间（毫秒时间戳）。若不传则使用当前时间。
+            source_type (str | None): 来源类型（upload/material）。若不传则按 file_id/folder_id 推断。
+            source_material_id (str | None): 来源教学资料 ID（source_type=material 时可用）。
+            source_material_title (str | None): 来源教学资料标题（可选，用于前端展示）。
             documents (List[str]): 文件内容列表
         Returns:
             dict: 包含embedding结果
@@ -372,18 +429,47 @@ class ChromaDB(object):
                         resolved_file_size = 0
                 except Exception:
                     resolved_file_size = None
-            meta = [
-                {
-                    "file_name": file_name,
-                    "file_id": file_id_str,
-                    "user_id": user_id_str,
-                    "folder_id": int(folder_id or 0),
-                    "url": url,
-                    "file_type": file_type,
-                    **({"file_size": resolved_file_size} if resolved_file_size is not None else {}),
-                }
-                for _ in documents
-            ]
+
+            resolved_created_at = self._normalize_timestamp_ms(created_at) or int(time.time() * 1000)
+
+            resolved_source_type = self._normalize_source_type(source_type)
+            if resolved_source_type is None:
+                try:
+                    folder_id_int = int(folder_id) if folder_id is not None else 0
+                except Exception:
+                    folder_id_int = 0
+                if file_id_str.startswith("upload:") or folder_id_int == 0:
+                    resolved_source_type = "upload"
+                elif file_id_str.startswith("gen:") or folder_id_int == 1:
+                    resolved_source_type = "material"
+
+            resolved_source_material_id = (str(source_material_id).strip() if source_material_id is not None else "") or None
+            if resolved_source_material_id is None and resolved_source_type == "material":
+                resolved_source_material_id = self._try_parse_material_id_from_gen_file_id(file_id_str)
+
+            resolved_source_material_title = (
+                (str(source_material_title).strip() if source_material_title is not None else "") or None
+            )
+
+            base_meta: Dict[str, Any] = {
+                "file_name": file_name,
+                "file_id": file_id_str,
+                "user_id": user_id_str,
+                "folder_id": int(folder_id or 0),
+                "url": url,
+                "file_type": file_type,
+                "created_at": resolved_created_at,
+            }
+            if resolved_file_size is not None:
+                base_meta["file_size"] = resolved_file_size
+            if resolved_source_type is not None:
+                base_meta["source_type"] = resolved_source_type
+            if resolved_source_material_id is not None:
+                base_meta["source_material_id"] = resolved_source_material_id
+            if resolved_source_material_title is not None:
+                base_meta["source_material_title"] = resolved_source_material_title
+
+            meta = [base_meta.copy() for _ in documents]
             ids = [f"{file_id_str}_{i}" for i in range(len(documents))]
             col = self.client.get_or_create_collection(collection_name, metadata={"hnsw:space": "cosine"})
             col.add(
@@ -467,6 +553,39 @@ class ChromaDB(object):
                                 "user_id": meta.get('user_id'),
                             }
 
+                        raw_created_at = (
+                            meta.get("created_at") if meta.get("created_at") is not None else meta.get("createdAt")
+                        )
+                        created_at_ms = self._normalize_timestamp_ms(raw_created_at)
+                        if created_at_ms is not None:
+                            prev = unique_files[file_id_key].get("created_at")
+                            if prev is None or int(created_at_ms) > int(prev):
+                                unique_files[file_id_key]["created_at"] = int(created_at_ms)
+
+                        source_type_norm = self._normalize_source_type(meta.get("source_type") or meta.get("sourceType"))
+                        if source_type_norm:
+                            unique_files[file_id_key]["source_type"] = source_type_norm
+
+                        raw_source_material_id = (
+                            meta.get("source_material_id")
+                            if meta.get("source_material_id") is not None
+                            else meta.get("sourceMaterialId")
+                        )
+                        if raw_source_material_id is not None:
+                            sid = str(raw_source_material_id).strip()
+                            if sid:
+                                unique_files[file_id_key]["source_material_id"] = sid
+
+                        raw_source_material_title = (
+                            meta.get("source_material_title")
+                            if meta.get("source_material_title") is not None
+                            else meta.get("sourceMaterialTitle")
+                        )
+                        if raw_source_material_title is not None:
+                            title = str(raw_source_material_title).strip()
+                            if title:
+                                unique_files[file_id_key]["source_material_title"] = title
+
                         # 优先使用显式存储的 file_size（更准确）
                         raw_size = meta.get("file_size") if meta.get("file_size") is not None else meta.get("fileSize")
                         if raw_size is not None:
@@ -484,6 +603,23 @@ class ChromaDB(object):
                             doc = documents[idx] if idx < len(documents) else None
                             if isinstance(doc, str) and doc:
                                 approx_sizes[file_id_key] = approx_sizes.get(file_id_key, 0) + len(doc.encode("utf-8"))
+
+            # 补齐缺失的 source 信息（仅对旧数据兜底）
+            for fid, info in unique_files.items():
+                if not info.get("source_type"):
+                    try:
+                        folder_id_int = int(info.get("folder_id")) if info.get("folder_id") is not None else 0
+                    except Exception:
+                        folder_id_int = 0
+                    if fid.startswith("upload:") or folder_id_int == 0:
+                        info["source_type"] = "upload"
+                    elif fid.startswith("gen:") or folder_id_int == 1:
+                        info["source_type"] = "material"
+
+                if info.get("source_type") == "material" and not info.get("source_material_id"):
+                    parsed = self._try_parse_material_id_from_gen_file_id(fid)
+                    if parsed:
+                        info["source_material_id"] = parsed
 
             # 补齐缺失的 file_size（仅对旧数据生效）
             for fid, size in approx_sizes.items():
@@ -586,6 +722,27 @@ class ChromaDB(object):
         file_name = str(meta0.get("file_name") or meta0.get("fileName") or "").strip()
         file_type = str(meta0.get("file_type") or meta0.get("fileType") or "").strip()
 
+        created_at_ms = self._normalize_timestamp_ms(
+            meta0.get("created_at") if meta0.get("created_at") is not None else meta0.get("createdAt")
+        )
+
+        source_type_norm = self._normalize_source_type(meta0.get("source_type") or meta0.get("sourceType"))
+        if source_type_norm is None:
+            if file_id_str.startswith("upload:"):
+                source_type_norm = "upload"
+            elif file_id_str.startswith("gen:"):
+                source_type_norm = "material"
+
+        source_material_id = (
+            str(meta0.get("source_material_id") or meta0.get("sourceMaterialId") or "").strip() or None
+        )
+        if source_material_id is None and source_type_norm == "material":
+            source_material_id = self._try_parse_material_id_from_gen_file_id(file_id_str)
+
+        source_material_title = (
+            str(meta0.get("source_material_title") or meta0.get("sourceMaterialTitle") or "").strip() or None
+        )
+
         raw_size = meta0.get("file_size") if meta0.get("file_size") is not None else meta0.get("fileSize")
         if raw_size is None:
             try:
@@ -607,6 +764,10 @@ class ChromaDB(object):
             "file_type": file_type,
             "file_size": file_size,
             "content": content,
+            **({"created_at": int(created_at_ms)} if created_at_ms is not None else {}),
+            **({"source_type": source_type_norm} if source_type_norm is not None else {}),
+            **({"source_material_id": source_material_id} if source_material_id is not None else {}),
+            **({"source_material_title": source_material_title} if source_material_title is not None else {}),
         }
 
     def list_exist_collections(self):

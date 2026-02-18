@@ -79,6 +79,9 @@ function serializeKbFiles(list: KBFile[] | undefined): PersistedKBFile[] {
     progress: typeof file.progress === 'number' ? file.progress : undefined,
     uploadedAt: toTimestamp((file as any).uploadedAt),
     folderId: typeof file.folderId === 'number' ? file.folderId : 0,
+    sourceType: file.sourceType,
+    sourceMaterialId: file.sourceMaterialId,
+    sourceMaterialTitle: file.sourceMaterialTitle,
   }));
 }
 
@@ -93,6 +96,9 @@ function deserializeKbFiles(list: PersistedKBFile[] | undefined): KBFile[] {
     progress: typeof file.progress === 'number' ? file.progress : undefined,
     uploadedAt: new Date(file.uploadedAt),
     folderId: typeof file.folderId === 'number' ? file.folderId : 0,
+    sourceType: file.sourceType,
+    sourceMaterialId: file.sourceMaterialId,
+    sourceMaterialTitle: file.sourceMaterialTitle,
   }));
 }
 
@@ -183,4 +189,3 @@ export async function deleteMaterialLarge(materialId: string): Promise<boolean> 
     return false;
   }
 }
-

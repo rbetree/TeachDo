@@ -178,6 +178,10 @@ const persistEditorDocument = (materialIdValue: string) => {
       content: md,
       fileType: 'md',
       folderId: 1,
+      createdAt: Date.now(),
+      sourceType: 'material',
+      sourceMaterialId: materialIdValue,
+      sourceMaterialTitle: material.title,
     })
     .catch((e) => console.warn('slides_final 产物入库失败（已忽略）', e));
 };

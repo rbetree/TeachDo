@@ -97,6 +97,10 @@ const vectorizeOutlineToKb = (content: string) => {
       content: trimmed,
       fileType: 'md',
       folderId: 1,
+      createdAt: Date.now(),
+      sourceType: 'material',
+      sourceMaterialId: props.currentMaterial.id,
+      sourceMaterialTitle: props.currentMaterial.title,
     })
     .catch((e) => console.warn('大纲入库失败（已忽略）', e));
 };

@@ -55,37 +55,109 @@ const getNameExt = (name: string) => {
 
 const getDisplayType = (file: KBFile) => normalizeExt(file.type) || getNameExt(file.name) || 'unknown';
 
-const getDisplayName = (file: KBFile) => {
-  const name = (file.name || '').trim() || file.id;
-  if (getNameExt(name)) return name;
-  const ext = getDisplayType(file);
-  if (!ext || ext === 'unknown') return name;
-  return `${name}.${ext}`;
-};
+	const getDisplayName = (file: KBFile) => {
+	  const name = (file.name || '').trim() || file.id;
+	  if (getNameExt(name)) return name;
+	  const ext = getDisplayType(file);
+	  if (!ext || ext === 'unknown') return name;
+	  return `${name}.${ext}`;
+	};
+
+	const normalizeTimestampMs = (value: unknown): number | null => {
+	  const asNumber = typeof value === 'number' ? value : Number.NaN;
+	  if (!Number.isFinite(asNumber) || asNumber <= 0) return null;
+	  // 兼容秒级时间戳
+	  return asNumber < 1_000_000_000_000 ? Math.floor(asNumber * 1000) : Math.floor(asNumber);
+	};
+
+	const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+	  year: 'numeric',
+	  month: '2-digit',
+	  day: '2-digit',
+	  hour: '2-digit',
+	  minute: '2-digit',
+	});
+
+	const formatDateTime = (value: Date | unknown) => {
+	  const date = value instanceof Date ? value : new Date(String(value));
+	  if (Number.isNaN(date.getTime())) return '';
+	  return dateTimeFormatter.format(date);
+	};
+
+	const normalizeSourceType = (value: unknown): KBFile['sourceType'] | null => {
+	  const s = String(value ?? '').trim().toLowerCase();
+	  if (s === 'upload' || s === 'material') return s;
+	  return null;
+	};
+
+	const parseMaterialIdFromGenFileId = (fileId: string): string | null => {
+	  if (!fileId.startsWith('gen:')) return null;
+	  const parts = fileId.split(':');
+	  if (parts.length < 4) return null;
+	  return parts[2] || null;
+	};
+
+	const getSourceLabel = (file: KBFile) => {
+	  const sourceType = file.sourceType;
+	  if (sourceType === 'upload') return t('kb.source.upload');
+	  if (sourceType === 'material') {
+	    const materialId = file.sourceMaterialId || parseMaterialIdFromGenFileId(file.id) || '';
+	    const title =
+	      file.sourceMaterialTitle ||
+	      (materialId ? store.materials.find((m) => m.id === materialId)?.title : undefined) ||
+	      '';
+	    if (title) return t('kb.source.material', { title });
+	    if (materialId) return t('kb.source.material_id', { id: materialId });
+	    return t('kb.source.material_unknown');
+	  }
+	  return t('kb.source.unknown');
+	};
 
 const updateFiles = (next: KBFile[]) => {
   store.setKbFiles(next);
 };
 
-const mergeServerFiles = (
-  serverFiles: Array<{ file_id: string; file_name: string; file_type: string; file_size?: number; folder_id: number }>,
-) => {
-  const now = new Date();
-  const pending = files.value.filter((f) => f.status === 'uploading' || f.status === 'processing');
-  const mapped = serverFiles.map((it) => {
-    const existing = files.value.find((f) => f.id === it.file_id);
-    return {
-      id: it.file_id,
-      name: it.file_name || it.file_id,
-      size: typeof it.file_size === 'number' ? it.file_size : existing?.size || 0,
-      type: it.file_type || 'unknown',
-      status: 'ready' as const,
-      uploadedAt: existing?.uploadedAt || now,
-      folderId: typeof it.folder_id === 'number' ? it.folder_id : 0,
-    } satisfies KBFile;
-  });
-  updateFiles([...pending, ...mapped]);
-};
+	const mergeServerFiles = (
+	  serverFiles: Array<{
+	    file_id: string;
+	    file_name: string;
+	    file_type: string;
+	    file_size?: number;
+	    folder_id: number;
+	    created_at?: number;
+	    source_type?: 'upload' | 'material';
+	    source_material_id?: string;
+	    source_material_title?: string;
+	  }>,
+	) => {
+	  const now = new Date();
+	  const pending = files.value.filter((f) => f.status === 'uploading' || f.status === 'processing');
+	  const mapped = serverFiles.map((it) => {
+	    const existing = files.value.find((f) => f.id === it.file_id);
+	    const createdAtMs = normalizeTimestampMs(it.created_at);
+	    const inferredSourceType =
+	      normalizeSourceType(it.source_type) ||
+	      (it.file_id.startsWith('upload:') || it.folder_id === 0 ? 'upload' : it.folder_id === 1 || it.file_id.startsWith('gen:') ? 'material' : null);
+	    const inferredMaterialId =
+	      (typeof it.source_material_id === 'string' && it.source_material_id.trim() ? it.source_material_id.trim() : null) ||
+	      (inferredSourceType === 'material' ? parseMaterialIdFromGenFileId(it.file_id) : null);
+	    return {
+	      id: it.file_id,
+	      name: it.file_name || it.file_id,
+	      size: typeof it.file_size === 'number' ? it.file_size : existing?.size || 0,
+	      type: it.file_type || 'unknown',
+	      status: 'ready' as const,
+	      uploadedAt: createdAtMs ? new Date(createdAtMs) : existing?.uploadedAt || now,
+	      folderId: typeof it.folder_id === 'number' ? it.folder_id : 0,
+	      sourceType: inferredSourceType || existing?.sourceType,
+	      sourceMaterialId: inferredMaterialId || existing?.sourceMaterialId,
+	      sourceMaterialTitle:
+	        (typeof it.source_material_title === 'string' && it.source_material_title.trim() ? it.source_material_title.trim() : null) ||
+	        existing?.sourceMaterialTitle,
+	    } satisfies KBFile;
+	  });
+	  updateFiles([...pending, ...mapped]);
+	};
 
 const refreshFromBackend = async () => {
   syncing.value = true;
@@ -380,11 +452,13 @@ onBeforeUnmount(() => {
 	
 	                  <div class="min-w-0 flex-1">
 	                    <div class="font-bold text-sm text-slate-800 dark:text-slate-100 truncate" :title="getDisplayName(file)">{{ getDisplayName(file) }}</div>
-	                    <div class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
-	                      <span class="font-mono">{{ formatSize(file.size || 0) }}</span>
-	                      <span class="text-slate-300 dark:text-slate-700">•</span>
-	                      <span>{{ new Date(file.uploadedAt).toLocaleDateString() }}</span>
-                    </div>
+		                    <div class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
+		                      <span class="font-mono">{{ formatSize(file.size || 0) }}</span>
+		                      <span class="text-slate-300 dark:text-slate-700">•</span>
+		                      <span>{{ formatDateTime(file.uploadedAt) }}</span>
+		                      <span class="text-slate-300 dark:text-slate-700">•</span>
+		                      <span>{{ getSourceLabel(file) }}</span>
+	                    </div>
 
                     <div v-if="file.status === 'uploading'" class="mt-2 space-y-1">
                       <div class="flex justify-between text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
@@ -498,10 +572,10 @@ onBeforeUnmount(() => {
 	                    {{ getDisplayType(file) }}
 	                  </div>
 	                  <div class="min-w-0">
-	                    <div class="font-bold text-sm text-slate-800 dark:text-slate-200 truncate" :title="getDisplayName(file)">{{ getDisplayName(file) }}</div>
-	                    <div class="text-xs text-slate-400">{{ new Date(file.uploadedAt).toLocaleDateString() }}</div>
-	                  </div>
-	                </div>
+		                    <div class="font-bold text-sm text-slate-800 dark:text-slate-200 truncate" :title="getDisplayName(file)">{{ getDisplayName(file) }}</div>
+		                    <div class="text-xs text-slate-400">{{ formatDateTime(file.uploadedAt) }} · {{ getSourceLabel(file) }}</div>
+		                  </div>
+		                </div>
                 <div class="col-span-2 text-sm text-slate-500 font-mono">
                   {{ formatSize(file.size || 0) }}
                 </div>

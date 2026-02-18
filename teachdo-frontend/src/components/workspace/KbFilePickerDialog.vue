@@ -43,6 +43,26 @@ const getFolderLabel = (folderId: number) => {
   return `${t('kb.folder.unknown')}(${folderId})`;
 };
 
+const normalizeTimestampMs = (value: unknown): number | null => {
+  const asNumber = typeof value === 'number' ? value : Number.NaN;
+  if (!Number.isFinite(asNumber) || asNumber <= 0) return null;
+  // 兼容秒级时间戳
+  return asNumber < 1_000_000_000_000 ? Math.floor(asNumber * 1000) : Math.floor(asNumber);
+};
+
+const normalizeSourceType = (value: unknown): KBFile['sourceType'] | null => {
+  const s = String(value ?? '').trim().toLowerCase();
+  if (s === 'upload' || s === 'material') return s;
+  return null;
+};
+
+const parseMaterialIdFromGenFileId = (fileId: string): string | null => {
+  if (!fileId.startsWith('gen:')) return null;
+  const parts = fileId.split(':');
+  if (parts.length < 4) return null;
+  return parts[2] || null;
+};
+
 const files = computed(() => (store.kbFiles || props.files || []));
 const readyFiles = computed(() => files.value.filter((f) => f.status === 'ready'));
 
@@ -82,20 +102,42 @@ const updateFiles = (next: KBFile[]) => {
 };
 
 const mergeServerFiles = (
-  serverFiles: Array<{ file_id: string; file_name: string; file_type: string; file_size?: number; folder_id: number }>,
+  serverFiles: Array<{
+    file_id: string;
+    file_name: string;
+    file_type: string;
+    file_size?: number;
+    folder_id: number;
+    created_at?: number;
+    source_type?: 'upload' | 'material';
+    source_material_id?: string;
+    source_material_title?: string;
+  }>,
 ) => {
   const now = new Date();
   const pending = files.value.filter((f) => f.status === 'uploading' || f.status === 'processing');
   const mapped = serverFiles.map((it) => {
     const existing = files.value.find((f) => f.id === it.file_id);
+    const createdAtMs = normalizeTimestampMs(it.created_at);
+    const inferredSourceType =
+      normalizeSourceType(it.source_type) ||
+      (it.file_id.startsWith('upload:') || it.folder_id === 0 ? 'upload' : it.folder_id === 1 || it.file_id.startsWith('gen:') ? 'material' : null);
+    const inferredMaterialId =
+      (typeof it.source_material_id === 'string' && it.source_material_id.trim() ? it.source_material_id.trim() : null) ||
+      (inferredSourceType === 'material' ? parseMaterialIdFromGenFileId(it.file_id) : null);
     return {
       id: it.file_id,
       name: it.file_name || it.file_id,
       size: typeof it.file_size === 'number' ? it.file_size : existing?.size || 0,
       type: it.file_type || 'unknown',
       status: 'ready' as const,
-      uploadedAt: existing?.uploadedAt || now,
+      uploadedAt: createdAtMs ? new Date(createdAtMs) : existing?.uploadedAt || now,
       folderId: typeof it.folder_id === 'number' ? it.folder_id : 0,
+      sourceType: inferredSourceType || existing?.sourceType,
+      sourceMaterialId: inferredMaterialId || existing?.sourceMaterialId,
+      sourceMaterialTitle:
+        (typeof it.source_material_title === 'string' && it.source_material_title.trim() ? it.source_material_title.trim() : null) ||
+        existing?.sourceMaterialTitle,
     } satisfies KBFile;
   });
   updateFiles([...pending, ...mapped]);

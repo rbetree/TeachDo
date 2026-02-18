@@ -18,6 +18,14 @@ export interface KBFile {
   uploadedAt: Date;
   progress?: number;
   folderId?: number;
+  /**
+   * 来源类型（用于知识库列表展示溯源信息）
+   * - upload: 用户上传
+   * - material: 由某个教学资料生成
+   */
+  sourceType?: 'upload' | 'material';
+  sourceMaterialId?: string;
+  sourceMaterialTitle?: string;
 }
 
 interface LessonPlanSection {
