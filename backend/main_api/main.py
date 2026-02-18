@@ -205,6 +205,7 @@ async def aippt_outline_unified(
     user_id: str = Form("default_user"),
     folder_id: int | str = Form(0),
     file_type: str | None = Form(None),
+    kb_file_ids: list[str] | None = Form(None),  # 可选：限定从哪些 KB 文件检索参考片段
 ):
     """
     统一的大纲生成 API，支持两种模式：
@@ -212,20 +213,20 @@ async def aippt_outline_unified(
     - 文档模式：传 file，解析文档后生成大纲
     - 混合模式：同时传 content 和 file，以文档为主，主题作为补充上下文
     """
-    has_content = content and content.strip()
+    content_text = (content or "").strip()
+    has_content = bool(content_text)
     has_file = file is not None
 
     # 主题是必填的
     if not has_content:
         raise HTTPException(status_code=400, detail="请提供主题")
 
-    prompt = ""
     file_content = ""
+    personaldb_url = _get_personaldb_url()
 
     # 如果有文件，先解析文件内容
     if has_file:
-        personaldb_api_url = os.getenv("PERSONAL_DB")
-        if not personaldb_api_url:
+        if not personaldb_url:
             raise HTTPException(status_code=500, detail="PERSONAL_DB 未配置")
 
         # 生成 fileId
@@ -258,16 +259,15 @@ async def aippt_outline_unified(
             )
         }
 
-        upload_url = f"{personaldb_api_url.rstrip('/')}/upload/"
+        upload_url = f"{personaldb_url}/upload/"
 
         # 内部服务调用（personaldb）不应受系统代理环境变量影响
-        async with httpx.AsyncClient(trust_env=False) as client:
+        async with httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(360.0)) as client:
             try:
                 resp = await client.post(
                     upload_url,
                     data=data,
                     files=files_payload,
-                    timeout=360.0,
                 )
                 if resp.status_code >= 400:
                     logger.info(f"[personaldb {resp.status_code}] {resp.text}")
@@ -291,13 +291,25 @@ async def aippt_outline_unified(
             except httpx.RequestError as exc:
                 raise HTTPException(status_code=500, detail=f"Error connecting to personaldb: {exc}")
 
-    # 构建最终的 prompt
+    kb_context = ""
+    resolved_kb_file_ids = _normalize_kb_file_ids(kb_file_ids)
+    if resolved_kb_file_ids:
+        if personaldb_url and await _is_personaldb_ready(personaldb_url):
+            kb_context = await _search_personaldb_kb_context(
+                personaldb_url,
+                user_id=str(user_id),
+                query=content_text,
+                kb_file_ids=resolved_kb_file_ids,
+            )
+        else:
+            logger.info("personaldb 不可用，跳过 kb_file_ids 检索增强：%s", personaldb_url)
+
+    prompt_parts: list[str] = [content_text]
     if file_content:
-        # 有文件时，结合主题和文件内容
-        prompt = f"主题：{content.strip()}\n\n参考文档内容：\n{file_content}"
-    else:
-        # 纯主题模式
-        prompt = content.strip()
+        prompt_parts.append(f"参考文档内容（来自你上传的文件）：\n{file_content}")
+    if kb_context:
+        prompt_parts.append(f"知识库检索结果（从你选择的知识库文件中检索，仅供参考）：\n{kb_context}")
+    prompt = "\n\n".join(prompt_parts)
 
     logger.info(f"统一大纲API*outline***=====>：language={language}, has_file={has_file}, has_content={has_content}")
 
@@ -485,6 +497,154 @@ async def _is_personaldb_ready(personaldb_url: str) -> bool:
             return resp.status_code == 200
     except Exception:
         return False
+
+
+def _normalize_kb_file_ids(kb_file_ids: list[str] | None) -> list[str]:
+    """
+    归一化 kb_file_ids：
+    - 去空白
+    - 去重（保持稳定顺序）
+    """
+    if not isinstance(kb_file_ids, list) or not kb_file_ids:
+        return []
+    seen: set[str] = set()
+    resolved: list[str] = []
+    for raw in kb_file_ids:
+        sid = str(raw).strip()
+        if not sid or sid in seen:
+            continue
+        seen.add(sid)
+        resolved.append(sid)
+    return resolved
+
+
+def _format_personaldb_search_context(
+    result: object,
+    *,
+    max_chunks: int = 5,
+    max_total_chars: int = 4000,
+    max_chunk_chars: int = 800,
+) -> str:
+    """
+    将 personaldb /search 的返回格式化为可拼进 prompt 的参考内容。
+    约束：
+    - 限制总长度，避免 prompt 过大导致模型效果变差或超限
+    - 每个 chunk 截断
+    """
+    if not isinstance(result, dict):
+        return ""
+
+    documents = result.get("documents")
+    metadatas = result.get("metadatas")
+    distances = result.get("distances")
+
+    docs_row: list[object] = []
+    metas_row: list[object] = []
+    dists_row: list[object] = []
+
+    if isinstance(documents, list) and documents and isinstance(documents[0], list):
+        docs_row = documents[0]
+    if isinstance(metadatas, list) and metadatas and isinstance(metadatas[0], list):
+        metas_row = metadatas[0]
+    if isinstance(distances, list) and distances and isinstance(distances[0], list):
+        dists_row = distances[0]
+
+    blocks: list[str] = []
+    total = 0
+    for idx, doc in enumerate(docs_row):
+        if not isinstance(doc, str):
+            continue
+        text = doc.strip()
+        if not text:
+            continue
+
+        meta = metas_row[idx] if idx < len(metas_row) else None
+        file_id = ""
+        file_name = ""
+        folder_id = None
+        if isinstance(meta, dict):
+            file_id = str(meta.get("file_id") or meta.get("fileId") or "").strip()
+            file_name = str(meta.get("file_name") or meta.get("fileName") or "").strip()
+            folder_id = meta.get("folder_id") if meta.get("folder_id") is not None else meta.get("folderId")
+
+        dist = dists_row[idx] if idx < len(dists_row) else None
+        dist_str = ""
+        if dist is not None:
+            try:
+                dist_str = f"{float(dist):.4f}"
+            except Exception:
+                dist_str = ""
+
+        if len(text) > max_chunk_chars:
+            text = text[:max_chunk_chars].rstrip() + "…"
+
+        meta_bits: list[str] = []
+        if file_name:
+            meta_bits.append(file_name)
+        if file_id:
+            meta_bits.append(f"file_id={file_id}")
+        if folder_id is not None:
+            try:
+                meta_bits.append(f"folder_id={int(folder_id)}")
+            except Exception:
+                pass
+        if dist_str:
+            meta_bits.append(f"distance={dist_str}")
+        meta_line = " / ".join(meta_bits).strip() or "KB chunk"
+
+        block = f"[{len(blocks) + 1}] {meta_line}\n{text}"
+        if total + len(block) > max_total_chars:
+            break
+        blocks.append(block)
+        total += len(block) + 2
+        if len(blocks) >= max_chunks:
+            break
+
+    return "\n\n".join(blocks).strip()
+
+
+async def _search_personaldb_kb_context(
+    personaldb_url: str,
+    *,
+    user_id: str,
+    query: str,
+    kb_file_ids: list[str],
+    topk: int = 5,
+) -> str:
+    """
+    从 personaldb 检索知识库片段，作为大纲生成的参考上下文。
+    注意：检索失败时不应阻断主流程（仍可用主题生成大纲）。
+    """
+    if not query.strip():
+        return ""
+    if not kb_file_ids:
+        return ""
+
+    payload = {
+        "userId": str(user_id),
+        "query": str(query),
+        "keyword": "",
+        "topk": int(topk),
+        "fileIds": list(kb_file_ids),
+    }
+
+    url = f"{personaldb_url}/search"
+    async with httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(20.0)) as client:
+        try:
+            resp = await client.post(url, json=payload)
+            if resp.status_code >= 400:
+                logger.info("[personaldb %s] %s", resp.status_code, resp.text)
+                return ""
+            try:
+                result = resp.json()
+            except ValueError:
+                logger.info("personaldb /search 返回非 JSON：%s", resp.text)
+                return ""
+        except Exception as exc:
+            logger.info("personaldb /search 调用失败：%s", exc)
+            return ""
+
+    return _format_personaldb_search_context(result)
 
 
 async def stream_content_response(

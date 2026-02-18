@@ -32,6 +32,9 @@ export async function generateOutline(
   formData.append('content', content);
   formData.append('language', 'chinese');
   formData.append('user_id', KB_USER_ID);
+  for (const fileId of new Set((material.kbFileIds ?? []).map((id) => id.trim()).filter(Boolean))) {
+    formData.append('kb_file_ids', fileId);
+  }
 
   const response = await requestRaw(
     '/tools/aippt_outline_unified',

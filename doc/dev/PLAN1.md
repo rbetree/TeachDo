@@ -26,7 +26,7 @@
 - [DONE] personaldb：`POST /search` 支持 `fileIds` 过滤（服务端向量查询 where 过滤）+ 单测
 
 ### P1（再做：大纲 KB 增强 + KB 可观测性 + 删除清理）
-- [TODO] 大纲生成：`/tools/aippt_outline_unified` 支持 `kb_file_ids`，并基于 personaldb 检索结果增强 prompt + 单测
+- [DONE] 大纲生成：`/tools/aippt_outline_unified` 支持 `kb_file_ids`，并基于 personaldb 检索结果增强 prompt + 单测
 - [TODO] KB 文件元数据：补全 `created_at/source_type/source_material_*` 写入与 `GET /files/{user_id}` 返回透出；前端 KB 列表展示“时间+来源”
 - [TODO] 删除教学资料：确认弹窗 + 可选“同时删除该教学资料相关 KB 产物文件（folderId=1 + gen 前缀）”
 
