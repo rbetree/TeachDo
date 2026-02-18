@@ -3,6 +3,9 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { KBFile } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
+import { toast } from '@/utils/toast';
+import { aiService } from '@/services/aiService';
+import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 
 type FolderFilter = 'all' | 'upload' | 'generated';
 
@@ -21,11 +24,16 @@ interface Emits {
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const { t } = useI18n();
+const store = useAppStore();
 
 const dialogRef = ref<HTMLElement | null>(null);
 const searchQuery = ref('');
 const folderFilter = ref<FolderFilter>('all');
 const draftSelected = ref<Set<string>>(new Set());
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const isDragging = ref(false);
+const syncing = ref(false);
+const uploadTimers = new Map<string, number>();
 
 const close = () => emit('update:open', false);
 
@@ -35,7 +43,8 @@ const getFolderLabel = (folderId: number) => {
   return `${t('kb.folder.unknown')}(${folderId})`;
 };
 
-const readyFiles = computed(() => (props.files || []).filter((f) => f.status === 'ready'));
+const files = computed(() => (store.kbFiles || props.files || []));
+const readyFiles = computed(() => files.value.filter((f) => f.status === 'ready'));
 
 const filteredFiles = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
@@ -68,6 +77,142 @@ const clearAll = () => {
   draftSelected.value = new Set();
 };
 
+const updateFiles = (next: KBFile[]) => {
+  store.setKbFiles(next);
+};
+
+const mergeServerFiles = (
+  serverFiles: Array<{ file_id: string; file_name: string; file_type: string; file_size?: number; folder_id: number }>,
+) => {
+  const now = new Date();
+  const pending = files.value.filter((f) => f.status === 'uploading' || f.status === 'processing');
+  const mapped = serverFiles.map((it) => {
+    const existing = files.value.find((f) => f.id === it.file_id);
+    return {
+      id: it.file_id,
+      name: it.file_name || it.file_id,
+      size: typeof it.file_size === 'number' ? it.file_size : existing?.size || 0,
+      type: it.file_type || 'unknown',
+      status: 'ready' as const,
+      uploadedAt: existing?.uploadedAt || now,
+      folderId: typeof it.folder_id === 'number' ? it.folder_id : 0,
+    } satisfies KBFile;
+  });
+  updateFiles([...pending, ...mapped]);
+};
+
+const refreshFromBackend = async () => {
+  syncing.value = true;
+  try {
+    const list = await aiService.kbListFiles({ userId: KB_USER_ID });
+    mergeServerFiles(list);
+  } catch (e) {
+    console.warn('知识库列表同步失败（已忽略）', e);
+  } finally {
+    syncing.value = false;
+  }
+};
+
+const handleDragOver = (e: DragEvent) => {
+  e.preventDefault();
+  isDragging.value = true;
+};
+
+const handleDragLeave = (e: DragEvent) => {
+  e.preventDefault();
+  isDragging.value = false;
+};
+
+const handleDrop = (e: DragEvent) => {
+  e.preventDefault();
+  isDragging.value = false;
+  const droppedFiles = Array.from(e.dataTransfer?.files || []);
+  if (!droppedFiles.length) return;
+  const first = droppedFiles[0];
+  if (first) void uploadFile(first);
+};
+
+const openFilePicker = () => {
+  fileInputRef.value?.click();
+};
+
+const handleFilePicked = (e: Event) => {
+  const input = e.target as HTMLInputElement | null;
+  const file = input?.files?.[0];
+  if (input) input.value = '';
+  if (!file) return;
+  void uploadFile(file);
+};
+
+const updateFileStatus = (fileId: string, status: KBFile['status'], progress?: number) => {
+  const next = files.value.map((f) => (f.id === fileId ? { ...f, status, progress: progress ?? f.progress } : f));
+  updateFiles(next);
+};
+
+const uploadFile = async (file: File) => {
+  const localId = `temp:${Date.now()}`;
+  const newFile: KBFile = {
+    id: localId,
+    name: file.name,
+    size: file.size,
+    type: file.name.split('.').pop() || 'unknown',
+    status: 'uploading',
+    uploadedAt: new Date(),
+    progress: 0,
+    folderId: 0,
+  };
+  updateFiles([...files.value, newFile]);
+
+  let progress = 0;
+  const timer = window.setInterval(() => {
+    progress += 8;
+    if (progress > 90) progress = 90;
+    updateFileStatus(localId, 'uploading', progress);
+  }, 250);
+  uploadTimers.set(localId, timer);
+
+  try {
+    updateFileStatus(localId, 'processing', 95);
+    const res = await aiService.kbUpload({
+      userId: KB_USER_ID,
+      file,
+      folderId: 0,
+    });
+
+    window.clearInterval(timer);
+    uploadTimers.delete(localId);
+
+    const next: KBFile[] = files.value.map((f) =>
+      f.id === localId
+        ? {
+            ...f,
+            id: res.file_id,
+            name: res.file_name || file.name,
+            size: typeof res.file_size === 'number' ? res.file_size : f.size,
+            type: res.file_type || f.type,
+            status: 'ready',
+            progress: 100,
+            folderId: res.folder_id ?? 0,
+          }
+        : f,
+    );
+    updateFiles(next);
+
+    const selected = new Set(draftSelected.value);
+    selected.add(res.file_id);
+    draftSelected.value = selected;
+
+    toast.success(t('kb.toast.uploaded'));
+    await refreshFromBackend();
+  } catch (e) {
+    window.clearInterval(timer);
+    uploadTimers.delete(localId);
+    updateFileStatus(localId, 'error');
+    console.error(e);
+    toast.error(t('kb.toast.upload_failed'));
+  }
+};
+
 const confirm = () => {
   emit('confirm', Array.from(draftSelected.value));
   close();
@@ -86,6 +231,7 @@ watch(
       draftSelected.value = new Set((props.selectedIds || []).filter(Boolean));
       document.body.style.overflow = 'hidden';
       document.addEventListener('keydown', onKeydown);
+      void refreshFromBackend();
       await nextTick();
       dialogRef.value?.focus();
       return;
@@ -103,6 +249,8 @@ watch(
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown);
   document.body.style.overflow = '';
+  uploadTimers.forEach((timer) => window.clearInterval(timer));
+  uploadTimers.clear();
 });
 </script>
 
@@ -110,6 +258,7 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <Transition name="td-modal">
       <div v-if="props.open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <input ref="fileInputRef" type="file" class="hidden" @change="handleFilePicked" />
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="close" />
 
         <div
@@ -142,6 +291,31 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="px-5 py-4 space-y-3 max-h-[min(70vh,720px)] overflow-y-auto custom-scrollbar">
+            <button
+              type="button"
+              class="w-full p-4 border-2 border-dashed rounded-2xl text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
+              :class="isDragging
+                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                : 'border-indigo-300/80 dark:border-indigo-700/70 bg-indigo-50/50 dark:bg-indigo-900/10 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'"
+              @click="openFilePicker"
+              @dragover.prevent="handleDragOver"
+              @dragleave.prevent="handleDragLeave"
+              @drop="handleDrop"
+            >
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl border border-indigo-200 dark:border-indigo-800/50 bg-white/80 dark:bg-slate-900/40 flex items-center justify-center flex-shrink-0">
+                  <LucideIcon name="upload-cloud" :size="18" :class="isDragging ? 'text-indigo-600 dark:text-indigo-300' : 'text-indigo-500 dark:text-indigo-400'" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{{ t('kb.drop.title') }}</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ t('kb.drop.desc') }}</p>
+                </div>
+                <span class="text-xs font-bold text-indigo-700 dark:text-indigo-200 px-3 py-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700/50">
+                  {{ t('kb.action.upload') }}
+                </span>
+              </div>
+            </button>
+
             <div class="flex flex-col md:flex-row md:items-center gap-3">
               <div class="relative flex-1">
                 <LucideIcon name="search" :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -177,6 +351,17 @@ onBeforeUnmount(() => {
                   @click="clearAll"
                 >
                   {{ t('kb.picker.clear') }}
+                </button>
+
+                <button
+                  type="button"
+                  class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/30 text-sm font-bold text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors inline-flex items-center gap-1.5"
+                  :aria-label="t('kb.action.refresh')"
+                  :title="t('kb.action.refresh')"
+                  @click="refreshFromBackend"
+                >
+                  <LucideIcon name="refresh-cw" :size="14" :class="syncing ? 'animate-spin' : ''" />
+                  <span>{{ t('kb.action.refresh') }}</span>
                 </button>
               </div>
             </div>

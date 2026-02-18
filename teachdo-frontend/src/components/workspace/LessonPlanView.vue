@@ -7,6 +7,7 @@ import LucideIcon from '@/components/common/LucideIcon.vue';
 
 interface Props {
   currentMaterial: TeachingMaterial;
+  headerActionHost?: HTMLElement | null;
 }
 
 interface Emits {
@@ -21,6 +22,7 @@ const { t } = useI18n();
 const loading = ref(false);
 const plan = ref<LessonPlan | null>(null);
 const copied = ref(false);
+const hasExternalToolbar = computed(() => !!props.headerActionHost);
 
 const hasOutline = computed(() => !!props.currentMaterial?.outlineContent);
 
@@ -119,115 +121,130 @@ const goToOutline = () => {
   emit('navigate', 'outline');
 };
 </script>
-
+	
 <template>
-  <div v-if="!hasOutline" class="flex-1 flex flex-col items-center justify-center text-slate-400 h-full p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-slate-50/50 dark:bg-slate-900/30">
-    <div class="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center mb-4">
-      <span class="text-3xl grayscale opacity-50">📑</span>
+  <div v-if="!hasOutline" class="h-full flex flex-col min-h-0">
+    <div class="workspace-card flex-1 min-h-0 p-4 md:p-6">
+      <div class="h-full w-full flex flex-col items-center justify-center text-slate-400 p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-slate-50/50 dark:bg-slate-900/30">
+        <div class="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center mb-4">
+          <span class="text-3xl grayscale opacity-50">📑</span>
+        </div>
+        <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300">{{ t('lesson.need_outline.title') }}</h3>
+        <p class="text-sm mt-2 mb-6 max-w-md text-center text-slate-500">
+          {{ t('lesson.need_outline.desc') }}
+        </p>
+        <button
+          class="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-slate-200/50 dark:shadow-none"
+          @click="goToOutline"
+        >
+          {{ t('lesson.go_outline') }}
+        </button>
+      </div>
     </div>
-    <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300">{{ t('lesson.need_outline.title') }}</h3>
-    <p class="text-sm mt-2 mb-6 max-w-md text-center text-slate-500">
-      {{ t('lesson.need_outline.desc') }}
-    </p>
-    <button
-      class="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-slate-200/50 dark:shadow-none"
-      @click="goToOutline"
-    >
-      {{ t('lesson.go_outline') }}
-    </button>
   </div>
 
-  <div v-else class="h-full flex flex-col gap-6 items-center">
-    <div class="w-full max-w-4xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-4 flex gap-3">
-      <div class="w-10 h-10 rounded-xl bg-white/80 dark:bg-slate-900/40 border border-amber-200 dark:border-amber-800/50 flex items-center justify-center text-amber-600 dark:text-amber-300 flex-shrink-0">
-        <LucideIcon name="alert-triangle" :size="18" />
-      </div>
-      <div class="min-w-0">
-        <div class="text-sm font-bold text-amber-900 dark:text-amber-100">{{ t('lesson.in_progress.title') }}</div>
-        <div class="text-xs text-amber-700 dark:text-amber-200 mt-0.5 leading-relaxed">{{ t('lesson.in_progress.desc') }}</div>
-      </div>
-    </div>
-
-    <!-- Actions Bar -->
-    <div class="w-full flex justify-between items-center max-w-4xl">
-      <div class="flex flex-col">
-        <h2 class="text-lg font-bold text-slate-900 dark:text-white">{{ t('lesson.title') }}</h2>
-        <p class="text-xs text-slate-500">{{ t('lesson.subtitle') }}</p>
-      </div>
-      <div class="flex gap-3">
+  <div v-else class="h-full flex flex-col min-h-0" :class="hasExternalToolbar ? 'gap-0' : 'gap-6'">
+    <Teleport :to="props.headerActionHost || 'body'" :disabled="!hasExternalToolbar">
+      <div
+        class="flex items-center justify-end gap-2"
+        :class="hasExternalToolbar
+          ? 'w-full h-full'
+          : 'bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm min-h-[44px]'"
+      >
         <button
           v-if="plan"
-          class="text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 px-3 py-2 transition-colors"
+          type="button"
+          class="toolbar-item text-slate-500 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700"
           @click="copyToClipboard"
         >
           {{ copied ? t('lesson.copied') : t('lesson.copy') }}
         </button>
         <button
           v-if="plan"
-          class="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+          type="button"
+          class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600"
           @click="downloadDocx"
         >
-          <LucideIcon name="download" :size="12" /> {{ t('lesson.download') }}
+          <LucideIcon name="download" class="w-4 h-4" /> {{ t('lesson.download') }}
         </button>
         <button
+          type="button"
           :disabled="loading"
-          class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2"
+          class="toolbar-item bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:bg-slate-300 disabled:text-slate-500"
           @click="handleGenerate"
         >
-          <span>{{ t('lesson.in_progress.cta') }}</span>
+          {{ t('lesson.in_progress.cta') }}
         </button>
       </div>
-    </div>
+    </Teleport>
 
-    <!-- Paper Document UI -->
-    <div class="flex-1 w-full max-w-4xl overflow-y-auto custom-scrollbar pb-10">
-      <div v-if="!plan" class="w-full aspect-[1/1.4] bg-white dark:bg-slate-900 rounded-sm shadow-xl flex items-center justify-center text-slate-300 border border-slate-200 dark:border-slate-800">
-        <div class="text-center">
-          <div class="text-6xl mb-4 opacity-20">📄</div>
-          <p>{{ t('lesson.ready') }}</p>
+    <div :class="['workspace-card flex-1 min-h-0 flex flex-col', hasExternalToolbar ? 'mt-4' : '']">
+      <div class="p-4 md:p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+        <div class="max-w-4xl mx-auto w-full">
+          <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-4 flex gap-3">
+            <div class="w-10 h-10 rounded-xl bg-white/80 dark:bg-slate-900/40 border border-amber-200 dark:border-amber-800/50 flex items-center justify-center text-amber-600 dark:text-amber-300 flex-shrink-0">
+              <LucideIcon name="alert-triangle" :size="18" />
+            </div>
+            <div class="min-w-0">
+              <div class="text-sm font-bold text-amber-900 dark:text-amber-100">{{ t('lesson.in_progress.title') }}</div>
+              <div class="text-xs text-amber-700 dark:text-amber-200 mt-0.5 leading-relaxed">{{ t('lesson.in_progress.desc') }}</div>
+            </div>
+          </div>
         </div>
       </div>
-      <div v-else class="bg-white text-slate-800 shadow-2xl rounded-sm min-h-[1000px] p-12 md:p-16 relative mx-auto animate-fade-in-up border border-slate-100">
-        <!-- Decorative Header Line -->
-        <div class="w-20 h-1 bg-indigo-600 mb-8"></div>
 
-        <h1 class="text-4xl font-serif font-bold text-slate-900 mb-6 leading-tight">{{ plan.title }}</h1>
-
-        <div class="flex gap-6 text-sm font-bold text-slate-500 uppercase tracking-wider mb-12 border-b border-slate-100 pb-6">
-          <div><span class="text-indigo-600">{{ t('lesson.labels.audience') }}:</span> {{ plan.targetAudience }}</div>
-          <div><span class="text-indigo-600">{{ t('lesson.labels.duration') }}:</span> {{ plan.duration }}</div>
-        </div>
-
-        <div class="space-y-10 font-serif leading-relaxed">
-          <section>
-            <h3 class="text-lg font-sans font-bold text-slate-900 mb-3 uppercase tracking-wide">{{ t('lesson.section.objectives') }}</h3>
-            <ul class="list-disc pl-5 space-y-2 text-slate-700">
-              <li v-for="(o, i) in plan.objectives" :key="i">{{ o }}</li>
-            </ul>
-          </section>
-
-          <section>
-            <h3 class="text-lg font-sans font-bold text-slate-900 mb-3 uppercase tracking-wide">{{ t('lesson.section.materials') }}</h3>
-            <p class="text-slate-700">{{ plan.materials.join(', ') }}</p>
-          </section>
-
-          <section>
-            <h3 class="text-lg font-sans font-bold text-slate-900 mb-5 uppercase tracking-wide">{{ t('lesson.section.procedure') }}</h3>
-            <div class="space-y-6">
-              <div v-for="(p, i) in plan.procedure" :key="i" class="flex gap-4">
-                <div class="w-16 flex-shrink-0 text-xs font-sans font-bold text-slate-400 pt-1">{{ p.duration }}</div>
-                <div>
-                  <div class="font-bold text-slate-900 mb-1">{{ p.step }}</div>
-                  <p class="text-slate-600">{{ p.activity }}</p>
-                </div>
-              </div>
+      <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 md:p-6">
+        <div class="max-w-4xl mx-auto w-full">
+          <div v-if="!plan" class="w-full min-h-[420px] border border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/60 dark:bg-slate-950/20 flex items-center justify-center text-slate-300">
+            <div class="text-center">
+              <div class="text-6xl mb-4 opacity-20">📄</div>
+              <p class="font-bold text-slate-500 dark:text-slate-400">{{ t('lesson.ready') }}</p>
             </div>
-          </section>
+          </div>
 
-          <section class="bg-slate-50 p-6 rounded-lg border border-slate-100 mt-8">
-            <h3 class="text-sm font-sans font-bold text-slate-900 mb-2 uppercase tracking-wide">{{ t('lesson.section.homework') }}</h3>
-            <p class="text-slate-700 italic">{{ plan.homework }}</p>
-          </section>
+          <div v-else class="text-slate-800 dark:text-slate-200 min-h-[1000px] p-10 md:p-12 relative mx-auto animate-fade-in-up">
+            <!-- Decorative Header Line -->
+            <div class="w-20 h-1 bg-indigo-600 mb-8"></div>
+
+            <h1 class="text-4xl font-serif font-bold text-slate-900 dark:text-white mb-6 leading-tight">{{ plan.title }}</h1>
+
+            <div class="flex gap-6 text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-12 border-b border-slate-100 dark:border-slate-800 pb-6">
+              <div><span class="text-indigo-600">{{ t('lesson.labels.audience') }}:</span> {{ plan.targetAudience }}</div>
+              <div><span class="text-indigo-600">{{ t('lesson.labels.duration') }}:</span> {{ plan.duration }}</div>
+            </div>
+
+            <div class="space-y-10 font-serif leading-relaxed">
+              <section>
+                <h3 class="text-lg font-sans font-bold text-slate-900 dark:text-white mb-3 uppercase tracking-wide">{{ t('lesson.section.objectives') }}</h3>
+                <ul class="list-disc pl-5 space-y-2 text-slate-700 dark:text-slate-300">
+                  <li v-for="(o, i) in plan.objectives" :key="i">{{ o }}</li>
+                </ul>
+              </section>
+
+              <section>
+                <h3 class="text-lg font-sans font-bold text-slate-900 dark:text-white mb-3 uppercase tracking-wide">{{ t('lesson.section.materials') }}</h3>
+                <p class="text-slate-700 dark:text-slate-300">{{ plan.materials.join(', ') }}</p>
+              </section>
+
+              <section>
+                <h3 class="text-lg font-sans font-bold text-slate-900 dark:text-white mb-5 uppercase tracking-wide">{{ t('lesson.section.procedure') }}</h3>
+                <div class="space-y-6">
+                  <div v-for="(p, i) in plan.procedure" :key="i" class="flex gap-4">
+                    <div class="w-16 flex-shrink-0 text-xs font-sans font-bold text-slate-400 dark:text-slate-500 pt-1">{{ p.duration }}</div>
+                    <div>
+                      <div class="font-bold text-slate-900 dark:text-slate-100 mb-1">{{ p.step }}</div>
+                      <p class="text-slate-600 dark:text-slate-300">{{ p.activity }}</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-lg border border-slate-100 dark:border-slate-700 mt-8">
+                <h3 class="text-sm font-sans font-bold text-slate-900 dark:text-slate-100 mb-2 uppercase tracking-wide">{{ t('lesson.section.homework') }}</h3>
+                <p class="text-slate-700 dark:text-slate-300 italic">{{ plan.homework }}</p>
+              </section>
+            </div>
+          </div>
         </div>
       </div>
     </div>

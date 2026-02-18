@@ -94,29 +94,17 @@ const handleCreate = (material: TeachingMaterial) => {
     <div class="absolute inset-0 opacity-40 pointer-events-none bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] dark:bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:20px_20px]"></div>
 
     <div class="relative z-10 mx-auto max-w-6xl px-6 md:px-10 py-8 md:py-10">
-      <header class="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+      <header class="flex items-center">
         <div class="flex items-center gap-4 min-w-0">
           <div class="w-12 h-12 rounded-2xl bg-indigo-600 dark:bg-slate-800 flex items-center justify-center shadow-lg shadow-indigo-500/20 dark:shadow-none">
             <BrandLogo class="w-7 h-7 text-white dark:text-indigo-400" />
           </div>
           <div class="min-w-0">
-            <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              {{ t('material.list.title') }}
+            <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Teach<span class="text-indigo-600 dark:text-indigo-400">Do</span>
             </h1>
-            <p class="mt-1 text-sm md:text-base text-slate-500 dark:text-slate-400 leading-relaxed">
-              {{ t('material.list.subtitle') }}
-            </p>
           </div>
         </div>
-
-        <button
-          type="button"
-          class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
-          @click="createOpen = true"
-        >
-          <LucideIcon name="plus" class="w-4 h-4" />
-          <span>{{ t('material.list.create') }}</span>
-        </button>
       </header>
 
       <div class="mt-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

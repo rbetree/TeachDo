@@ -10,6 +10,7 @@ import { KB_USER_ID } from '@/stores/appStore';
 
 interface Props {
   currentMaterial: TeachingMaterial;
+  headerActionHost?: HTMLElement | null;
 }
 
 interface Emits {
@@ -162,66 +163,77 @@ const renderMarkdown = (content: string) => {
 
 const markdownHtml = computed(() => renderMarkdown(outlineText.value));
 const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
+const hasExternalToolbar = computed(() => !!props.headerActionHost);
 </script>
 
 <template>
-  <div class="h-full flex flex-col gap-6 min-h-0">
+  <div class="h-full flex flex-col min-h-0" :class="hasExternalToolbar ? 'gap-0' : 'gap-6'">
     <!-- Toolbar -->
-    <div class="flex justify-between items-center bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm sticky top-0 z-10">
-      <div class="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-        <button
-          :disabled="mode === 'COMPARE'"
-          :class="[
-            'px-4 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2',
-            mode === 'PREVIEW'
-              ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-white'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white disabled:opacity-50'
-          ]"
-          @click="mode = 'PREVIEW'"
-        >
-          <LucideIcon name="eye" :size="12" /> {{ t('outline.preview') }}
-        </button>
-        <button
-          :disabled="mode === 'COMPARE'"
-          :class="[
-            'px-4 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2',
-            mode === 'EDIT'
-              ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-white'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white disabled:opacity-50'
-          ]"
-          @click="mode = 'EDIT'"
-        >
-          <LucideIcon name="edit-3" :size="12" /> {{ t('outline.edit') }}
-        </button>
-      </div>
+    <Teleport :to="props.headerActionHost || 'body'" :disabled="!hasExternalToolbar">
+      <div
+        class="flex items-center justify-between gap-2"
+        :class="hasExternalToolbar
+          ? 'w-full h-full'
+          : 'bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm sticky top-0 z-10 min-h-[44px]'"
+      >
+        <div class="flex items-center gap-2 min-w-0 overflow-x-auto no-scrollbar">
+          <div class="flex items-center gap-1 shrink-0">
+            <button
+              :disabled="mode === 'COMPARE'"
+              :class="[
+                'toolbar-item',
+                mode === 'PREVIEW'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 disabled:opacity-50'
+              ]"
+              @click="mode = 'PREVIEW'"
+            >
+              <LucideIcon name="eye" class="w-4 h-4" /> {{ t('outline.preview') }}
+            </button>
+            <button
+              :disabled="mode === 'COMPARE'"
+              :class="[
+                'toolbar-item',
+                mode === 'EDIT'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 disabled:opacity-50'
+              ]"
+              @click="mode = 'EDIT'"
+            >
+              <LucideIcon name="edit-3" class="w-4 h-4" /> {{ t('outline.edit') }}
+            </button>
+          </div>
 
-      <div class="flex gap-2">
-        <div v-if="mode === 'COMPARE'" class="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg animate-pulse">
-          <LucideIcon name="arrow-left-right" :size="12" /> {{ t('outline.compare_banner') }}
+          <div v-if="mode === 'COMPARE'" class="toolbar-item text-indigo-600 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-sm shrink-0">
+            <LucideIcon name="arrow-left-right" class="w-4 h-4" /> {{ t('outline.compare_banner') }}
+          </div>
         </div>
-        <template v-else>
-          <button
-            v-if="outlineText"
-            :disabled="loading"
-            class="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-            @click="handleGenerateWrapper"
-          >
-            <LucideIcon :name="loading ? 'loader-2' : 'refresh-cw'" :size="12" :class="{ 'animate-spin': loading }" />
-            <span>{{ t('outline.regenerate') }}</span>
-          </button>
-          <button
-            v-if="mode === 'EDIT' && props.currentMaterial.outlineContent !== outlineText"
-            class="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-md transition-all"
-            @click="handleSave"
-          >
-            <LucideIcon name="save" :size="12" /> {{ t('outline.save') }}
-          </button>
-        </template>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <template v-if="mode !== 'COMPARE'">
+            <button
+              v-if="outlineText"
+              :disabled="loading"
+              class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-600 disabled:opacity-60"
+              @click="handleGenerateWrapper"
+            >
+              <LucideIcon :name="loading ? 'loader-2' : 'refresh-cw'" class="w-4 h-4" :class="{ 'animate-spin': loading }" />
+              <span>{{ t('outline.regenerate') }}</span>
+            </button>
+            <button
+              v-if="mode === 'EDIT' && props.currentMaterial.outlineContent !== outlineText"
+              class="toolbar-item bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm"
+              @click="handleSave"
+            >
+              <LucideIcon name="save" class="w-4 h-4" /> {{ t('outline.save') }}
+            </button>
+          </template>
+        </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Main Content Area -->
-    <div :class="['flex-1 min-h-0 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative', mode === 'COMPARE' ? 'bg-slate-100 dark:bg-slate-950' : '']">
+    <div :class="['workspace-card flex-1 relative', hasExternalToolbar ? 'mt-4' : '', mode === 'COMPARE' ? 'bg-slate-100 dark:bg-slate-950' : '']">
       <!-- --- COMPARE MODE --- -->
       <div v-if="mode === 'COMPARE'" class="h-full grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
         <!-- Left: Original -->
@@ -289,9 +301,6 @@ const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
       <!-- --- PREVIEW MODE --- -->
       <div v-if="mode === 'PREVIEW'" class="h-full min-h-0 overflow-y-auto custom-scrollbar p-8 md:p-12 max-w-4xl mx-auto bg-white dark:bg-slate-900">
         <article class="prose dark:prose-invert prose-indigo max-w-none">
-          <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8 border-b border-slate-100 dark:border-slate-800 pb-4">
-            {{ t('outline.course_outline_title', { title: props.currentMaterial.title }) }}
-          </div>
           <div v-if="outlineText" class="space-y-4 font-serif text-slate-800 dark:text-slate-200 leading-relaxed text-sm md:text-base" v-html="markdownHtml"></div>
           <div v-else class="flex flex-col items-center justify-center h-96 text-center">
             <div class="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-full flex items-center justify-center mb-6 text-3xl">

@@ -137,18 +137,6 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="px-5 py-4 space-y-4 max-h-[min(70vh,680px)] overflow-y-auto custom-scrollbar">
-            <div class="rounded-xl border border-amber-200/70 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs text-amber-800 dark:text-amber-100 leading-relaxed">
-              <div class="flex items-start gap-2">
-                <LucideIcon name="info" :size="16" class="mt-0.5 text-amber-600 dark:text-amber-300" />
-                <div>
-                  <div class="font-bold">{{ t('material.create.tip_title') }}</div>
-                  <div class="mt-0.5">
-                    {{ t('material.create.tip_desc') }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label class="space-y-2 text-left">
                 <span class="block text-xs font-bold uppercase tracking-widest text-slate-500">
@@ -307,4 +295,3 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-

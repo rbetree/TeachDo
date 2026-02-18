@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from 'vue';
+import { computed, defineAsyncComponent, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import LucideIcon from '@/components/common/LucideIcon.vue';
@@ -16,6 +16,7 @@ const router = useRouter();
 const route = useRoute();
 const store = useAppStore();
 const { t } = useI18n();
+const workspaceActionHost = ref<HTMLElement | null>(null);
 
 const currentMaterial = computed(() => store.currentMaterial);
 
@@ -89,48 +90,59 @@ const goBack = () => {
             </button>
           </div>
 
-          <div class="flex p-1 bg-slate-200/40 dark:bg-slate-800 rounded-xl overflow-x-auto no-scrollbar gap-1 w-fit">
-            <button
-              v-for="tab in tabConfig"
-              :key="tab.id"
-              type="button"
-              class="relative px-4 md:px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap"
-              :class="activeTab === tab.id ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-100'"
-              @click="goToTab(tab.id)"
-            >
-              <LucideIcon :name="tab.icon" class="w-4 h-4" />
-              <span>{{ tab.label }}</span>
-            </button>
+          <div class="flex flex-col xl:flex-row xl:items-center gap-3">
+            <div class="toolbar-shell gap-1 w-fit max-w-full">
+              <button
+                v-for="tab in tabConfig"
+                :key="tab.id"
+                type="button"
+                class="toolbar-item relative"
+                :class="activeTab === tab.id ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-100'"
+                @click="goToTab(tab.id)"
+              >
+                <LucideIcon :name="tab.icon" class="w-4 h-4" />
+                <span>{{ tab.label }}</span>
+              </button>
+            </div>
+
+            <div class="flex-1 min-w-0">
+              <div class="toolbar-shell">
+                <div ref="workspaceActionHost" class="flex-1 min-w-0 flex items-center h-full"></div>
+              </div>
+            </div>
           </div>
         </header>
 
         <div class="flex-1 overflow-hidden min-h-0">
-          <div v-if="activeTab === 'outline'" class="h-full p-6 md:p-8">
+          <div v-if="activeTab === 'outline'" class="h-full p-4 md:p-5">
             <div class="h-full max-w-6xl mx-auto min-h-0">
               <OutlineView
                 v-if="currentMaterial"
                 :current-material="currentMaterial"
+                :header-action-host="workspaceActionHost"
                 @update-material="persistMaterial"
               />
             </div>
           </div>
 
-          <div v-else-if="activeTab === 'lesson'" class="h-full p-6 md:p-8">
+          <div v-else-if="activeTab === 'lesson'" class="h-full p-4 md:p-5">
             <div class="h-full max-w-6xl mx-auto min-h-0">
               <LessonPlanView
                 v-if="currentMaterial"
                 :current-material="currentMaterial"
+                :header-action-host="workspaceActionHost"
                 @update-material="persistMaterial"
                 @navigate="(tab) => (tab === 'outline' ? goToTab('outline') : undefined)"
               />
             </div>
           </div>
 
-          <div v-else class="h-full p-6 md:p-8">
+          <div v-else class="h-full p-4 md:p-5">
             <div class="h-full max-w-6xl mx-auto min-h-0">
               <PPTView
                 v-if="currentMaterial"
                 :current-material="currentMaterial"
+                :header-action-host="workspaceActionHost"
                 @update-material="persistMaterial"
               />
             </div>

@@ -11,6 +11,7 @@ interface Props {
   selectedTemplate: PPTTemplate | null;
   editorDocument: EditorDocument | null;
   slideIndex: number;
+  externalToolbar?: boolean;
 }
 
 interface Emits {
@@ -206,8 +207,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col gap-6 min-h-0">
-    <div class="flex justify-between items-center bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+  <div class="h-full flex flex-col min-h-0" :class="props.externalToolbar ? 'gap-4' : 'gap-6'">
+    <div v-if="!props.externalToolbar" class="flex justify-between items-center bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
       <div class="flex items-center gap-4">
         <div>
           <h3 class="text-sm font-black text-slate-800 dark:text-white leading-tight">{{ t('ppt.preview_title') }}</h3>
@@ -257,7 +258,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="!hasEditorSlides && (!props.presentation || slides.length === 0)" class="flex-1 flex items-center justify-center bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+    <div v-if="!hasEditorSlides && (!props.presentation || slides.length === 0)" class="flex-1 flex items-center justify-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl">
       <div class="text-center opacity-40">
         <LucideIcon name="loader-2" :size="48" class="animate-spin mx-auto mb-4" />
         <p class="font-bold">{{ t('ppt.generating_content') }}</p>
@@ -265,7 +266,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else-if="hasEditorSlides" class="flex-1 min-h-0 flex gap-6 overflow-hidden">
-      <div v-if="!editorPreviewReady || !editorSlidesStoreLoaded" class="flex-1 flex items-center justify-center bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+      <div v-if="!editorPreviewReady || !editorSlidesStoreLoaded" class="flex-1 flex items-center justify-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl">
         <div class="text-center opacity-40">
           <LucideIcon name="loader-2" :size="48" class="animate-spin mx-auto mb-4" />
           <p class="font-bold">{{ t('common.loading') }}</p>
@@ -289,7 +290,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <div class="flex-1 min-h-0 flex flex-col bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 overflow-hidden">
+        <div class="flex-1 min-h-0 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl p-6 overflow-hidden">
           <div ref="previewCanvasRef" class="flex-1 min-h-0 overflow-hidden">
             <div class="h-full w-full flex items-center justify-center">
               <div v-if="currentEditorSlide" class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl ring-1 ring-slate-200/60 dark:ring-slate-800/60 overflow-hidden">
@@ -323,7 +324,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div class="flex-1 min-h-0 flex flex-col bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 overflow-y-auto custom-scrollbar">
+      <div class="flex-1 min-h-0 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl p-8 overflow-y-auto custom-scrollbar">
         <div v-if="currentSlide" class="w-full aspect-video bg-white dark:bg-slate-900 shadow-2xl rounded-xl p-12 flex flex-col relative overflow-hidden mb-6 flex-shrink-0 transition-all duration-300">
           <div v-if="props.selectedTemplate?.coverUrl" class="absolute inset-0 bg-center bg-cover opacity-5 pointer-events-none" :style="{ backgroundImage: `url(${props.selectedTemplate.coverUrl})` }" />
           <div v-else class="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl opacity-20 -mr-20 -mt-20" :class="props.selectedTemplate?.thumbnailColor || 'bg-slate-200'" />
@@ -377,4 +378,3 @@ onBeforeUnmount(() => {
   background: rgba(71, 85, 105, 0.7);
 }
 </style>
-

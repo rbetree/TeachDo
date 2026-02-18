@@ -4,6 +4,31 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .toolbar-shell {
+    @apply flex items-center p-1 bg-slate-200/40 dark:bg-slate-800 rounded-xl overflow-x-auto;
+    height: 44px;
+    scrollbar-width: none;
+  }
+
+  .toolbar-shell::-webkit-scrollbar {
+    display: none;
+  }
+
+  .toolbar-cluster {
+    @apply inline-flex items-center gap-1 rounded-lg p-1 bg-slate-100 dark:bg-slate-800;
+  }
+
+  .toolbar-item {
+    @apply inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition-colors whitespace-nowrap;
+    min-height: 36px;
+  }
+
+  .workspace-card {
+    @apply bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden min-h-0;
+  }
+}
+
 @layer base {
   html {
     scrollbar-gutter: stable;

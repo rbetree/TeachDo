@@ -8,6 +8,7 @@ interface Props {
   selectedTemplateId: string;
   loading: boolean;
   hasAdvancedOverrides: boolean;
+  externalToolbar?: boolean;
 }
 
 interface Emits {
@@ -27,7 +28,7 @@ const selectTemplate = (id: string) => {
 
 <template>
   <div class="flex-1 flex flex-col min-h-0">
-    <div class="mb-6 flex items-start justify-between gap-4">
+    <div v-if="!props.externalToolbar" class="mb-6 flex items-start justify-between gap-4">
       <div class="min-w-0">
         <h2 class="text-2xl font-bold text-slate-900 dark:text-white">{{ t('ppt.choose_template') }}</h2>
         <p class="text-slate-500 dark:text-slate-400">{{ t('ppt.select_hint') }}</p>
@@ -47,7 +48,7 @@ const selectTemplate = (id: string) => {
       </button>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" :class="props.externalToolbar ? 'mb-0' : 'mb-8'">
       <button
         v-for="template in props.templates"
         :key="template.id"
@@ -76,7 +77,7 @@ const selectTemplate = (id: string) => {
       </button>
     </div>
 
-    <div class="flex justify-center">
+    <div v-if="!props.externalToolbar" class="flex justify-center">
       <button
         :disabled="props.loading || !props.templates.length"
         class="px-10 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:text-slate-500 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-500/30 transition-all flex items-center gap-3"

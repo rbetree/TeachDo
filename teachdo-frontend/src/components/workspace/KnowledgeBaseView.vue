@@ -257,15 +257,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div :class="['h-full flex flex-col', isPanel ? 'gap-3' : 'gap-6']">
+  <div :class="['h-full flex flex-col', isPanel ? 'gap-2' : 'gap-6']">
     <input ref="fileInputRef" type="file" class="hidden" @change="handleFilePicked" />
 
     <!-- Panel Variant: 紧凑侧栏布局 -->
     <div
       v-if="isPanel"
-      class="px-3 py-3 border-b border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-900/30 backdrop-blur"
+      class="px-4 py-4 border-b border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-900/30 backdrop-blur"
     >
-      <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center justify-between gap-3">
         <div class="flex items-center gap-2 min-w-0">
           <div class="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 text-indigo-600 dark:text-indigo-300 flex items-center justify-center border border-indigo-100 dark:border-indigo-800/40 flex-shrink-0">
             <LucideIcon name="database" :size="18" />
@@ -278,30 +278,18 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="flex items-center gap-1">
-          <button
-            type="button"
-            class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 transition-colors"
-            :aria-label="t('kb.action.refresh')"
-            :title="t('kb.action.refresh')"
-            @click="refreshFromBackend"
-          >
-            <LucideIcon name="refresh-cw" :size="18" :class="syncing ? 'animate-spin' : ''" />
-          </button>
-
-          <button
-            type="button"
-            class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
-            :aria-label="t('kb.action.upload')"
-            :title="t('kb.action.upload')"
-            @click="openFilePicker"
-          >
-            <LucideIcon name="upload-cloud" :size="18" />
-          </button>
-        </div>
+        <button
+          type="button"
+          class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 transition-colors"
+          :aria-label="t('kb.action.refresh')"
+          :title="t('kb.action.refresh')"
+          @click="refreshFromBackend"
+        >
+          <LucideIcon name="refresh-cw" :size="18" :class="syncing ? 'animate-spin' : ''" />
+        </button>
       </div>
 
-      <div class="mt-3">
+      <div class="mt-4">
         <div class="relative">
           <LucideIcon name="search" :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -355,20 +343,20 @@ onBeforeUnmount(() => {
         <template v-if="isPanel">
           <button
             type="button"
-            class="mx-3 mt-3 mb-2 p-4 border border-dashed rounded-xl flex items-center gap-3 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
+            class="mx-4 mt-3 mb-3 p-4 border-2 border-dashed rounded-2xl flex items-center gap-3 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
             :class="isDragging
               ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-              : 'border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/20 hover:bg-white/80 dark:hover:bg-slate-900/30'"
+              : 'border-indigo-300/80 dark:border-indigo-700/70 bg-indigo-50/50 dark:bg-indigo-900/10 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'"
             @click="openFilePicker"
             @dragover.prevent="handleDragOver"
             @dragleave.prevent="handleDragLeave"
             @drop="handleDrop"
           >
-            <div class="w-9 h-9 rounded-xl bg-white/80 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0">
-              <LucideIcon name="upload-cloud" :size="18" :class="isDragging ? 'text-indigo-600' : 'text-slate-400'" />
+            <div class="w-10 h-10 rounded-xl bg-white/80 dark:bg-slate-900/40 border border-indigo-200 dark:border-indigo-700/50 flex items-center justify-center flex-shrink-0">
+              <LucideIcon name="upload-cloud" :size="18" :class="isDragging ? 'text-indigo-600 dark:text-indigo-300' : 'text-indigo-500 dark:text-indigo-400'" />
             </div>
             <div class="min-w-0">
-              <p class="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{{ t('kb.drop.title') }}</p>
+              <p class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{{ t('kb.drop.title') }}</p>
               <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ t('kb.drop.desc') }}</p>
             </div>
           </button>
@@ -379,7 +367,7 @@ onBeforeUnmount(() => {
               <p class="text-sm">{{ t('kb.empty') }}</p>
             </div>
 
-	            <div v-else class="px-3 pb-3 space-y-2">
+	            <div v-else class="px-4 pb-4 space-y-2.5">
 		              <div
 		                v-for="file in filteredFiles"
 		                :key="file.id"
