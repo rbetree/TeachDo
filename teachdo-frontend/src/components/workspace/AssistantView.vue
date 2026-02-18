@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { ChatMessage, TeachingMaterial } from '#root/types';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useI18n } from 'vue-i18n';
 import { escapeHtml } from '@/utils/safeHtml';
+import { useAppStore } from '@/stores/appStore';
+import { aiService } from '@/services/aiService';
+import { ApiError } from '@/services/apiClient';
 
 type AssistantViewVariant = 'page' | 'panel';
 
@@ -15,21 +18,20 @@ interface Props {
 
 const props = defineProps<Props>();
 const { t } = useI18n();
+const store = useAppStore();
 
 const isPanel = computed(() => props.variant === 'panel');
 
-const assistantEnabled = false;
-
-const messages = ref<ChatMessage[]>([]);
+const messages = computed(() => store.assistantMessages);
+const visibleMessages = computed(() => store.assistantMessages.filter((m) => m.role === 'user' || (m.text || '').trim()));
 const inputValue = ref('');
 const isTyping = ref(false);
 const messagesListRef = ref<HTMLDivElement | null>(null);
+const pendingController = ref<AbortController | null>(null);
 
 const contextName = computed(() => props.currentMaterial?.title || t('nav.workspace'));
 
-const greeting = computed(() =>
-  assistantEnabled ? t('assistant.greeting', { name: contextName.value }) : t('assistant.in_progress.greeting', { name: contextName.value }),
-);
+const greeting = computed(() => t('assistant.greeting', { name: contextName.value }));
 
 const renderInlineStyles = (text: string) => {
   const parts = text.split(/(\*\*.*?\*\*)/g);
@@ -79,17 +81,18 @@ const scrollToBottom = () => {
 };
 
 const resetMessages = () => {
-  messages.value = [{ role: 'model', text: greeting.value, timestamp: new Date() }];
+  store.setAssistantMessages([{ role: 'model', text: greeting.value, timestamp: new Date() }]);
 };
 
-watch(
-  () => props.currentMaterial?.id,
-  () => {
+onMounted(() => {
+  if (!store.assistantMessages.length) {
     resetMessages();
-    scrollToBottom();
-  },
-  { immediate: true },
-);
+  }
+});
+
+onBeforeUnmount(() => {
+  pendingController.value?.abort();
+});
 
 watch(
   messages,
@@ -100,43 +103,64 @@ watch(
 );
 
 const handleSend = async () => {
-  if (!assistantEnabled) {
-    toast.info(t('assistant.toast.in_progress'));
-    return;
-  }
   if (!inputValue.value.trim()) return;
+  if (isTyping.value) return;
+
+  pendingController.value?.abort();
+  const controller = new AbortController();
+  pendingController.value = controller;
+
   const userMsg: ChatMessage = { role: 'user', text: inputValue.value.trim(), timestamp: new Date() };
-  const history = [...messages.value, userMsg];
-  messages.value = history;
+  store.appendAssistantMessage(userMsg);
   inputValue.value = '';
   isTyping.value = true;
 
   const streamingMsg: ChatMessage = { role: 'model', text: '', timestamp: new Date() };
-  messages.value = [...messages.value, streamingMsg];
+  store.appendAssistantMessage(streamingMsg);
 
   let fullResponse = '';
 
+  const materialContext = props.currentMaterial
+    ? {
+        title: props.currentMaterial.title,
+        subject: props.currentMaterial.subject,
+        description: props.currentMaterial.description,
+        objectives: props.currentMaterial.objectives,
+      }
+    : null;
+
   try {
-    // 当前阶段仅保留页面与路由结构，助教能力后续接入。
-    fullResponse = t('assistant.toast.in_progress');
-    const updated = [...messages.value];
-    const lastIndex = updated.length - 1;
-    if (lastIndex >= 0) {
-      const last = updated[lastIndex] || streamingMsg;
-      updated[lastIndex] = {
-        ...last,
-        role: last.role ?? 'model',
-        timestamp: last.timestamp || new Date(),
-        text: fullResponse,
-      };
-    }
-    messages.value = updated;
+    const historyForRequest = store.assistantMessages
+      .slice(1) // 去掉 greeting（避免占用上下文窗口）
+      .map((m) => ({ ...m }))
+      .filter((m) => (m.text || '').trim());
+
+    await aiService.streamAssistantReply({
+      messages: historyForRequest,
+      material: materialContext,
+      kbFileIds: props.currentMaterial?.kbFileIds ?? [],
+      language: 'zh',
+      signal: controller.signal,
+      onDelta: (delta) => {
+        fullResponse += delta;
+        store.updateLastAssistantMessageText(fullResponse);
+      },
+    });
+  } catch (e) {
+    if (e instanceof ApiError && e.kind === 'abort') return;
+    console.error('Assistant chat failed', e);
+    toast.error(t('assistant.error'));
+    store.updateLastAssistantMessageText(t('assistant.error'));
   } finally {
     isTyping.value = false;
+    pendingController.value = null;
   }
 };
 
 const clearHistory = () => {
+  pendingController.value?.abort();
+  pendingController.value = null;
+  isTyping.value = false;
   resetMessages();
 };
 </script>
@@ -201,28 +225,6 @@ const clearHistory = () => {
     </div>
 
     <div
-      :class="[
-        'bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200/70 dark:border-amber-800/40',
-        isPanel ? 'px-3 py-2.5' : 'px-4 py-3',
-      ]"
-    >
-      <div class="flex items-start gap-3">
-        <div
-          :class="[
-            'rounded-xl bg-white/80 dark:bg-slate-900/40 border border-amber-200 dark:border-amber-800/50 flex items-center justify-center text-amber-600 dark:text-amber-300 flex-shrink-0',
-            isPanel ? 'w-8 h-8' : 'w-9 h-9',
-          ]"
-        >
-          <LucideIcon name="alert-triangle" :size="isPanel ? 16 : 18" />
-        </div>
-        <div class="min-w-0">
-          <div class="text-sm font-bold text-amber-900 dark:text-amber-100">{{ t('assistant.in_progress.title') }}</div>
-          <div class="text-xs text-amber-700 dark:text-amber-200 mt-0.5 leading-relaxed">{{ t('assistant.in_progress.desc') }}</div>
-        </div>
-      </div>
-    </div>
-
-    <div
       ref="messagesListRef"
       :class="[
         'flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50 dark:bg-slate-950/50',
@@ -230,7 +232,7 @@ const clearHistory = () => {
       ]"
     >
       <div
-        v-for="(msg, i) in messages"
+        v-for="(msg, i) in visibleMessages"
         :key="i"
         :class="['flex gap-4 animate-fade-in', msg.role === 'user' ? 'justify-end' : 'justify-start']"
       >
@@ -255,7 +257,7 @@ const clearHistory = () => {
         </div>
       </div>
 
-      <div v-if="isTyping && messages[messages.length - 1]?.role === 'user'" class="flex gap-4 justify-start animate-fade-in">
+      <div v-if="isTyping && messages[messages.length - 1]?.role === 'model' && !messages[messages.length - 1]?.text" class="flex gap-4 justify-start animate-fade-in">
         <div class="w-8 h-8 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 shadow-sm">
           <LucideIcon name="sparkles" :size="16" class="text-indigo-500" />
         </div>
@@ -280,13 +282,13 @@ const clearHistory = () => {
             'w-full bg-slate-100 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/30 rounded-xl pl-4 pr-14 text-sm outline-none dark:text-white transition-all resize-none custom-scrollbar shadow-inner',
             isPanel ? 'py-3 h-12 max-h-28' : 'py-3.5 h-14 max-h-32',
           ]"
-          :placeholder="assistantEnabled ? t('assistant.placeholder') : t('assistant.in_progress.placeholder')"
-          :disabled="isTyping || !assistantEnabled"
+          :placeholder="t('assistant.placeholder')"
+          :disabled="isTyping"
           @keydown.enter.prevent="(event) => { if (!event.shiftKey && !isTyping) handleSend(); }"
         />
         <button
           type="button"
-          :disabled="isTyping || !assistantEnabled || !inputValue.trim()"
+          :disabled="isTyping || !inputValue.trim()"
           :class="[
             'absolute right-2 top-2 p-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg transition-all shadow-lg shadow-indigo-500/20',
             isPanel ? '' : 'hover:scale-105 active:scale-95',

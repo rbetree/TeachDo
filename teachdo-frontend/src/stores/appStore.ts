@@ -1,5 +1,5 @@
 import { defineStore, type Pinia } from 'pinia';
-import type { KBFile, Language, TeachingMaterial } from '#root/types';
+import type { ChatMessage, KBFile, Language, TeachingMaterial } from '#root/types';
 import { setLocale } from '@/i18n';
 import { deleteLegacyIndexedDb, deleteMaterialLarge, loadAppLarge, loadMaterialLarge, saveAppLarge, saveMaterialLarge } from '@/utils/appStoreIdb';
 
@@ -14,6 +14,12 @@ export interface AppStoreState {
   materials: TeachingMaterial[];
   currentMaterialId: string | null;
   kbFiles: KBFile[];
+  /**
+   * 助教：全局单会话（仅内存，不做持久化）。
+   * - 由前端维护 messages，后端不保存会话
+   * - 刷新页面即清空
+   */
+  assistantMessages: ChatMessage[];
   theme: ThemeMode;
   language: Language;
 }
@@ -41,6 +47,7 @@ const defaultState: AppStoreState = {
   materials: [],
   currentMaterialId: null,
   kbFiles: [],
+  assistantMessages: [],
   theme: 'light',
   language: 'zh',
 };
@@ -239,6 +246,17 @@ export const useAppStore = defineStore('app', {
       this.kbFiles = files;
       void saveAppLarge({ kbFiles: files });
     },
+    setAssistantMessages(messages: ChatMessage[]) {
+      this.assistantMessages = messages;
+    },
+    appendAssistantMessage(message: ChatMessage) {
+      this.assistantMessages.push(message);
+    },
+    updateLastAssistantMessageText(text: string) {
+      const last = this.assistantMessages[this.assistantMessages.length - 1];
+      if (!last) return;
+      last.text = text;
+    },
     setTheme(theme: ThemeMode) {
       this.theme = theme;
       applyTheme(theme);
@@ -271,7 +289,13 @@ export const setupAppStore = (pinia: Pinia) => {
   })();
 
   store.$subscribe(
-    (_mutation, state) => {
+    (mutation, state) => {
+      // 助教对话为高频更新（流式），且不做持久化；跳过持久化可避免频繁写 localStorage 卡顿。
+      const events = (mutation as any)?.events as Array<{ key?: unknown }> | undefined;
+      if (Array.isArray(events) && events.length > 0) {
+        const onlyAssistant = events.every((e) => typeof e?.key === 'string' && (e.key as string).startsWith('assistantMessages'));
+        if (onlyAssistant) return;
+      }
       persistState(state);
       applyTheme(state.theme);
       applyLanguage(state.language);

@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi import UploadFile, File, HTTPException, Form
 from fastapi import FastAPI, HTTPException, Query, Request, Response
+from typing import AsyncGenerator, Literal
 try:
     # 兼容在 `backend/main_api` 目录下直接运行（例如 `uvicorn main:app`）
     from outline_client import A2AOutlineClientWrapper
@@ -93,6 +94,30 @@ class AipptRequest(BaseModel):
     language: str
     model: str
     stream: bool
+
+
+class AssistantChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class AssistantMaterialContext(BaseModel):
+    title: str
+    subject: str | None = None
+    description: str | None = None
+    objectives: str | None = None
+
+
+class AssistantChatRequest(BaseModel):
+    """
+    助教对话请求（全局单会话，历史由前端维护并在每次请求时透传）。
+    """
+
+    messages: list[AssistantChatMessage]
+    user_id: str = "default_user"
+    kb_file_ids: list[str] | None = None
+    material: AssistantMaterialContext | None = None
+    language: str = "zh"
 
 async def iter_outline_text_chunks(prompt: str, language: str = "chinese"):
     """
@@ -647,6 +672,200 @@ async def _search_personaldb_kb_context(
     return _format_personaldb_search_context(result)
 
 
+def _pick_last_user_message(messages: list[AssistantChatMessage]) -> str:
+    """
+    从历史消息中找到最后一条 user 消息，作为 RAG 检索 query。
+    """
+    for msg in reversed(messages or []):
+        if msg.role == "user" and (msg.content or "").strip():
+            return msg.content.strip()
+    return ""
+
+
+def _build_assistant_system_prompt(
+    *,
+    material: AssistantMaterialContext | None,
+    kb_context: str,
+    language: str,
+) -> str:
+    """
+    构建助教的 system prompt：
+    - 教学资料上下文（标题/学科/简介/目标）
+    - KB 检索片段（若有）
+    """
+    lang = (language or "zh").strip().lower()
+    want_english = lang in {"en", "english"}
+
+    if want_english:
+        base = (
+            "You are TeachDo's AI teaching assistant.\n"
+            "Your goal is to help teachers design lessons, explain concepts, generate exercises, and answer questions.\n"
+            "Rules:\n"
+            "- Be accurate and practical.\n"
+            "- If the user question is ambiguous, ask 1-2 clarifying questions.\n"
+            "- When KB snippets are provided, use them as grounding; if insufficient, say so.\n"
+            "- Use concise bullets/steps when helpful.\n"
+        )
+    else:
+        base = (
+            "你是 TeachDo 的 AI 教学助教。\n"
+            "你的目标是帮助教师进行教学设计、知识点讲解、题目生成与答疑。\n"
+            "规则：\n"
+            "- 回答要准确、可操作。\n"
+            "- 问题不清晰时，先问 1~2 个澄清问题。\n"
+            "- 若提供了知识库检索片段，应优先基于片段作答；片段不足时要明确说明。\n"
+            "- 需要时用条目/步骤输出。\n"
+        )
+
+    context_bits: list[str] = []
+    if material and (material.title or "").strip():
+        title = material.title.strip()
+        if want_english:
+            context_bits.append(f"Current teaching material: {title}")
+        else:
+            context_bits.append(f"当前教学资料：{title}")
+        if material.subject:
+            context_bits.append(("Subject: " if want_english else "学科：") + str(material.subject).strip())
+        if material.description:
+            context_bits.append(("Description: " if want_english else "简介：") + str(material.description).strip())
+        if material.objectives:
+            context_bits.append(("Objectives: " if want_english else "教学目标：") + str(material.objectives).strip())
+
+    if kb_context and kb_context.strip():
+        if want_english:
+            context_bits.append("KB snippets (for grounding):\n" + kb_context.strip())
+        else:
+            context_bits.append("知识库检索片段（用于事实依据/参考）：\n" + kb_context.strip())
+
+    if not context_bits:
+        return base
+
+    return base + "\n\n" + "\n".join(context_bits).strip()
+
+
+def _get_assistant_llm_settings() -> dict[str, str]:
+    """
+    助教模型配置：
+    - 优先读取 ASSISTANT_*，若未配置则回退到 OUTLINE_*（保持与计划一致，减少新增配置成本）。
+    - 当前仅支持 openai 协议（OpenAI 兼容 base_url）。
+    """
+    llm_type = (os.getenv("ASSISTANT_TYPE") or os.getenv("OUTLINE_TYPE") or "").strip().lower()
+    llm_model = (os.getenv("ASSISTANT_MODEL") or os.getenv("OUTLINE_MODEL") or "").strip()
+    llm_api_key = (os.getenv("ASSISTANT_API_KEY") or os.getenv("OUTLINE_API_KEY") or "").strip()
+    llm_base_url = (os.getenv("ASSISTANT_BASE_URL") or os.getenv("OUTLINE_BASE_URL") or "https://api.openai.com/v1").strip()
+
+    if not llm_type or not llm_model:
+        raise RuntimeError("助教模型未配置，请设置 ASSISTANT_TYPE/ASSISTANT_MODEL（或复用 OUTLINE_* 配置）")
+    if llm_type != "openai":
+        raise RuntimeError(f"当前助教仅支持 openai 协议，检测到 ASSISTANT_TYPE/OUTLINE_TYPE={llm_type}")
+    if not llm_api_key:
+        raise RuntimeError("缺少助教模型 API Key，请设置 ASSISTANT_API_KEY（或复用 OUTLINE_API_KEY）")
+
+    return {"type": llm_type, "model": llm_model, "api_key": llm_api_key, "base_url": llm_base_url}
+
+
+async def iter_assistant_text_chunks(
+    *,
+    model: str,
+    api_key: str,
+    base_url: str,
+    messages: list[dict[str, str]],
+    temperature: float = 0.6,
+) -> AsyncGenerator[str, None]:
+    """
+    通过 OpenAI 兼容协议调用 Chat Completions，并将增量 token 作为文本片段 yield。
+    注意：这里不直接向客户端暴露上游 SSE，避免不同兼容网关的格式差异影响前端解析。
+    """
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "stream": True,
+    }
+
+    timeout = httpx.Timeout(connect=60.0, write=60.0, pool=60.0, read=None)
+    async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
+        async with client.stream("POST", url, headers=headers, json=payload) as resp:
+            if resp.status_code >= 400:
+                text = await resp.aread()
+                raise RuntimeError(f"LLM 请求失败：{resp.status_code} {text.decode('utf-8', errors='ignore')}")
+
+            async for line in resp.aiter_lines():
+                if not line:
+                    continue
+                if line.startswith(":"):
+                    continue
+                if not line.startswith("data:"):
+                    continue
+                data = line[len("data:") :].strip()
+                if not data:
+                    continue
+                if data == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data)
+                except Exception:
+                    # 某些网关可能夹杂非 JSON 行，忽略
+                    continue
+
+                # OpenAI 标准：choices[0].delta.content
+                delta = None
+                try:
+                    choices = obj.get("choices") if isinstance(obj, dict) else None
+                    if isinstance(choices, list) and choices:
+                        choice0 = choices[0] if isinstance(choices[0], dict) else {}
+                        delta_obj = choice0.get("delta") if isinstance(choice0.get("delta"), dict) else {}
+                        delta = delta_obj.get("content")
+                        if not delta:
+                            # 兼容少数实现：message.content 直接返回完整段落
+                            msg_obj = choice0.get("message") if isinstance(choice0.get("message"), dict) else {}
+                            delta = msg_obj.get("content")
+                except Exception:
+                    delta = None
+
+                if isinstance(delta, str) and delta:
+                    yield delta
+
+
+async def stream_assistant_sse(
+    *,
+    llm_settings: dict[str, str],
+    messages: list[dict[str, str]],
+) -> AsyncGenerator[bytes, None]:
+    """
+    将助教回答以 SSE 向前端流式输出（data: 增量文本，结束 data: [DONE]）。
+    若发生异常，发送一条 type=error 的 JSON 事件后结束。
+    """
+    try:
+        async for delta in iter_assistant_text_chunks(
+            model=llm_settings["model"],
+            api_key=llm_settings["api_key"],
+            base_url=llm_settings["base_url"],
+            messages=messages,
+        ):
+            yield _encode_sse_data(delta)
+    except asyncio.CancelledError:
+        logger.info("客户端已断开 /tools/assistant_chat SSE 连接，提前结束流")
+        raise
+    except Exception as exc:
+        logger.error("助教对话流异常: %s", exc, exc_info=True)
+        payload = json.dumps(
+            {
+                "type": "error",
+                "text": f"助教服务异常：{exc}",
+            },
+            ensure_ascii=False,
+        )
+        yield _encode_sse_data(payload)
+    finally:
+        yield b"data: [DONE]\n\n"
+
+
 async def stream_content_response(
     markdown_content: str,
     language,
@@ -745,6 +964,69 @@ async def aippt_content(request: AipptContentRequest):
             yield chunk
 
     # 关键：SSE 推荐这些头
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/tools/assistant_chat")
+async def assistant_chat(request: AssistantChatRequest):
+    """
+    助教对话（SSE）：
+    - 历史消息由前端维护，每次请求透传 messages
+    - 可选透传 kb_file_ids，用 personaldb 检索片段增强回答（RAG）
+    - 不做会话持久化，提供 “清除上下文” 由前端实现（清空 messages）
+    """
+    if not request.messages:
+        raise HTTPException(status_code=400, detail="messages 不能为空")
+
+    last_user_message = _pick_last_user_message(request.messages)
+    if not last_user_message:
+        raise HTTPException(status_code=400, detail="messages 中缺少 user 消息")
+
+    personaldb_url = _get_personaldb_url()
+    resolved_kb_file_ids = _normalize_kb_file_ids(request.kb_file_ids)
+    kb_context = ""
+    if resolved_kb_file_ids and personaldb_url and await _is_personaldb_ready(personaldb_url):
+        kb_context = await _search_personaldb_kb_context(
+            personaldb_url,
+            user_id=str(request.user_id or "default_user"),
+            query=last_user_message,
+            kb_file_ids=resolved_kb_file_ids,
+        )
+
+    system_prompt = _build_assistant_system_prompt(
+        material=request.material,
+        kb_context=kb_context,
+        language=request.language,
+    )
+
+    llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    for msg in request.messages:
+        content = (msg.content or "").strip()
+        if not content:
+            continue
+        llm_messages.append({"role": msg.role, "content": content})
+
+    try:
+        llm_settings = _get_assistant_llm_settings()
+    except Exception as exc:
+        logger.error("助教模型配置错误: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    async def event_generator():
+        async for chunk in stream_assistant_sse(
+            llm_settings=llm_settings,
+            messages=llm_messages,
+        ):
+            yield chunk
+
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
