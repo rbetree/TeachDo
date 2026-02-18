@@ -18,7 +18,6 @@ interface Emits {
   (e: 'update:open', value: boolean): void;
   (e: 'update:generateFromWebSearch', value: boolean): void;
   (e: 'update:generateFromUploadedFile', value: boolean): void;
-  (e: 'openKbFilePicker'): void;
   (e: 'goToKnowledgeBase'): void;
 }
 
@@ -146,23 +145,15 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-200 font-bold text-xs hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
-                :disabled="props.loading || !props.hasReadyKbFiles"
-                @click="emit('openKbFilePicker')"
+                :disabled="props.loading"
+                @click="emit('goToKnowledgeBase')"
               >
-                {{ t('kb.picker.open') }}
+                {{ props.hasReadyKbFiles ? t('ppt.advanced.manage_kb_files') : t('ppt.advanced.goto_kb') }}
               </button>
             </div>
 
             <div class="flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
               <div>{{ t('ppt.advanced.kb_ready', { count: props.readyKbFileCount }) }}</div>
-              <button
-                v-if="!props.hasReadyKbFiles"
-                type="button"
-                class="text-indigo-600 dark:text-indigo-300 font-bold hover:underline"
-                @click="emit('goToKnowledgeBase')"
-              >
-                {{ t('ppt.advanced.goto_kb') }}
-              </button>
             </div>
           </div>
 
@@ -238,4 +229,3 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-

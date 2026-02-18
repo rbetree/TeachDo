@@ -4,7 +4,7 @@ import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import type { ImgPoolItem } from '@/editor-runtime/aippt/aipptGenerator';
 import { buildSlidesMarkdown, mapAipptSlideToPreview } from '@/components/workspace/ppt/pptGenerationUtils';
-import { KB_USER_ID, useAppStore } from '@/stores/appStore';
+import { KB_USER_ID } from '@/stores/appStore';
 
 export type PptViewState = 'SELECT_TEMPLATE' | 'PREVIEW';
 
@@ -14,19 +14,7 @@ export interface UsePptGenerationParams {
   emitUpdateMaterial: (updates: Partial<TeachingMaterial>) => void;
 }
 
-function sameStringArray(a: string[] | undefined, b: string[] | undefined): boolean {
-  const left = Array.isArray(a) ? a : [];
-  const right = Array.isArray(b) ? b : [];
-  if (left.length !== right.length) return false;
-  for (let i = 0; i < left.length; i += 1) {
-    if (left[i] !== right[i]) return false;
-  }
-  return true;
-}
-
 export function usePptGeneration(params: UsePptGenerationParams) {
-  const store = useAppStore();
-
   const loading = ref(false);
   const presentation = ref<Presentation | null>(null);
   const templates = ref<PPTTemplate[]>([]);
@@ -34,33 +22,13 @@ export function usePptGeneration(params: UsePptGenerationParams) {
   const viewState = ref<PptViewState>('SELECT_TEMPLATE');
 
   const generateFromWebSearch = ref(true);
-  const generateFromUploadedFile = ref(true);
   const selectedKbFileIds = ref<string[]>([]);
 
-  const readyKbFiles = computed(() => (store.kbFiles || []).filter((f) => f.status === 'ready'));
-  const readyKbFileCount = computed(() => readyKbFiles.value.length);
-  const hasReadyKbFiles = computed(() => readyKbFileCount.value > 0);
-  const readyKbIdSet = computed(() => new Set(readyKbFiles.value.map((f) => f.id)));
-
-  const selectedReadyKbFileIds = computed(() =>
-    (selectedKbFileIds.value || []).filter((id) => readyKbIdSet.value.has(id)),
-  );
-
-  const hasAdvancedOverrides = computed(() => {
-    const material = params.currentMaterial.value;
-    const kbOverride = !sameStringArray(selectedKbFileIds.value, material.kbFileIds || []);
-    return !generateFromWebSearch.value || !generateFromUploadedFile.value || kbOverride;
+  const kbFileIdsForRequest = computed(() => {
+    const ids = Array.isArray(selectedKbFileIds.value) ? selectedKbFileIds.value : [];
+    const normalized = ids.map((id) => id.trim()).filter(Boolean);
+    return Array.from(new Set(normalized));
   });
-
-  watch(
-    hasReadyKbFiles,
-    (ok) => {
-      if (!ok && generateFromUploadedFile.value) {
-        generateFromUploadedFile.value = false;
-      }
-    },
-    { immediate: true },
-  );
 
   const selectedTemplate = computed(() => templates.value.find((item) => item.id === selectedTemplateId.value) || null);
 
@@ -110,19 +78,15 @@ export function usePptGeneration(params: UsePptGenerationParams) {
     { immediate: true },
   );
 
-  const validateKbSelection = (): { ok: boolean; kbFileIds: string[] | null } => {
-    if (!generateFromUploadedFile.value) return { ok: true, kbFileIds: null };
+  watch(
+    () => params.currentMaterial.value.kbFileIds,
+    (ids) => {
+      selectedKbFileIds.value = Array.isArray(ids) ? [...ids] : [];
+    },
+    { immediate: true },
+  );
 
-    const ids = selectedReadyKbFileIds.value;
-    if (ids.length === 0) {
-      generateFromUploadedFile.value = false;
-      toast.info(params.t('ppt.toast.kb_disabled'));
-      return { ok: true, kbFileIds: null };
-    }
-    return { ok: true, kbFileIds: ids };
-  };
-
-  const handleGenerate = async (options: { reason: 'generate' | 'regenerate' }) => {
+  const handleGenerate = async () => {
     const material = params.currentMaterial.value;
     const template = selectedTemplate.value;
     if (!material || !material.outlineContent || !template) return;
@@ -131,12 +95,8 @@ export function usePptGeneration(params: UsePptGenerationParams) {
     presentation.value = { theme: template.id, slides: [] };
     viewState.value = 'PREVIEW';
 
-    const { kbFileIds } = validateKbSelection();
-
-    // 仅在“重新生成”时把对话框里选中的 KB 文件写回默认
-    if (options.reason === 'regenerate') {
-      params.emitUpdateMaterial({ kbFileIds: [...selectedKbFileIds.value] });
-    }
+    const kbFileIds = kbFileIdsForRequest.value;
+    const useKb = kbFileIds.length > 0;
 
     try {
       const { createAipptGenerator } = await import('@/editor-runtime/aippt/aipptGenerator');
@@ -156,8 +116,8 @@ export function usePptGeneration(params: UsePptGenerationParams) {
         sessionId: KB_USER_ID,
         language: 'zh',
         generateFromWebSearch: generateFromWebSearch.value,
-        generateFromUploadedFile: generateFromUploadedFile.value,
-        kbFileIds,
+        generateFromUploadedFile: useKb,
+        kbFileIds: useKb ? kbFileIds : null,
         onSlide: (slide) => {
           if (slide.images?.length) {
             const imgs: ImgPoolItem[] = slide.images.map((img: any) => ({
@@ -240,12 +200,8 @@ export function usePptGeneration(params: UsePptGenerationParams) {
     selectedTemplate,
     presentation,
     viewState,
-    hasAdvancedOverrides,
     generateFromWebSearch,
-    generateFromUploadedFile,
     selectedKbFileIds,
-    readyKbFileCount,
-    hasReadyKbFiles,
     loadTemplates,
     handleGenerate,
     syncFromMaterial,

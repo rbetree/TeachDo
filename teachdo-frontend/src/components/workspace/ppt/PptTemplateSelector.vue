@@ -7,13 +7,11 @@ interface Props {
   templates: PPTTemplate[];
   selectedTemplateId: string;
   loading: boolean;
-  hasAdvancedOverrides: boolean;
   externalToolbar?: boolean;
 }
 
 interface Emits {
   (e: 'update:selectedTemplateId', value: string): void;
-  (e: 'openAdvanced'): void;
   (e: 'generate'): void;
 }
 
@@ -28,24 +26,11 @@ const selectTemplate = (id: string) => {
 
 <template>
   <div class="flex-1 flex flex-col min-h-0">
-    <div v-if="!props.externalToolbar" class="mb-6 flex items-start justify-between gap-4">
+    <div v-if="!props.externalToolbar" class="mb-6">
       <div class="min-w-0">
         <h2 class="text-2xl font-bold text-slate-900 dark:text-white">{{ t('ppt.choose_template') }}</h2>
         <p class="text-slate-500 dark:text-slate-400">{{ t('ppt.select_hint') }}</p>
       </div>
-
-      <button
-        type="button"
-        :disabled="props.loading"
-        class="shrink-0 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2 font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
-        @click="emit('openAdvanced')"
-      >
-        <span class="relative inline-flex">
-          <LucideIcon name="settings-2" :size="16" />
-          <span v-if="props.hasAdvancedOverrides" class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-slate-900" aria-hidden="true" />
-        </span>
-        <span class="hidden sm:inline">{{ t('ppt.advanced.title') }}</span>
-      </button>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" :class="props.externalToolbar ? 'mb-0' : 'mb-8'">

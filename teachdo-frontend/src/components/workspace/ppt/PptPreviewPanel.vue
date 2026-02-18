@@ -6,7 +6,6 @@ import LucideIcon from '@/components/common/LucideIcon.vue';
 
 interface Props {
   loading: boolean;
-  hasAdvancedOverrides: boolean;
   presentation: Presentation | null;
   selectedTemplate: PPTTemplate | null;
   editorDocument: EditorDocument | null;
@@ -16,7 +15,6 @@ interface Props {
 
 interface Emits {
   (e: 'update:slideIndex', value: number): void;
-  (e: 'openAdvanced'): void;
   (e: 'goToEditor'): void;
   (e: 'changeTemplate'): void;
   (e: 'regenerate'): void;
@@ -218,17 +216,6 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="flex gap-2 flex-wrap justify-end">
-        <button
-          type="button"
-          class="px-3 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
-          @click="emit('openAdvanced')"
-        >
-          <span class="relative inline-flex">
-            <LucideIcon name="settings-2" :size="16" />
-            <span v-if="props.hasAdvancedOverrides" class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-slate-900" aria-hidden="true" />
-          </span>
-          <span class="hidden lg:inline">{{ t('ppt.advanced.title') }}</span>
-        </button>
         <button
           v-if="props.editorDocument"
           type="button"

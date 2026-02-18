@@ -5,12 +5,9 @@ import { useI18n } from 'vue-i18n';
 import type { TeachingMaterial } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
-import { useAppStore } from '@/stores/appStore';
-import PptAdvancedDialog from '@/components/workspace/ppt/PptAdvancedDialog.vue';
 import PptPreviewPanel from '@/components/workspace/ppt/PptPreviewPanel.vue';
 import PptTemplateSelector from '@/components/workspace/ppt/PptTemplateSelector.vue';
 import { usePptGeneration } from '@/components/workspace/ppt/usePptGeneration';
-import KbFilePickerDialog from '@/components/workspace/KbFilePickerDialog.vue';
 
 interface Props {
   currentMaterial: TeachingMaterial;
@@ -26,7 +23,6 @@ const emit = defineEmits<Emits>();
 const { t } = useI18n();
 const router = useRouter();
 const ui = useWorkspaceUiStore();
-const store = useAppStore();
 
 const currentMaterialRef = toRef(props, 'currentMaterial');
 
@@ -37,12 +33,8 @@ const {
   selectedTemplate,
   presentation,
   viewState,
-  hasAdvancedOverrides,
   generateFromWebSearch,
-  generateFromUploadedFile,
   selectedKbFileIds,
-  readyKbFileCount,
-  hasReadyKbFiles,
   handleGenerate,
 } = usePptGeneration({
   currentMaterial: currentMaterialRef,
@@ -67,41 +59,8 @@ watch(
   },
 );
 
-const advancedOpen = ref(false);
-const lastFocusedEl = ref<HTMLElement | null>(null);
-
-const kbPickerOpen = ref(false);
-const kbPickerRestoreFocusEl = ref<HTMLElement | null>(null);
-
-const setAdvancedOpen = (value: boolean) => {
-  advancedOpen.value = value;
-};
-
-const setGenerateFromWebSearch = (value: boolean) => {
-  generateFromWebSearch.value = value;
-};
-
-const setGenerateFromUploadedFile = (value: boolean) => {
-  generateFromUploadedFile.value = value;
-};
-
-const openAdvanced = () => {
-  lastFocusedEl.value = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  advancedOpen.value = true;
-};
-
-const openKbFilePicker = () => {
-  kbPickerRestoreFocusEl.value = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  kbPickerOpen.value = true;
-};
-
-const handleKbFilePickerConfirm = (ids: string[]) => {
-  selectedKbFileIds.value = ids;
-};
-
 const goToKnowledgeBase = () => {
   ui.setRightPanelTab('kb');
-  advancedOpen.value = false;
 };
 
 const goToOutline = () => {
@@ -121,12 +80,12 @@ const goToTemplateSelect = () => {
 
 const handleGenerateFirst = async () => {
   currentSlideIndex.value = 0;
-  await handleGenerate({ reason: 'generate' });
+  await handleGenerate();
 };
 
 const handleRegenerate = async () => {
   currentSlideIndex.value = 0;
-  await handleGenerate({ reason: 'regenerate' });
+  await handleGenerate();
 };
 </script>
 
@@ -175,17 +134,31 @@ const handleRegenerate = async () => {
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
+          <label
+            class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer select-none disabled:opacity-60"
+            :class="loading ? 'opacity-60 cursor-not-allowed' : ''"
+          >
+            <input
+              v-model="generateFromWebSearch"
+              type="checkbox"
+              class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
+              :disabled="loading"
+            />
+            <span>{{ t('ppt.advanced.web_search') }}</span>
+          </label>
+
           <button
             type="button"
-            :disabled="loading"
-            class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-60"
-            @click="openAdvanced"
+            class="toolbar-item border transition-colors"
+            :class="selectedKbFileIds.length
+              ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/30'
+              : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600'"
+            :title="t('ppt.advanced.manage_kb_files')"
+            :aria-label="t('ppt.advanced.manage_kb_files')"
+            @click="goToKnowledgeBase"
           >
-            <span class="relative inline-flex">
-              <LucideIcon name="settings-2" class="w-4 h-4" />
-              <span v-if="hasAdvancedOverrides" class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-slate-900" aria-hidden="true" />
-            </span>
-            <span>{{ t('ppt.advanced.title') }}</span>
+            <LucideIcon name="database" class="w-4 h-4" />
+            <span>{{ t('ppt.toolbar.kb_refs', { count: selectedKbFileIds.length }) }}</span>
           </button>
 
           <template v-if="viewState === 'SELECT_TEMPLATE'">
@@ -241,9 +214,7 @@ const handleRegenerate = async () => {
           class="flex-1 min-h-0"
           :templates="templates"
           :loading="loading"
-          :has-advanced-overrides="hasAdvancedOverrides"
           :external-toolbar="hasExternalToolbar"
-          @open-advanced="openAdvanced"
           @generate="handleGenerateFirst"
         />
 
@@ -252,42 +223,15 @@ const handleRegenerate = async () => {
           v-model:slide-index="currentSlideIndex"
           class="flex-1 min-h-0"
           :loading="loading"
-          :has-advanced-overrides="hasAdvancedOverrides"
           :presentation="presentation"
           :selected-template="selectedTemplate"
           :editor-document="props.currentMaterial?.editorDocument ?? null"
           :external-toolbar="hasExternalToolbar"
-          @open-advanced="openAdvanced"
           @go-to-editor="goToEditor"
           @change-template="goToTemplateSelect"
           @regenerate="handleRegenerate"
         />
       </div>
     </div>
-
-    <PptAdvancedDialog
-      :open="advancedOpen"
-      :loading="loading"
-      :has-ready-kb-files="hasReadyKbFiles"
-      :ready-kb-file-count="readyKbFileCount"
-      :selected-kb-file-count="selectedKbFileIds.length"
-      :generate-from-web-search="generateFromWebSearch"
-      :generate-from-uploaded-file="generateFromUploadedFile"
-      :restore-focus-el="lastFocusedEl"
-      @update:open="setAdvancedOpen"
-      @update:generate-from-web-search="setGenerateFromWebSearch"
-      @update:generate-from-uploaded-file="setGenerateFromUploadedFile"
-      @open-kb-file-picker="openKbFilePicker"
-      @go-to-knowledge-base="goToKnowledgeBase"
-    />
-
-    <KbFilePickerDialog
-      :open="kbPickerOpen"
-      :files="store.kbFiles"
-      :selected-ids="selectedKbFileIds"
-      :restore-focus-el="kbPickerRestoreFocusEl"
-      @update:open="(v) => (kbPickerOpen = v)"
-      @confirm="handleKbFilePickerConfirm"
-    />
   </div>
 </template>
