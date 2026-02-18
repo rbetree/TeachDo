@@ -199,6 +199,7 @@ const uploadFile = async (file: File) => {
     uploadedAt: new Date(),
     progress: 0,
     folderId: 0,
+    sourceType: 'upload',
   };
   updateFiles([...files.value, newFile]);
 

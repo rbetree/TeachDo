@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import type { KBFile } from '#root/types';
+import type { KBFile, TeachingMaterial } from '#root/types';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useI18n } from 'vue-i18n';
@@ -12,6 +12,7 @@ type KnowledgeBaseViewVariant = 'page' | 'panel';
 
 interface Props {
   variant?: KnowledgeBaseViewVariant;
+  currentMaterial?: TeachingMaterial | null;
 }
 
 const props = defineProps<Props>();
@@ -19,6 +20,7 @@ const { t } = useI18n();
 const store = useAppStore();
 
 const isPanel = computed(() => props.variant === 'panel');
+const activeMaterial = computed(() => props.currentMaterial ?? store.currentMaterial);
 
 const isDragging = ref(false);
 const searchQuery = ref('');
@@ -33,6 +35,57 @@ const filteredFiles = computed(() => {
   const query = searchQuery.value.toLowerCase();
   return files.value.filter((f) => f.name.toLowerCase().includes(query));
 });
+
+const normalizeStringArray = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const id = typeof item === 'string' ? item.trim() : '';
+    if (!id) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
+};
+
+const selectedKbFileIdSet = computed(() => new Set(normalizeStringArray(activeMaterial.value?.kbFileIds)));
+const selectedKbFileCount = computed(() => selectedKbFileIdSet.value.size);
+
+const isKbFileSelected = (fileId: string) => selectedKbFileIdSet.value.has(fileId);
+
+const persistKbFileIds = (nextIds: string[]) => {
+  const material = activeMaterial.value;
+  if (!material) return;
+  store.patchMaterial(material.id, { kbFileIds: normalizeStringArray(nextIds) });
+};
+
+const toggleKbFileSelected = (fileId: string) => {
+  const material = activeMaterial.value;
+  if (!material) return;
+
+  const current = normalizeStringArray(material.kbFileIds);
+  const next = new Set(current);
+  if (next.has(fileId)) next.delete(fileId);
+  else next.add(fileId);
+  persistKbFileIds(Array.from(next));
+};
+
+const clearSelectedKbFiles = () => {
+  persistKbFileIds([]);
+};
+
+const purgeKbFileReferences = (fileId: string) => {
+  const target = fileId.trim();
+  if (!target) return;
+
+  for (const material of store.materials) {
+    const ids = normalizeStringArray(material.kbFileIds);
+    if (!ids.includes(target)) continue;
+    store.patchMaterial(material.id, { kbFileIds: ids.filter((id) => id !== target) });
+  }
+};
 
 const formatSize = (bytes: number) => {
   if (!bytes) return '0 B';
@@ -98,23 +151,7 @@ const getDisplayType = (file: KBFile) => normalizeExt(file.type) || getNameExt(f
 	  return parts[2] || null;
 	};
 
-	const getSourceLabel = (file: KBFile) => {
-	  const sourceType = file.sourceType;
-	  if (sourceType === 'upload') return t('kb.source.upload');
-	  if (sourceType === 'material') {
-	    const materialId = file.sourceMaterialId || parseMaterialIdFromGenFileId(file.id) || '';
-	    const title =
-	      file.sourceMaterialTitle ||
-	      (materialId ? store.materials.find((m) => m.id === materialId)?.title : undefined) ||
-	      '';
-	    if (title) return t('kb.source.material', { title });
-	    if (materialId) return t('kb.source.material_id', { id: materialId });
-	    return t('kb.source.material_unknown');
-	  }
-	  return t('kb.source.unknown_origin');
-	};
-
-const getSourceTagUi = (file: KBFile) => getKbSourceUi(getKbSource(file.folderId));
+	const getSourceTagUi = (file: KBFile) => getKbSourceUi(getKbSource(file.folderId));
 
 const updateFiles = (next: KBFile[]) => {
   store.setKbFiles(next);
@@ -208,16 +245,17 @@ const handleFilePicked = (e: Event) => {
 
 const uploadFile = async (file: File) => {
   const localId = `temp:${Date.now()}`;
-  const newFile: KBFile = {
-    id: localId,
-    name: file.name,
-    size: file.size,
-    type: file.name.split('.').pop() || 'unknown',
-    status: 'uploading',
-    uploadedAt: new Date(),
-    progress: 0,
-    folderId: 0,
-  };
+	  const newFile: KBFile = {
+	    id: localId,
+	    name: file.name,
+	    size: file.size,
+	    type: file.name.split('.').pop() || 'unknown',
+	    status: 'uploading',
+	    uploadedAt: new Date(),
+	    progress: 0,
+	    folderId: 0,
+	    sourceType: 'upload',
+	  };
 
   updateFiles([...files.value, newFile]);
 
@@ -291,6 +329,7 @@ const handleDelete = async (id: string) => {
   try {
     await aiService.kbDeleteFile({ userId: KB_USER_ID, fileId: id });
     updateFiles(files.value.filter((f) => f.id !== id));
+    purgeKbFileReferences(id);
     toast.success(t('kb.action.delete'));
     await refreshFromBackend();
   } catch (e) {
@@ -365,6 +404,20 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="mt-4">
+        <div v-if="activeMaterial" class="flex items-center justify-between gap-2 mb-3">
+          <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+            {{ t('kb.picker.selected', { count: selectedKbFileCount }) }}
+          </div>
+          <button
+            type="button"
+            class="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+            :disabled="selectedKbFileCount === 0"
+            @click="clearSelectedKbFiles"
+          >
+            {{ t('kb.picker.clear') }}
+          </button>
+        </div>
+
         <div class="relative">
           <LucideIcon name="search" :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -442,97 +495,125 @@ onBeforeUnmount(() => {
               <p class="text-sm">{{ t('kb.empty') }}</p>
             </div>
 
-	            <div v-else class="px-4 pb-4 space-y-2.5">
-		              <div
-		                v-for="file in filteredFiles"
-		                :key="file.id"
-		                class="group rounded-2xl border border-slate-200/70 dark:border-slate-800/60 bg-[rgb(117,138,230)]/10 dark:bg-[rgb(117,138,230)]/12 p-3 shadow-sm transition-colors hover:bg-[rgb(117,138,230)]/14 dark:hover:bg-[rgb(117,138,230)]/18 hover:border-indigo-200 dark:hover:border-indigo-700/40 focus-within:ring-2 focus-within:ring-indigo-500/40"
-		              >
-			                <div class="flex items-start gap-3">
-			                  <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 flex items-center justify-center text-indigo-700 dark:text-indigo-200 flex-shrink-0 font-bold text-[10px] uppercase border border-indigo-100 dark:border-indigo-800/40">
-			                    {{ getDisplayType(file) }}
-			                  </div>
-	
-	                  <div class="min-w-0 flex-1">
-	                    <div class="font-bold text-sm text-slate-800 dark:text-slate-100 truncate" :title="getDisplayName(file)">{{ getDisplayName(file) }}</div>
-		                    <div class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
-		                      <span class="font-mono">{{ formatSize(file.size || 0) }}</span>
-		                      <span class="text-slate-300 dark:text-slate-700">•</span>
-		                      <span>{{ formatDateTime(file.uploadedAt) }}</span>
-		                      <span class="text-slate-300 dark:text-slate-700">•</span>
-		                      <span>{{ getSourceLabel(file) }}</span>
-	                    </div>
+			            <div v-else class="px-4 pb-4 space-y-1">
+				              <div
+				                v-for="file in filteredFiles"
+				                :key="file.id"
+				                class="group rounded-2xl border border-slate-200/70 dark:border-slate-800/60 bg-[rgb(117,138,230)]/10 dark:bg-[rgb(117,138,230)]/12 p-1 shadow-sm transition-colors hover:bg-[rgb(117,138,230)]/14 dark:hover:bg-[rgb(117,138,230)]/18 hover:border-indigo-200 dark:hover:border-indigo-700/40 focus-within:ring-2 focus-within:ring-indigo-500/40"
+			                    :class="activeMaterial && isKbFileSelected(file.id) ? 'ring-2 ring-indigo-500/25 border-indigo-200 dark:border-indigo-700/50' : ''"
+				              >
+					                <div class="flex items-start justify-between gap-1">
+                        <label
+                          v-if="activeMaterial"
+                          :for="`kb-select-${file.id}`"
+                          class="min-w-0 flex-1 cursor-pointer"
+                        >
+                          <div class="font-bold text-[12px] leading-tight text-slate-800 dark:text-slate-100 truncate" :title="getDisplayName(file)">
+                            {{ getDisplayName(file) }}
+                          </div>
+                          <div class="mt-0.5 flex items-center gap-1 text-[9px] leading-tight text-slate-500 dark:text-slate-400 min-w-0">
+                            <span class="font-mono shrink-0">{{ formatSize(file.size || 0) }}</span>
+                            <span class="text-slate-300 dark:text-slate-700 shrink-0">•</span>
+                            <span class="shrink-0">{{ formatDateTime(file.uploadedAt) }}</span>
+                          </div>
+                        </label>
 
-                    <div v-if="file.status === 'uploading'" class="mt-2 space-y-1">
-                      <div class="flex justify-between text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
-                        <span>{{ t('kb.status.uploading') }}</span>
-                        <span>{{ file.progress ?? 0 }}%</span>
-                      </div>
-                      <div class="h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div class="h-full bg-indigo-500 transition-all duration-300" :style="{ width: `${file.progress ?? 0}%` }"></div>
-                      </div>
-                    </div>
-                  </div>
+                        <div v-else class="min-w-0 flex-1">
+                          <div class="font-bold text-[12px] leading-tight text-slate-800 dark:text-slate-100 truncate" :title="getDisplayName(file)">
+                            {{ getDisplayName(file) }}
+                          </div>
+                          <div class="mt-0.5 flex items-center gap-1 text-[9px] leading-tight text-slate-500 dark:text-slate-400 min-w-0">
+                            <span class="font-mono shrink-0">{{ formatSize(file.size || 0) }}</span>
+                            <span class="text-slate-300 dark:text-slate-700 shrink-0">•</span>
+                            <span class="shrink-0">{{ formatDateTime(file.uploadedAt) }}</span>
+                          </div>
+                        </div>
 
-	                  <div class="flex flex-col items-end gap-2 flex-shrink-0">
-                    <span
-                      :class="getSourceTagUi(file).className"
-                      :title="t(getSourceTagUi(file).i18nTitleKey)"
-                      :aria-label="t(getSourceTagUi(file).i18nTitleKey)"
-                    >
-                      <LucideIcon :name="getSourceTagUi(file).icon" :size="12" />
-                      {{ t(getSourceTagUi(file).i18nKey) }}
-                    </span>
-                    <span
-                      v-if="file.status === 'ready'"
-                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300"
-                    >
-                      <LucideIcon name="check-circle" :size="12" /> {{ t('kb.status.ready') }}
-                    </span>
-                    <span
-                      v-else-if="file.status === 'processing'"
-                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200"
-                    >
-                      <LucideIcon name="loader-2" :size="12" class="animate-spin" /> {{ t('kb.status.processing') }}
-                    </span>
-                    <span
-                      v-else-if="file.status === 'uploading'"
-                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-200"
-                    >
-                      <LucideIcon name="loader-2" :size="12" class="animate-spin" /> {{ t('kb.status.uploading') }}
-                    </span>
-                    <span
-                      v-else
-                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300"
-                    >
-                      <LucideIcon name="alert-circle" :size="12" /> {{ t('kb.status.error') }}
-                    </span>
+                        <input
+                          v-if="activeMaterial"
+                          :id="`kb-select-${file.id}`"
+                          type="checkbox"
+                          class="mt-0.5 h-3.5 w-3.5 accent-indigo-600 disabled:opacity-40"
+                          :checked="isKbFileSelected(file.id)"
+                          :disabled="file.status !== 'ready'"
+                          :aria-label="t('kb.picker.toggle')"
+                          @change="toggleKbFileSelected(file.id)"
+                        />
+					                </div>
 
-		                    <div class="flex items-center gap-1">
-		                      <button
-		                        type="button"
-		                        class="w-11 h-11 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
-		                        :aria-label="t('kb.action.export')"
-		                        :title="t('kb.action.export')"
-		                        :disabled="file.status !== 'ready' || exportingFileId === file.id"
-		                        @click="handleExport(file)"
-		                      >
-		                        <LucideIcon name="download" :size="16" />
-		                      </button>
-		                      <button
-		                        type="button"
-		                        class="w-11 h-11 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
-		                        :aria-label="t('kb.action.delete')"
-		                        :title="t('kb.action.delete')"
-		                        :disabled="file.status === 'uploading'"
-		                        @click="handleDelete(file.id)"
-		                      >
-	                        <LucideIcon name="trash-2" :size="16" />
-	                      </button>
-	                    </div>
-	                  </div>
-	                </div>
-	              </div>
+				                      <div class="mt-0.5 flex items-center justify-between gap-1">
+				                        <div class="flex items-center gap-1 min-w-0 flex-1">
+				                          <span
+				                            v-if="file.status === 'ready'"
+				                            class="shrink-0 inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-[9px] leading-none font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200"
+				                          >
+				                            <LucideIcon name="check-circle" :size="11" /> {{ t('kb.status.ready') }}
+				                          </span>
+				                          <span
+				                            v-else-if="file.status === 'processing'"
+				                            class="shrink-0 inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-[9px] leading-none font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200"
+				                          >
+				                            <LucideIcon name="loader-2" :size="11" class="animate-spin" /> {{ t('kb.status.processing') }}
+				                          </span>
+
+				                          <span
+				                            v-else-if="file.status === 'uploading'"
+				                            class="shrink-0 inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-[9px] leading-none font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-200"
+				                          >
+				                            <LucideIcon name="loader-2" :size="11" class="animate-spin" /> {{ t('kb.status.uploading') }}
+				                          </span>
+				                          <span
+				                            v-else-if="file.status === 'error'"
+				                            class="shrink-0 inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-[9px] leading-none font-bold bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300"
+				                          >
+				                            <LucideIcon name="alert-circle" :size="11" /> {{ t('kb.status.error') }}
+				                          </span>
+
+                          <span
+                            :class="getSourceTagUi(file).className"
+                            :title="t(getSourceTagUi(file).i18nTitleKey)"
+                            :aria-label="t(getSourceTagUi(file).i18nTitleKey)"
+                            class="shrink-0"
+                          >
+                            <LucideIcon :name="getSourceTagUi(file).icon" :size="12" />
+                            {{ t(getSourceTagUi(file).i18nKey) }}
+                          </span>
+				                        </div>
+
+				                        <div class="flex items-center gap-1 shrink-0">
+				                          <button
+				                            type="button"
+				                            class="w-7 h-7 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+				                            :aria-label="t('kb.action.export')"
+				                            :title="t('kb.action.export')"
+				                            :disabled="file.status !== 'ready' || exportingFileId === file.id"
+				                            @click="handleExport(file)"
+				                          >
+				                            <LucideIcon name="download" :size="13" />
+				                          </button>
+				                          <button
+				                            type="button"
+				                            class="w-7 h-7 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+				                            :aria-label="t('kb.action.delete')"
+				                            :title="t('kb.action.delete')"
+				                            :disabled="file.status === 'uploading'"
+				                            @click="handleDelete(file.id)"
+				                          >
+				                            <LucideIcon name="trash-2" :size="13" />
+				                          </button>
+				                        </div>
+				                      </div>
+
+				                      <div v-if="file.status === 'uploading'" class="mt-0.5 space-y-1">
+				                        <div class="flex justify-between text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+				                          <span>{{ t('kb.status.uploading') }}</span>
+				                          <span>{{ file.progress ?? 0 }}%</span>
+				                        </div>
+				                        <div class="h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+				                          <div class="h-full bg-indigo-500 transition-all duration-300" :style="{ width: `${file.progress ?? 0}%` }"></div>
+				                        </div>
+				                      </div>
+				              </div>
             </div>
           </div>
         </template>
@@ -595,7 +676,7 @@ onBeforeUnmount(() => {
                             {{ t(getSourceTagUi(file).i18nKey) }}
                           </span>
                         </div>
-		                    <div class="text-xs text-slate-400">{{ formatDateTime(file.uploadedAt) }} · {{ getSourceLabel(file) }}</div>
+			                    <div class="text-xs text-slate-400">{{ formatDateTime(file.uploadedAt) }}</div>
 		                  </div>
 		                </div>
                 <div class="col-span-2 text-sm text-slate-500 font-mono">

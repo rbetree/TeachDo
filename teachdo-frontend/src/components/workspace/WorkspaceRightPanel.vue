@@ -122,7 +122,7 @@ onMounted(() => {
     </div>
 
     <div v-if="!collapsed" class="flex-1 min-h-0 overflow-hidden">
-      <KnowledgeBaseView v-if="activeTab === 'kb'" variant="panel" />
+      <KnowledgeBaseView v-if="activeTab === 'kb'" variant="panel" :current-material="props.currentMaterial" />
       <AssistantView v-else :current-material="props.currentMaterial" variant="panel" />
     </div>
   </aside>
