@@ -6,6 +6,7 @@ import LucideIcon from '@/components/common/LucideIcon.vue';
 import { toast } from '@/utils/toast';
 import { aiService } from '@/services/aiService';
 import { KB_USER_ID, useAppStore } from '@/stores/appStore';
+import { getKbSource, getKbSourceUi } from '@/utils/kbSource';
 
 type FolderFilter = 'all' | 'upload' | 'generated';
 
@@ -37,12 +38,6 @@ const uploadTimers = new Map<string, number>();
 
 const close = () => emit('update:open', false);
 
-const getFolderLabel = (folderId: number) => {
-  if (folderId === 0) return t('kb.folder.upload');
-  if (folderId === 1) return t('kb.folder.generated');
-  return `${t('kb.folder.unknown')}(${folderId})`;
-};
-
 const normalizeTimestampMs = (value: unknown): number | null => {
   const asNumber = typeof value === 'number' ? value : Number.NaN;
   if (!Number.isFinite(asNumber) || asNumber <= 0) return null;
@@ -70,15 +65,17 @@ const filteredFiles = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   const filter = folderFilter.value;
   return readyFiles.value.filter((f) => {
-    const folderId = typeof f.folderId === 'number' ? f.folderId : 0;
-    if (filter === 'upload' && folderId !== 0) return false;
-    if (filter === 'generated' && folderId !== 1) return false;
+    const source = getKbSource(typeof f.folderId === 'number' ? f.folderId : undefined);
+    if (filter === 'upload' && source !== 'uploaded') return false;
+    if (filter === 'generated' && source !== 'generated') return false;
     if (!query) return true;
     return (f.name || '').toLowerCase().includes(query) || (f.id || '').toLowerCase().includes(query);
   });
 });
 
 const selectedCount = computed(() => draftSelected.value.size);
+
+const getSourceTagUi = (file: KBFile) => getKbSourceUi(getKbSource(typeof file.folderId === 'number' ? file.folderId : undefined));
 
 const toggleId = (id: string) => {
   const next = new Set(draftSelected.value);
@@ -369,15 +366,46 @@ onBeforeUnmount(() => {
                 />
               </div>
 
-              <div class="flex items-center gap-2">
-                <select
-                  v-model="folderFilter"
-                  class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/30 text-sm text-slate-700 dark:text-slate-200 outline-none"
+              <div class="flex items-center flex-wrap gap-2">
+                <div
+                  class="inline-flex items-center p-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/30"
+                  role="group"
+                  :aria-label="t('kb.picker.folder')"
                 >
-                  <option value="all">{{ t('kb.picker.filter.all') }}</option>
-                  <option value="upload">{{ t('kb.folder.upload') }}</option>
-                  <option value="generated">{{ t('kb.folder.generated') }}</option>
-                </select>
+                  <button
+                    type="button"
+                    class="px-3 py-2 rounded-lg text-sm font-bold transition-colors"
+                    :class="folderFilter === 'all'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'"
+                    :aria-pressed="folderFilter === 'all'"
+                    @click="folderFilter = 'all'"
+                  >
+                    {{ t('kb.picker.filter.all') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-2 rounded-lg text-sm font-bold transition-colors"
+                    :class="folderFilter === 'upload'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'"
+                    :aria-pressed="folderFilter === 'upload'"
+                    @click="folderFilter = 'upload'"
+                  >
+                    {{ t('kb.source.uploaded') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-2 rounded-lg text-sm font-bold transition-colors"
+                    :class="folderFilter === 'generated'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'"
+                    :aria-pressed="folderFilter === 'generated'"
+                    @click="folderFilter = 'generated'"
+                  >
+                    {{ t('kb.source.generated') }}
+                  </button>
+                </div>
 
                 <button
                   type="button"
@@ -439,8 +467,15 @@ onBeforeUnmount(() => {
                       </div>
                     </div>
                   </div>
-                  <div class="col-span-3 text-xs font-bold text-slate-500 dark:text-slate-300">
-                    {{ getFolderLabel(typeof file.folderId === 'number' ? file.folderId : 0) }}
+                  <div class="col-span-3">
+                    <span
+                      :class="getSourceTagUi(file).className"
+                      :title="t(getSourceTagUi(file).i18nTitleKey)"
+                      :aria-label="t(getSourceTagUi(file).i18nTitleKey)"
+                    >
+                      <LucideIcon :name="getSourceTagUi(file).icon" :size="12" />
+                      {{ t(getSourceTagUi(file).i18nKey) }}
+                    </span>
                   </div>
                   <div class="col-span-2 flex items-center justify-end">
                     <input

@@ -6,6 +6,7 @@ import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useI18n } from 'vue-i18n';
 import { aiService } from '@/services/aiService';
 import { KB_USER_ID, useAppStore } from '@/stores/appStore';
+import { getKbSource, getKbSourceUi } from '@/utils/kbSource';
 
 type KnowledgeBaseViewVariant = 'page' | 'panel';
 
@@ -110,8 +111,10 @@ const getDisplayType = (file: KBFile) => normalizeExt(file.type) || getNameExt(f
 	    if (materialId) return t('kb.source.material_id', { id: materialId });
 	    return t('kb.source.material_unknown');
 	  }
-	  return t('kb.source.unknown');
+	  return t('kb.source.unknown_origin');
 	};
+
+const getSourceTagUi = (file: KBFile) => getKbSourceUi(getKbSource(file.folderId));
 
 const updateFiles = (next: KBFile[]) => {
   store.setKbFiles(next);
@@ -473,6 +476,14 @@ onBeforeUnmount(() => {
 
 	                  <div class="flex flex-col items-end gap-2 flex-shrink-0">
                     <span
+                      :class="getSourceTagUi(file).className"
+                      :title="t(getSourceTagUi(file).i18nTitleKey)"
+                      :aria-label="t(getSourceTagUi(file).i18nTitleKey)"
+                    >
+                      <LucideIcon :name="getSourceTagUi(file).icon" :size="12" />
+                      {{ t(getSourceTagUi(file).i18nKey) }}
+                    </span>
+                    <span
                       v-if="file.status === 'ready'"
                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300"
                     >
@@ -572,7 +583,18 @@ onBeforeUnmount(() => {
 	                    {{ getDisplayType(file) }}
 	                  </div>
 	                  <div class="min-w-0">
-		                    <div class="font-bold text-sm text-slate-800 dark:text-slate-200 truncate" :title="getDisplayName(file)">{{ getDisplayName(file) }}</div>
+		                    <div class="flex items-center gap-2 min-w-0">
+                          <div class="font-bold text-sm text-slate-800 dark:text-slate-200 truncate flex-1 min-w-0" :title="getDisplayName(file)">{{ getDisplayName(file) }}</div>
+                          <span
+                            :class="getSourceTagUi(file).className"
+                            :title="t(getSourceTagUi(file).i18nTitleKey)"
+                            :aria-label="t(getSourceTagUi(file).i18nTitleKey)"
+                            class="flex-shrink-0"
+                          >
+                            <LucideIcon :name="getSourceTagUi(file).icon" :size="12" />
+                            {{ t(getSourceTagUi(file).i18nKey) }}
+                          </span>
+                        </div>
 		                    <div class="text-xs text-slate-400">{{ formatDateTime(file.uploadedAt) }} · {{ getSourceLabel(file) }}</div>
 		                  </div>
 		                </div>
