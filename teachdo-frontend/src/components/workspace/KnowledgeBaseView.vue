@@ -418,13 +418,16 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <div class="relative">
-          <LucideIcon name="search" :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+	        <div class="relative">
+	          <LucideIcon name="search" :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
 	          <input
 	            v-model="searchQuery"
 	            type="text"
 	            :placeholder="t('kb.search')"
-	            class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-colors"
+              :aria-label="t('kb.search')"
+              name="kb-search"
+              autocomplete="off"
+	            class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
 	          />
 	        </div>
 	      </div>
@@ -454,7 +457,10 @@ onBeforeUnmount(() => {
 	            v-model="searchQuery"
 	            type="text"
 	            :placeholder="t('kb.search')"
-	            class="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-transparent focus:bg-white dark:focus:bg-slate-900 border focus:border-indigo-500 rounded-lg text-sm outline-none transition-colors"
+              :aria-label="t('kb.search')"
+              name="kb-search"
+              autocomplete="off"
+	            class="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-transparent focus:bg-white dark:focus:bg-slate-900 border focus:border-indigo-500 rounded-lg text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
 	          />
 	        </div>
 	      </div>
@@ -489,7 +495,7 @@ onBeforeUnmount(() => {
             </div>
           </button>
 
-          <div class="flex-1 overflow-y-auto custom-scrollbar">
+          <div class="flex-1 overflow-y-auto overscroll-contain custom-scrollbar">
             <div v-if="filteredFiles.length === 0" class="flex flex-col items-center justify-center py-10 text-slate-400">
               <LucideIcon name="file" :size="32" class="mb-2 opacity-40" />
               <p class="text-sm">{{ t('kb.empty') }}</p>
@@ -499,10 +505,12 @@ onBeforeUnmount(() => {
 				              <div
 				                v-for="file in filteredFiles"
 				                :key="file.id"
-				                class="group rounded-2xl border border-slate-200/70 dark:border-slate-800/60 bg-[rgb(117,138,230)]/10 dark:bg-[rgb(117,138,230)]/12 p-1 shadow-sm transition-colors hover:bg-[rgb(117,138,230)]/14 dark:hover:bg-[rgb(117,138,230)]/18 hover:border-indigo-200 dark:hover:border-indigo-700/40 focus-within:ring-2 focus-within:ring-indigo-500/40"
-			                    :class="activeMaterial && isKbFileSelected(file.id) ? 'ring-2 ring-indigo-500/25 border-indigo-200 dark:border-indigo-700/50' : ''"
+				                class="group rounded-2xl border shadow-sm transition-[background-color,border-color,box-shadow] duration-200 px-3 pt-2 pb-1"
+			                    :class="activeMaterial && isKbFileSelected(file.id)
+                            ? 'border-indigo-300/80 bg-indigo-50/90 dark:border-indigo-700/60 dark:bg-indigo-900/20 ring-2 ring-indigo-500/30 ring-inset'
+                            : 'border-slate-200/70 dark:border-slate-800/60 bg-indigo-50/60 dark:bg-indigo-900/10 hover:bg-indigo-50/80 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-700/40'"
 				              >
-					                <div class="flex items-start justify-between gap-1">
+					                <div class="flex items-start justify-between gap-2">
                         <label
                           v-if="activeMaterial"
                           :for="`kb-select-${file.id}`"
@@ -511,7 +519,7 @@ onBeforeUnmount(() => {
                           <div class="font-bold text-[12px] leading-tight text-slate-800 dark:text-slate-100 truncate" :title="getDisplayName(file)">
                             {{ getDisplayName(file) }}
                           </div>
-                          <div class="mt-0.5 flex items-center gap-1 text-[9px] leading-tight text-slate-500 dark:text-slate-400 min-w-0">
+                          <div class="mt-0.5 flex items-center gap-1 text-[10px] leading-tight text-slate-500 dark:text-slate-400 min-w-0">
                             <span class="font-mono shrink-0">{{ formatSize(file.size || 0) }}</span>
                             <span class="text-slate-300 dark:text-slate-700 shrink-0">•</span>
                             <span class="shrink-0">{{ formatDateTime(file.uploadedAt) }}</span>
@@ -522,7 +530,7 @@ onBeforeUnmount(() => {
                           <div class="font-bold text-[12px] leading-tight text-slate-800 dark:text-slate-100 truncate" :title="getDisplayName(file)">
                             {{ getDisplayName(file) }}
                           </div>
-                          <div class="mt-0.5 flex items-center gap-1 text-[9px] leading-tight text-slate-500 dark:text-slate-400 min-w-0">
+                          <div class="mt-0.5 flex items-center gap-1 text-[10px] leading-tight text-slate-500 dark:text-slate-400 min-w-0">
                             <span class="font-mono shrink-0">{{ formatSize(file.size || 0) }}</span>
                             <span class="text-slate-300 dark:text-slate-700 shrink-0">•</span>
                             <span class="shrink-0">{{ formatDateTime(file.uploadedAt) }}</span>
@@ -533,7 +541,7 @@ onBeforeUnmount(() => {
                           v-if="activeMaterial"
                           :id="`kb-select-${file.id}`"
                           type="checkbox"
-                          class="mt-0.5 h-3.5 w-3.5 accent-indigo-600 disabled:opacity-40"
+                          class="mt-0.5 h-4 w-4 accent-indigo-600 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
                           :checked="isKbFileSelected(file.id)"
                           :disabled="file.status !== 'ready'"
                           :aria-label="t('kb.picker.toggle')"
@@ -541,30 +549,30 @@ onBeforeUnmount(() => {
                         />
 					                </div>
 
-				                      <div class="mt-0.5 flex items-center justify-between gap-1">
-				                        <div class="flex items-center gap-1 min-w-0 flex-1">
+				                      <div class="mt-0.5 flex items-center justify-between gap-2">
+				                        <div class="flex flex-wrap items-center gap-1 min-w-0 flex-1">
 				                          <span
 				                            v-if="file.status === 'ready'"
-				                            class="shrink-0 inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-[9px] leading-none font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200"
+				                            class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] leading-none font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200"
 				                          >
 				                            <LucideIcon name="check-circle" :size="11" /> {{ t('kb.status.ready') }}
 				                          </span>
 				                          <span
 				                            v-else-if="file.status === 'processing'"
-				                            class="shrink-0 inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-[9px] leading-none font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200"
+				                            class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] leading-none font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200"
 				                          >
 				                            <LucideIcon name="loader-2" :size="11" class="animate-spin" /> {{ t('kb.status.processing') }}
 				                          </span>
 
 				                          <span
 				                            v-else-if="file.status === 'uploading'"
-				                            class="shrink-0 inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-[9px] leading-none font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-200"
+				                            class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] leading-none font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-200"
 				                          >
 				                            <LucideIcon name="loader-2" :size="11" class="animate-spin" /> {{ t('kb.status.uploading') }}
 				                          </span>
 				                          <span
 				                            v-else-if="file.status === 'error'"
-				                            class="shrink-0 inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-[9px] leading-none font-bold bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300"
+				                            class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] leading-none font-bold bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300"
 				                          >
 				                            <LucideIcon name="alert-circle" :size="11" /> {{ t('kb.status.error') }}
 				                          </span>
@@ -583,23 +591,23 @@ onBeforeUnmount(() => {
 				                        <div class="flex items-center gap-1 shrink-0">
 				                          <button
 				                            type="button"
-				                            class="w-11 h-11 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+				                            class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
 				                            :aria-label="t('kb.action.export')"
 				                            :title="t('kb.action.export')"
 				                            :disabled="file.status !== 'ready' || exportingFileId === file.id"
 				                            @click="handleExport(file)"
 				                          >
-				                            <LucideIcon name="download" :size="13" />
+				                            <LucideIcon name="download" :size="16" />
 				                          </button>
 				                          <button
 				                            type="button"
-				                            class="w-11 h-11 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+				                            class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
 				                            :aria-label="t('kb.action.delete')"
 				                            :title="t('kb.action.delete')"
 				                            :disabled="file.status === 'uploading'"
 				                            @click="handleDelete(file.id)"
 				                          >
-				                            <LucideIcon name="trash-2" :size="13" />
+				                            <LucideIcon name="trash-2" :size="16" />
 				                          </button>
 				                        </div>
 				                      </div>
@@ -649,7 +657,7 @@ onBeforeUnmount(() => {
             <div class="col-span-1 text-right">{{ t('kb.table.action') }}</div>
           </div>
 
-          <div class="flex-1 overflow-y-auto custom-scrollbar">
+          <div class="flex-1 overflow-y-auto overscroll-contain custom-scrollbar">
             <div v-if="filteredFiles.length === 0" class="flex flex-col items-center justify-center h-48 text-slate-400">
               <LucideIcon name="file" :size="40" class="mb-2 opacity-40" />
               <p class="text-sm">{{ t('kb.empty') }}</p>

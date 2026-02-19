@@ -337,7 +337,7 @@ onBeforeUnmount(() => {
             </div>
             <button
               type="button"
-              class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/20"
               :aria-label="t('common.close')"
               @click="close"
             >
@@ -345,7 +345,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div class="px-5 py-4 space-y-3 max-h-[min(70vh,720px)] overflow-y-auto custom-scrollbar">
+          <div class="px-5 py-4 space-y-3 max-h-[min(70vh,720px)] overflow-y-auto overscroll-contain custom-scrollbar">
             <button
               type="button"
               class="w-full p-4 border-2 border-dashed rounded-2xl text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
@@ -380,7 +380,9 @@ onBeforeUnmount(() => {
                   type="text"
                   :placeholder="t('kb.picker.search')"
                   :aria-label="t('kb.picker.search')"
-                  class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-colors"
+                  name="kb-picker-search"
+                  autocomplete="off"
+                  class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
                 />
               </div>
 
@@ -455,22 +457,22 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-              <div class="grid grid-cols-12 gap-3 px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50/60 dark:bg-slate-950/30">
+              <div class="sticky top-0 z-10 grid grid-cols-12 gap-3 px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50/60 dark:bg-slate-950/30">
                 <div class="col-span-7">{{ t('kb.table.name') }}</div>
                 <div class="col-span-3">{{ t('kb.picker.folder') }}</div>
                 <div class="col-span-2 text-right">{{ t('kb.picker.action') }}</div>
               </div>
 
-              <div class="max-h-[420px] overflow-y-auto custom-scrollbar divide-y divide-slate-100 dark:divide-slate-800">
+              <div class="divide-y divide-slate-100 dark:divide-slate-800">
                 <div v-if="filteredFiles.length === 0" class="px-6 py-10 text-center text-sm text-slate-400">
                   {{ t('kb.picker.empty') }}
                 </div>
-                <button
+                <label
                   v-for="file in filteredFiles"
                   :key="file.id"
-                  type="button"
-                  class="w-full grid grid-cols-12 gap-3 px-4 py-3 items-center text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                  @click="toggleId(file.id)"
+                  :for="`kb-pick-${file.id}`"
+                  class="grid grid-cols-12 gap-3 px-4 py-3 items-center text-left cursor-pointer select-none transition-colors focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:ring-inset hover:bg-indigo-50/60 dark:hover:bg-indigo-900/15"
+                  :class="draftSelected.has(file.id) ? 'bg-indigo-50/80 dark:bg-indigo-900/20' : ''"
                 >
                   <div class="col-span-7 min-w-0">
                     <div class="flex items-center gap-3 min-w-0">
@@ -497,14 +499,14 @@ onBeforeUnmount(() => {
                   </div>
                   <div class="col-span-2 flex items-center justify-end">
                     <input
+                      :id="`kb-pick-${file.id}`"
                       type="checkbox"
                       class="h-4 w-4 accent-indigo-600"
                       :checked="draftSelected.has(file.id)"
-                      :aria-label="t('kb.picker.toggle')"
-                      @click.stop="toggleId(file.id)"
+                      @change="toggleId(file.id)"
                     />
                   </div>
-                </button>
+                </label>
               </div>
             </div>
           </div>

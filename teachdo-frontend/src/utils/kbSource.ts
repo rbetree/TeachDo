@@ -22,7 +22,7 @@ export function getKbSourceUi(source: KbSource): {
   icon: IconName;
   className: string;
 } {
-  const baseClass = 'inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-[9px] leading-none font-bold border';
+  const baseClass = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] leading-none font-bold border';
 
   if (source === 'generated') {
     return {
