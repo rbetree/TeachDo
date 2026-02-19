@@ -36,6 +36,10 @@ const {
   generateFromWebSearch,
   selectedKbFileIds,
   handleGenerate,
+  cancelGenerate,
+  generationCanceled,
+  draftPreviewActive,
+  discardDraftPreview,
 } = usePptGeneration({
   currentMaterial: currentMaterialRef,
   t,
@@ -45,10 +49,13 @@ const {
 const hasOutline = computed(() => !!props.currentMaterial?.outlineContent);
 const hasExternalToolbar = computed(() => !!props.headerActionHost);
 const previewSlideCount = computed(() => {
+  if (draftPreviewActive.value) return presentation.value?.slides?.length || 0;
   const editorSlides = props.currentMaterial?.editorDocument?.slides;
   if (Array.isArray(editorSlides) && editorSlides.length > 0) return editorSlides.length;
   return presentation.value?.slides?.length || 0;
 });
+
+const showEditButton = computed(() => !!props.currentMaterial?.editorDocument && !draftPreviewActive.value);
 
 const currentSlideIndex = ref(0);
 
@@ -100,7 +107,7 @@ const handleRegenerate = async () => {
         <p class="text-sm mt-2 mb-6 max-w-md text-center text-slate-500">{{ t('ppt.need_outline.desc') }}</p>
         <button
           type="button"
-          class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-base shadow-lg hover:shadow-indigo-500/30 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
+          class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-base shadow-lg hover:shadow-indigo-500/30 transition-colors transition-shadow transition-transform transform hover:-translate-y-0.5 flex items-center gap-2"
           @click="goToOutline"
         >
           <LucideIcon name="layout-list" :size="18" />
@@ -134,6 +141,15 @@ const handleRegenerate = async () => {
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
+          <button
+            v-if="loading"
+            type="button"
+            class="toolbar-item bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800/40 hover:bg-red-100 dark:hover:bg-red-900/30"
+            @click="cancelGenerate"
+          >
+            <LucideIcon name="x" class="w-4 h-4" />
+            <span>{{ t('common.cancel') }}</span>
+          </button>
           <label
             class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer select-none disabled:opacity-60"
             :class="loading ? 'opacity-60 cursor-not-allowed' : ''"
@@ -175,7 +191,7 @@ const handleRegenerate = async () => {
 
           <template v-else>
             <button
-              v-if="props.currentMaterial?.editorDocument"
+              v-if="showEditButton"
               type="button"
               :disabled="loading"
               class="toolbar-item bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
@@ -208,6 +224,39 @@ const handleRegenerate = async () => {
 
     <div :class="['workspace-card flex-1 min-h-0 flex flex-col', hasExternalToolbar ? 'mt-4' : '']">
       <div class="flex-1 min-h-0 p-4 md:p-6 flex flex-col">
+        <div
+          v-if="generationCanceled && draftPreviewActive && viewState !== 'SELECT_TEMPLATE' && previewSlideCount > 0"
+          class="mb-4 rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50/70 dark:bg-amber-900/10 p-4 flex flex-col md:flex-row md:items-center justify-between gap-3"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="min-w-0">
+            <div class="text-sm font-bold text-amber-900 dark:text-amber-100">
+              {{ t('ppt.banner.canceled.title') }}
+            </div>
+            <div class="text-xs text-amber-800/80 dark:text-amber-200/90 mt-0.5">
+              {{ t('ppt.banner.canceled.desc', { count: previewSlideCount }) }}
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors"
+              @click="handleRegenerate"
+            >
+              {{ t('ppt.regenerate') }}
+            </button>
+            <button
+              v-if="props.currentMaterial?.editorDocument"
+              type="button"
+              class="px-3 py-2 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-white/70 dark:bg-slate-900/30 text-amber-900 dark:text-amber-100 font-bold text-xs hover:bg-white dark:hover:bg-slate-900 transition-colors"
+              @click="discardDraftPreview"
+            >
+              {{ t('ppt.banner.canceled.back_to_saved') }}
+            </button>
+          </div>
+        </div>
+
         <PptTemplateSelector
           v-if="viewState === 'SELECT_TEMPLATE'"
           v-model:selected-template-id="selectedTemplateId"
@@ -225,7 +274,7 @@ const handleRegenerate = async () => {
           :loading="loading"
           :presentation="presentation"
           :selected-template="selectedTemplate"
-          :editor-document="props.currentMaterial?.editorDocument ?? null"
+          :editor-document="draftPreviewActive ? null : (props.currentMaterial?.editorDocument ?? null)"
           :external-toolbar="hasExternalToolbar"
           @go-to-editor="goToEditor"
           @change-template="goToTemplateSelect"

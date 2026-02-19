@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { onBeforeUnmount, ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { TeachingMaterial } from '#root/types';
 import { aiService } from '@/services/aiService';
@@ -7,6 +7,7 @@ import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { escapeHtml } from '@/utils/safeHtml';
 import { KB_USER_ID } from '@/stores/appStore';
+import { ApiError } from '@/services/apiClient';
 
 interface Props {
   currentMaterial: TeachingMaterial;
@@ -25,6 +26,7 @@ const loading = ref(false);
 const outlineText = ref('');
 const newOutlineText = ref('');
 const mode = ref<'EDIT' | 'PREVIEW' | 'COMPARE'>('PREVIEW');
+const pendingController = ref<AbortController | null>(null);
 
 // Sync state if material changes externally
 watch(
@@ -48,42 +50,75 @@ watch(
 );
 
 const handleGenerateWrapper = async () => {
+  pendingController.value?.abort();
+  const controller = new AbortController();
+  pendingController.value = controller;
+
   if (outlineText.value && outlineText.value.trim().length > 0) {
     // --- COMPARE MODE ---
     mode.value = 'COMPARE';
     newOutlineText.value = '';
     loading.value = true;
     try {
-      await aiService.generateOutline(props.currentMaterial, (text) => {
-        newOutlineText.value = text;
-      });
+      await aiService.generateOutline(
+        props.currentMaterial,
+        (text) => {
+          newOutlineText.value = text;
+        },
+        { signal: controller.signal },
+      );
       toast.success(t('outline.toast.new'));
     } catch (e) {
+      if (e instanceof ApiError && e.kind === 'abort') {
+        toast.info(t('outline.toast.canceled'));
+        newOutlineText.value = '';
+        mode.value = 'PREVIEW';
+        return;
+      }
       console.error(e);
       toast.error(t('outline.toast.error'));
       mode.value = 'PREVIEW'; // Revert
     } finally {
       loading.value = false;
+      pendingController.value = null;
     }
   } else {
     // --- DIRECT GENERATE MODE ---
     loading.value = true;
     mode.value = 'PREVIEW';
     try {
-      const finalText = await aiService.generateOutline(props.currentMaterial, (text) => {
-        outlineText.value = text;
-      });
+      const finalText = await aiService.generateOutline(
+        props.currentMaterial,
+        (text) => {
+          outlineText.value = text;
+        },
+        { signal: controller.signal },
+      );
       emit('updateMaterial', { outlineContent: finalText });
       vectorizeOutlineToKb(finalText);
       toast.success(t('outline.toast.generated'));
     } catch (e) {
+      if (e instanceof ApiError && e.kind === 'abort') {
+        toast.info(t('outline.toast.canceled'));
+        outlineText.value = props.currentMaterial.outlineContent || '';
+        return;
+      }
       console.error(e);
       toast.error(t('outline.toast.error'));
     } finally {
       loading.value = false;
+      pendingController.value = null;
     }
   }
 };
+
+const cancelGenerate = () => {
+  pendingController.value?.abort();
+};
+
+onBeforeUnmount(() => {
+  pendingController.value?.abort();
+});
 
 const vectorizeOutlineToKb = (content: string) => {
   const trimmed = content?.trim();
@@ -165,9 +200,9 @@ const renderMarkdown = (content: string) => {
   }).join('');
 };
 
-const markdownHtml = computed(() => renderMarkdown(outlineText.value));
-const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
-const hasExternalToolbar = computed(() => !!props.headerActionHost);
+	const markdownHtml = computed(() => renderMarkdown(outlineText.value));
+	const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
+	const hasExternalToolbar = computed(() => !!props.headerActionHost);
 </script>
 
 <template>
@@ -214,6 +249,15 @@ const hasExternalToolbar = computed(() => !!props.headerActionHost);
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
+          <button
+            v-if="loading"
+            type="button"
+            class="toolbar-item bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800/40 hover:bg-red-100 dark:hover:bg-red-900/30"
+            @click="cancelGenerate"
+          >
+            <LucideIcon name="x" class="w-4 h-4" />
+            <span>{{ t('common.cancel') }}</span>
+          </button>
           <template v-if="mode !== 'COMPARE'">
             <button
               v-if="outlineText"
@@ -280,7 +324,7 @@ const hasExternalToolbar = computed(() => !!props.headerActionHost);
             <button
               :disabled="loading"
               :class="[
-                'w-full py-3 rounded-xl font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2',
+                'w-full py-3 rounded-xl font-bold text-sm shadow-lg transition-colors transition-transform flex items-center justify-center gap-2',
                 loading
                   ? 'bg-indigo-300 cursor-not-allowed text-white'
                   : 'bg-indigo-600 hover:bg-indigo-700 text-white hover:-translate-y-1'
@@ -307,18 +351,19 @@ const hasExternalToolbar = computed(() => !!props.headerActionHost);
         <article class="prose dark:prose-invert prose-indigo max-w-none">
           <div v-if="outlineText" class="space-y-4 font-serif text-slate-800 dark:text-slate-200 leading-relaxed text-sm md:text-base" v-html="markdownHtml"></div>
           <div v-else class="flex flex-col items-center justify-center h-96 text-center">
-            <div class="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-full flex items-center justify-center mb-6 text-3xl">
-              📑
+            <div class="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mb-6">
+              <LucideIcon name="file-text" :size="32" class="text-indigo-600 dark:text-indigo-300" />
             </div>
             <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-2">{{ t('outline.empty.title') }}</h3>
             <p class="text-slate-500 dark:text-slate-400 max-w-md mb-8">
               {{ t('outline.empty.desc') }}
             </p>
             <button
-              class="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-indigo-500/30 transition-all transform hover:-translate-y-0.5"
+              class="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-indigo-500/30 transition-colors transition-shadow transition-transform transform hover:-translate-y-0.5 flex items-center gap-2"
               @click="handleGenerateWrapper"
             >
-              ✨ {{ t('outline.generate_cta') }}
+              <LucideIcon name="sparkles" :size="18" />
+              {{ t('outline.generate_cta') }}
             </button>
           </div>
         </article>

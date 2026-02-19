@@ -7,6 +7,7 @@ import { toast } from '@/utils/toast';
 import { aiService } from '@/services/aiService';
 import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 import { getKbSource, getKbSourceUi } from '@/utils/kbSource';
+import { trapTabKey } from '@/utils/focusTrap';
 
 type FolderFilter = 'all' | 'upload' | 'generated';
 
@@ -29,6 +30,7 @@ const store = useAppStore();
 
 const dialogRef = ref<HTMLElement | null>(null);
 const searchQuery = ref('');
+const searchInputRef = ref<HTMLInputElement | null>(null);
 const folderFilter = ref<FolderFilter>('all');
 const draftSelected = ref<Set<string>>(new Set());
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -259,9 +261,14 @@ const confirm = () => {
 };
 
 const onKeydown = (e: KeyboardEvent) => {
-  if (e.key !== 'Escape') return;
   if (!props.open) return;
-  close();
+  if (e.key === 'Escape') {
+    close();
+    return;
+  }
+  if (e.key === 'Tab' && dialogRef.value) {
+    trapTabKey(e, dialogRef.value);
+  }
 };
 
 watch(
@@ -273,7 +280,10 @@ watch(
       document.addEventListener('keydown', onKeydown);
       void refreshFromBackend();
       await nextTick();
-      dialogRef.value?.focus();
+      searchInputRef.value?.focus?.();
+      if (document.activeElement !== searchInputRef.value) {
+        dialogRef.value?.focus();
+      }
       return;
     }
 
@@ -299,7 +309,12 @@ onBeforeUnmount(() => {
     <Transition name="td-modal">
       <div v-if="props.open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
         <input ref="fileInputRef" type="file" class="hidden" @change="handleFilePicked" />
-        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="close" />
+        <button
+          type="button"
+          class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+          :aria-label="t('common.close')"
+          @click="close"
+        />
 
         <div
           ref="dialogRef"
@@ -360,10 +375,12 @@ onBeforeUnmount(() => {
               <div class="relative flex-1">
                 <LucideIcon name="search" :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
+                  ref="searchInputRef"
                   v-model="searchQuery"
                   type="text"
                   :placeholder="t('kb.picker.search')"
-                  class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-all"
+                  :aria-label="t('kb.picker.search')"
+                  class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-colors"
                 />
               </div>
 

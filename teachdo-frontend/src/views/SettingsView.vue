@@ -39,17 +39,19 @@ const toggleKeyVisibility = (key: string) => {
   showKeys[key] = !showKeys[key];
 };
 
+const getKeyToggleLabel = (key: string) => (showKeys[key] ? t('settings.key.hide') : t('settings.key.show'));
+
 const handleSave = () => {
   loading.value = true;
   setTimeout(() => {
     loading.value = false;
-    toast.success('配置已保存（演示）');
+    toast.success(t('settings.toast.saved_demo'));
   }, 800);
 };
 
 const handleReset = () => {
-  if (!confirm('确认恢复默认配置？')) return;
-  toast.info('已恢复默认配置（演示）');
+  if (!confirm(t('settings.confirm_reset_demo'))) return;
+  toast.info(t('settings.toast.reset_demo'));
 };
 </script>
 
@@ -89,11 +91,11 @@ const handleReset = () => {
               <div class="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300">
                 <LucideIcon name="shield" :size="18" />
               </div>
-              <div>
-                <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.llm') }}</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Outline / PPT / Embedding</p>
-              </div>
-            </div>
+	              <div>
+	                <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.llm') }}</p>
+	                <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.section.llm_desc') }}</p>
+	              </div>
+	            </div>
             <div class="p-6 space-y-4">
               <div class="grid md:grid-cols-2 gap-4">
                 <label class="space-y-1 text-sm">
@@ -107,12 +109,19 @@ const handleReset = () => {
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.outlineKey') }}</span>
                   <div class="flex gap-2">
-                    <input v-model="config.outlineApiKey" :type="showKeys.outlineApiKey ? 'text' : 'password'" class="input flex-1" />
-                    <button class="icon-btn" type="button" @click="toggleKeyVisibility('outlineApiKey')">
-                      <LucideIcon :name="showKeys.outlineApiKey ? 'eye-off' : 'eye'" :size="16" />
-                    </button>
-                  </div>
-                </label>
+	                    <input v-model="config.outlineApiKey" :type="showKeys.outlineApiKey ? 'text' : 'password'" class="input flex-1" />
+	                    <button
+	                      class="icon-btn"
+	                      type="button"
+	                      :aria-label="getKeyToggleLabel('outlineApiKey')"
+	                      :title="getKeyToggleLabel('outlineApiKey')"
+	                      :aria-pressed="!!showKeys.outlineApiKey"
+	                      @click="toggleKeyVisibility('outlineApiKey')"
+	                    >
+	                      <LucideIcon :name="showKeys.outlineApiKey ? 'eye-off' : 'eye'" :size="16" />
+	                    </button>
+	                  </div>
+	                </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.pptWriterBase') }}</span>
                   <input v-model="config.pptWriterBaseUrl" class="input" />
@@ -124,12 +133,19 @@ const handleReset = () => {
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.pptWriterKey') }}</span>
                   <div class="flex gap-2">
-                    <input v-model="config.pptWriterApiKey" :type="showKeys.pptWriterApiKey ? 'text' : 'password'" class="input flex-1" />
-                    <button class="icon-btn" type="button" @click="toggleKeyVisibility('pptWriterApiKey')">
-                      <LucideIcon :name="showKeys.pptWriterApiKey ? 'eye-off' : 'eye'" :size="16" />
-                    </button>
-                  </div>
-                </label>
+	                    <input v-model="config.pptWriterApiKey" :type="showKeys.pptWriterApiKey ? 'text' : 'password'" class="input flex-1" />
+	                    <button
+	                      class="icon-btn"
+	                      type="button"
+	                      :aria-label="getKeyToggleLabel('pptWriterApiKey')"
+	                      :title="getKeyToggleLabel('pptWriterApiKey')"
+	                      :aria-pressed="!!showKeys.pptWriterApiKey"
+	                      @click="toggleKeyVisibility('pptWriterApiKey')"
+	                    >
+	                      <LucideIcon :name="showKeys.pptWriterApiKey ? 'eye-off' : 'eye'" :size="16" />
+	                    </button>
+	                  </div>
+	                </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.pptCheckerBase') }}</span>
                   <input v-model="config.pptCheckerBaseUrl" class="input" />
@@ -141,12 +157,19 @@ const handleReset = () => {
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.pptCheckerKey') }}</span>
                   <div class="flex gap-2">
-                    <input v-model="config.pptCheckerApiKey" :type="showKeys.pptCheckerApiKey ? 'text' : 'password'" class="input flex-1" />
-                    <button class="icon-btn" type="button" @click="toggleKeyVisibility('pptCheckerApiKey')">
-                      <LucideIcon :name="showKeys.pptCheckerApiKey ? 'eye-off' : 'eye'" :size="16" />
-                    </button>
-                  </div>
-                </label>
+	                    <input v-model="config.pptCheckerApiKey" :type="showKeys.pptCheckerApiKey ? 'text' : 'password'" class="input flex-1" />
+	                    <button
+	                      class="icon-btn"
+	                      type="button"
+	                      :aria-label="getKeyToggleLabel('pptCheckerApiKey')"
+	                      :title="getKeyToggleLabel('pptCheckerApiKey')"
+	                      :aria-pressed="!!showKeys.pptCheckerApiKey"
+	                      @click="toggleKeyVisibility('pptCheckerApiKey')"
+	                    >
+	                      <LucideIcon :name="showKeys.pptCheckerApiKey ? 'eye-off' : 'eye'" :size="16" />
+	                    </button>
+	                  </div>
+	                </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.embeddingBase') }}</span>
                   <input v-model="config.embeddingBaseUrl" class="input" />
@@ -158,12 +181,19 @@ const handleReset = () => {
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.embeddingKey') }}</span>
                   <div class="flex gap-2">
-                    <input v-model="config.embeddingApiKey" :type="showKeys.embeddingApiKey ? 'text' : 'password'" class="input flex-1" />
-                    <button class="icon-btn" type="button" @click="toggleKeyVisibility('embeddingApiKey')">
-                      <LucideIcon :name="showKeys.embeddingApiKey ? 'eye-off' : 'eye'" :size="16" />
-                    </button>
-                  </div>
-                </label>
+	                    <input v-model="config.embeddingApiKey" :type="showKeys.embeddingApiKey ? 'text' : 'password'" class="input flex-1" />
+	                    <button
+	                      class="icon-btn"
+	                      type="button"
+	                      :aria-label="getKeyToggleLabel('embeddingApiKey')"
+	                      :title="getKeyToggleLabel('embeddingApiKey')"
+	                      :aria-pressed="!!showKeys.embeddingApiKey"
+	                      @click="toggleKeyVisibility('embeddingApiKey')"
+	                    >
+	                      <LucideIcon :name="showKeys.embeddingApiKey ? 'eye-off' : 'eye'" :size="16" />
+	                    </button>
+	                  </div>
+	                </label>
               </div>
             </div>
           </div>
@@ -173,11 +203,11 @@ const handleReset = () => {
               <div class="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300">
                 <LucideIcon name="server" :size="18" />
               </div>
-              <div>
-                <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.service') }}</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Outline/Content/Kb/代理配置</p>
-              </div>
-            </div>
+	              <div>
+	                <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.service') }}</p>
+	                <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.section.service_desc') }}</p>
+	              </div>
+	            </div>
             <div class="p-6 space-y-4">
               <div class="grid md:grid-cols-2 gap-4">
                 <label class="space-y-1 text-sm">
@@ -214,22 +244,29 @@ const handleReset = () => {
             <div class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
               <LucideIcon name="shield" :size="18" />
             </div>
-            <div class="space-y-2">
-              <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.security') }}</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">API Key 仅用于演示，请在生产环境替换真实凭据并存放于安全存储。</p>
-            </div>
-          </div>
+	            <div class="space-y-2">
+	              <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.security') }}</p>
+	              <p class="text-sm text-slate-600 dark:text-slate-400">{{ t('settings.security_notice_demo') }}</p>
+	            </div>
+	          </div>
 
           <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-5 flex items-start gap-3">
             <div class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
               <LucideIcon name="activity" :size="18" />
             </div>
-            <div class="space-y-2">
-              <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.theme') }}</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">{{ t('settings.theme') }}：{{ store.isDarkMode ? 'Dark' : 'Light' }}</p>
-              <button class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm" @click="store.toggleTheme()">{{ t('settings.toggle') }}</button>
-            </div>
-          </div>
+	            <div class="space-y-2">
+	              <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.theme') }}</p>
+	              <p class="text-sm text-slate-600 dark:text-slate-400">
+	                {{ t('settings.theme') }}：{{ store.isDarkMode ? t('settings.theme.dark') : t('settings.theme.light') }}
+	              </p>
+	              <button
+	                class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
+	                @click="store.toggleTheme()"
+	              >
+	                {{ t('settings.toggle') }}
+	              </button>
+	            </div>
+	          </div>
         </div>
       </div>
     </div>

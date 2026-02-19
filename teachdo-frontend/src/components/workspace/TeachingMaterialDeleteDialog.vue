@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import type { TeachingMaterial } from '#root/types';
+import { trapTabKey } from '@/utils/focusTrap';
 
 interface Props {
   open: boolean;
@@ -21,6 +22,7 @@ const emit = defineEmits<Emits>();
 const { t } = useI18n();
 
 const dialogRef = ref<HTMLElement | null>(null);
+const cancelButtonRef = ref<HTMLButtonElement | null>(null);
 const restoreFocusEl = ref<HTMLElement | null>(null);
 
 const deleteKbFiles = ref(false);
@@ -36,9 +38,14 @@ const close = () => {
 };
 
 const onKeydown = (e: KeyboardEvent) => {
-  if (e.key !== 'Escape') return;
   if (!props.open) return;
-  close();
+  if (e.key === 'Escape') {
+    close();
+    return;
+  }
+  if (e.key === 'Tab' && dialogRef.value) {
+    trapTabKey(e, dialogRef.value);
+  }
 };
 
 const onConfirm = () => {
@@ -55,7 +62,10 @@ watch(
       document.body.style.overflow = 'hidden';
       document.addEventListener('keydown', onKeydown);
       await nextTick();
-      dialogRef.value?.focus();
+      cancelButtonRef.value?.focus?.();
+      if (document.activeElement !== cancelButtonRef.value) {
+        dialogRef.value?.focus();
+      }
       return;
     }
 
@@ -78,7 +88,12 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <Transition name="td-modal">
       <div v-if="props.open" class="fixed inset-0 z-[55] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="close" />
+        <button
+          type="button"
+          class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+          :aria-label="t('common.close')"
+          @click="close"
+        />
 
         <div
           ref="dialogRef"
@@ -132,6 +147,7 @@ onBeforeUnmount(() => {
 
           <div class="px-5 py-4 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-end gap-2 bg-slate-50/40 dark:bg-slate-950/20">
             <button
+              ref="cancelButtonRef"
               type="button"
               class="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
               :disabled="props.loading"

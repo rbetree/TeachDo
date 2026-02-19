@@ -157,11 +157,23 @@ const handleSend = async () => {
   }
 };
 
+const handleStop = () => {
+  pendingController.value?.abort();
+};
+
 const clearHistory = () => {
   pendingController.value?.abort();
   pendingController.value = null;
   isTyping.value = false;
   resetMessages();
+};
+
+const handleTextareaKeydown = (event: KeyboardEvent) => {
+  if (event.key !== 'Enter') return;
+  if (event.shiftKey) return;
+  event.preventDefault();
+  if (isTyping.value) return;
+  void handleSend();
 };
 </script>
 
@@ -279,20 +291,34 @@ const clearHistory = () => {
         <textarea
           v-model="inputValue"
           :class="[
-            'w-full bg-slate-100 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/30 rounded-xl pl-4 pr-14 text-sm outline-none dark:text-white transition-all resize-none custom-scrollbar shadow-inner',
+            'w-full bg-slate-100 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/30 rounded-xl pl-4 pr-14 text-sm outline-none dark:text-white transition-colors resize-none custom-scrollbar shadow-inner',
             isPanel ? 'py-3 h-12 max-h-28' : 'py-3.5 h-14 max-h-32',
           ]"
           :placeholder="t('assistant.placeholder')"
+          :aria-label="t('assistant.input')"
           :disabled="isTyping"
-          @keydown.enter.prevent="(event) => { if (!event.shiftKey && !isTyping) handleSend(); }"
+          @keydown="handleTextareaKeydown"
         />
         <button
+          v-if="isTyping"
+          type="button"
+          class="absolute right-2 top-2 p-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-lg shadow-red-500/20"
+          :aria-label="t('assistant.stop')"
+          :title="t('assistant.stop')"
+          @click="handleStop"
+        >
+          <LucideIcon name="x" :size="16" />
+        </button>
+        <button
+          v-else
           type="button"
           :disabled="isTyping || !inputValue.trim()"
           :class="[
-            'absolute right-2 top-2 p-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg transition-all shadow-lg shadow-indigo-500/20',
+            'absolute right-2 top-2 p-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg transition-colors transition-transform shadow-lg shadow-indigo-500/20',
             isPanel ? '' : 'hover:scale-105 active:scale-95',
           ]"
+          :aria-label="t('assistant.send')"
+          :title="t('assistant.send')"
           @click="handleSend"
         >
           <LucideIcon name="send" :size="16" />

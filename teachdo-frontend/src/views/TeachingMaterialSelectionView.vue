@@ -164,12 +164,12 @@ const handleCreate = (material: TeachingMaterial) => {
 
       <div class="mt-4">
         <div v-if="sortedMaterials.length" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          <RouterLink
-            v-for="material in sortedMaterials"
-            :key="material.id"
-            :to="{ name: 'material', params: { materialId: material.id } }"
-            class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-60 overflow-hidden group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
-          >
+	          <RouterLink
+	            v-for="material in sortedMaterials"
+	            :key="material.id"
+	            :to="{ name: 'material', params: { materialId: material.id } }"
+	            class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-colors transition-transform transition-shadow duration-300 flex flex-col h-60 overflow-hidden group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
+	          >
             <div class="p-7 flex flex-col h-full gap-4">
               <div class="flex items-start justify-between gap-4">
                 <span class="text-[11px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-slate-100 dark:bg-slate-700/40 text-slate-500 dark:text-slate-400">
@@ -205,19 +205,19 @@ const handleCreate = (material: TeachingMaterial) => {
                     {{ t('material.card.progress', { done: getProgress(material).done }) }}
                   </span>
                 </div>
-                <div class="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all">
-                  {{ t('material.card.open') }}
-                  <LucideIcon name="arrow-right" class="w-3 h-3" />
-                </div>
+	                <div class="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-opacity transition-transform duration-200">
+	                  {{ t('material.card.open') }}
+	                  <LucideIcon name="arrow-right" class="w-3 h-3" />
+	                </div>
               </div>
             </div>
           </RouterLink>
 
-          <button
-            type="button"
-            class="flex flex-col items-center justify-center p-8 h-60 rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-800/40 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
-            @click="createOpen = true"
-          >
+	          <button
+	            type="button"
+	            class="flex flex-col items-center justify-center p-8 h-60 rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-800/40 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
+	            @click="createOpen = true"
+	          >
             <div class="w-16 h-16 rounded-full border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:scale-110 transition">
               <LucideIcon name="plus" class="w-8 h-8" />
             </div>

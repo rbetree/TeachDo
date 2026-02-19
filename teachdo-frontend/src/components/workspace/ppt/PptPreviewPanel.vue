@@ -216,13 +216,13 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="flex gap-2 flex-wrap justify-end">
-        <button
-          v-if="props.editorDocument"
-          type="button"
-          :disabled="props.loading"
-          class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center gap-2 disabled:bg-slate-300 disabled:text-slate-500"
-          @click="emit('goToEditor')"
-        >
+	        <button
+	          v-if="props.editorDocument"
+	          type="button"
+	          :disabled="props.loading"
+	          class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-md transition-colors flex items-center gap-2 disabled:bg-slate-300 disabled:text-slate-500"
+	          @click="emit('goToEditor')"
+	        >
           <LucideIcon name="edit-3" :size="16" />
           <span>{{ t('ppt.edit') }}</span>
         </button>
@@ -233,12 +233,12 @@ onBeforeUnmount(() => {
         >
           {{ t('ppt.change_template') }}
         </button>
-        <button
-          type="button"
-          :disabled="props.loading"
-          class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center gap-2 disabled:bg-slate-300 disabled:text-slate-500"
-          @click="emit('regenerate')"
-        >
+	        <button
+	          type="button"
+	          :disabled="props.loading"
+	          class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-md transition-colors flex items-center gap-2 disabled:bg-slate-300 disabled:text-slate-500"
+	          @click="emit('regenerate')"
+	        >
           <LucideIcon :name="props.loading ? 'loader-2' : 'refresh-cw'" :size="16" :class="{ 'animate-spin': props.loading }" />
           <span>{{ props.loading ? t('ppt.generating') : t('ppt.regenerate') }}</span>
         </button>
@@ -264,9 +264,9 @@ onBeforeUnmount(() => {
           <button
             v-for="(slide, i) in editorSlides"
             :key="slide?.id || i"
-            :class="['w-full text-left group transition-all', slideIndexModel === i ? 'ring-2 ring-emerald-500 rounded-lg' : 'opacity-70 hover:opacity-100']"
-            @click="slideIndexModel = i"
-          >
+	          :class="['w-full text-left group transition-opacity transition-shadow duration-200', slideIndexModel === i ? 'ring-2 ring-emerald-500 rounded-lg' : 'opacity-70 hover:opacity-100']"
+	          @click="slideIndexModel = i"
+	        >
             <div class="w-full rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
               <ThumbnailSlide :slide="slide" :size="thumbnailSize" />
             </div>
@@ -294,9 +294,9 @@ onBeforeUnmount(() => {
         <button
           v-for="(slide, i) in slides"
           :key="i"
-          :class="['w-full text-left group transition-all', slideIndexModel === i ? 'ring-2 ring-indigo-500 rounded-lg' : 'opacity-70 hover:opacity-100']"
-          @click="slideIndexModel = i"
-        >
+	          :class="['w-full text-left group transition-opacity transition-shadow duration-200', slideIndexModel === i ? 'ring-2 ring-indigo-500 rounded-lg' : 'opacity-70 hover:opacity-100']"
+	          @click="slideIndexModel = i"
+	        >
           <div
             :class="[
               'aspect-video w-full rounded-lg mb-1 flex items-center justify-center text-[10px] p-2 border',
@@ -312,7 +312,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="flex-1 min-h-0 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl p-8 overflow-y-auto custom-scrollbar">
-        <div v-if="currentSlide" class="w-full aspect-video bg-white dark:bg-slate-900 shadow-2xl rounded-xl p-12 flex flex-col relative overflow-hidden mb-6 flex-shrink-0 transition-all duration-300">
+	      <div v-if="currentSlide" class="w-full aspect-video bg-white dark:bg-slate-900 shadow-2xl rounded-xl p-12 flex flex-col relative overflow-hidden mb-6 flex-shrink-0 transition-opacity duration-300">
           <div v-if="props.selectedTemplate?.coverUrl" class="absolute inset-0 bg-center bg-cover opacity-5 pointer-events-none" :style="{ backgroundImage: `url(${props.selectedTemplate.coverUrl})` }" />
           <div v-else class="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl opacity-20 -mr-20 -mt-20" :class="props.selectedTemplate?.thumbnailColor || 'bg-slate-200'" />
           <div class="relative z-10 flex flex-col h-full">

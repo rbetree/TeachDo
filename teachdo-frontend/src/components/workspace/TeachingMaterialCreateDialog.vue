@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import type { TeachingMaterial } from '#root/types';
+import { trapTabKey } from '@/utils/focusTrap';
 
 interface Props {
   open: boolean;
@@ -18,6 +19,7 @@ const emit = defineEmits<Emits>();
 const { t } = useI18n();
 
 const dialogRef = ref<HTMLElement | null>(null);
+const titleInputRef = ref<HTMLInputElement | null>(null);
 const restoreFocusEl = ref<HTMLElement | null>(null);
 
 const form = reactive({
@@ -55,9 +57,14 @@ const handleCreate = () => {
 };
 
 const onKeydown = (e: KeyboardEvent) => {
-  if (e.key !== 'Escape') return;
   if (!props.open) return;
-  close();
+  if (e.key === 'Escape') {
+    close();
+    return;
+  }
+  if (e.key === 'Tab' && dialogRef.value) {
+    trapTabKey(e, dialogRef.value);
+  }
 };
 
 watch(
@@ -69,7 +76,10 @@ watch(
       document.body.style.overflow = 'hidden';
       document.addEventListener('keydown', onKeydown);
       await nextTick();
-      dialogRef.value?.focus();
+      titleInputRef.value?.focus?.();
+      if (document.activeElement !== titleInputRef.value) {
+        dialogRef.value?.focus();
+      }
       return;
     }
 
@@ -92,7 +102,12 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <Transition name="td-modal">
       <div v-if="props.open" class="fixed inset-0 z-[55] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="close" />
+        <button
+          type="button"
+          class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+          :aria-label="t('common.close')"
+          @click="close"
+        />
 
         <div
           ref="dialogRef"
@@ -127,6 +142,7 @@ onBeforeUnmount(() => {
                   {{ t('material.form.title') }}
                 </span>
                 <input
+                  ref="titleInputRef"
                   v-model="form.title"
                   type="text"
                   class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"

@@ -54,10 +54,10 @@ const headerMaterial = computed(() => props.materials.find((m) => m.id === props
 
     <aside :class="baseSidebarClasses">
       <div class="flex-1 flex flex-col">
-        <div
-          class="border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 transition-all duration-300"
-          :class="collapsed ? 'p-3 flex justify-center' : 'p-5'"
-        >
+	        <div
+	          class="border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 transition-[padding] duration-300"
+	          :class="collapsed ? 'p-3 flex justify-center' : 'p-5'"
+	        >
           <template v-if="!collapsed">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
@@ -102,12 +102,12 @@ const headerMaterial = computed(() => props.materials.find((m) => m.id === props
           </div>
 
           <div v-for="material in props.materials" :key="material.id">
-            <button
-              type="button"
-              class="w-full group text-left rounded-xl border transition-all duration-200 relative overflow-hidden"
-              :class="[
-                collapsed ? 'p-2 flex justify-center' : 'p-3.5 transform hover:scale-[1.01]',
-                isActive(material.id)
+	            <button
+	              type="button"
+	              class="w-full group text-left rounded-xl border transition-colors transition-transform transition-shadow duration-200 relative overflow-hidden"
+	              :class="[
+	                collapsed ? 'p-2 flex justify-center' : 'p-3.5 transform hover:scale-[1.01]',
+	                isActive(material.id)
                   ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-500/20 text-white'
                   : 'bg-white dark:bg-slate-800/40 border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-700/40 hover:bg-indigo-50/30 dark:hover:bg-slate-800/60',
               ]"
@@ -182,4 +182,3 @@ const headerMaterial = computed(() => props.materials.find((m) => m.id === props
     </aside>
   </div>
 </template>
-

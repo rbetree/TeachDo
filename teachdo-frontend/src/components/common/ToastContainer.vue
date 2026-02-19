@@ -73,7 +73,7 @@ onUnmounted(() => {
 <style scoped>
 .toast-slide-enter-active,
 .toast-slide-leave-active {
-  transition: all 0.25s ease;
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
 .toast-slide-enter-from,
 .toast-slide-leave-to {

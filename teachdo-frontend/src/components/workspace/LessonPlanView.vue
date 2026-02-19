@@ -19,9 +19,8 @@ const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const { t } = useI18n();
 
-const loading = ref(false);
-const plan = ref<LessonPlan | null>(null);
-const copied = ref(false);
+	const plan = ref<LessonPlan | null>(null);
+	const copied = ref(false);
 const hasExternalToolbar = computed(() => !!props.headerActionHost);
 
 const hasOutline = computed(() => !!props.currentMaterial?.outlineContent);
@@ -34,10 +33,6 @@ watch(
   },
   { immediate: true }
 );
-
-const handleGenerate = async () => {
-  toast.info(t('lesson.toast.in_progress'));
-};
 
 const copyToClipboard = () => {
   if (!plan.value) return;
@@ -167,14 +162,13 @@ const goToOutline = () => {
         >
           <LucideIcon name="download" class="w-4 h-4" /> {{ t('lesson.download') }}
         </button>
-        <button
-          type="button"
-          :disabled="loading"
-          class="toolbar-item bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:bg-slate-300 disabled:text-slate-500"
-          @click="handleGenerate"
-        >
-          {{ t('lesson.in_progress.cta') }}
-        </button>
+	        <button
+	          type="button"
+	          disabled
+	          class="toolbar-item bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+	        >
+	          {{ t('lesson.in_progress.cta') }}
+	        </button>
       </div>
     </Teleport>
 
@@ -195,12 +189,14 @@ const goToOutline = () => {
 
       <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 md:p-6">
         <div class="max-w-4xl mx-auto w-full">
-          <div v-if="!plan" class="w-full min-h-[420px] border border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/60 dark:bg-slate-950/20 flex items-center justify-center text-slate-300">
-            <div class="text-center">
-              <div class="text-6xl mb-4 opacity-20">📄</div>
-              <p class="font-bold text-slate-500 dark:text-slate-400">{{ t('lesson.ready') }}</p>
-            </div>
-          </div>
+	          <div v-if="!plan" class="w-full min-h-[420px] border border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/60 dark:bg-slate-950/20 flex items-center justify-center text-slate-300">
+	            <div class="text-center">
+	              <div class="w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-center mx-auto mb-4 opacity-60">
+	                <LucideIcon name="file-text" :size="28" />
+	              </div>
+	              <p class="font-bold text-slate-500 dark:text-slate-400">{{ t('lesson.ready') }}</p>
+	            </div>
+	          </div>
 
           <div v-else class="text-slate-800 dark:text-slate-200 min-h-[1000px] p-10 md:p-12 relative mx-auto animate-fade-in-up">
             <!-- Decorative Header Line -->

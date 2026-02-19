@@ -39,16 +39,24 @@ const selectTemplate = (id: string) => {
         :key="template.id"
         type="button"
         :disabled="props.loading"
-        :aria-pressed="props.selectedTemplateId === template.id"
-        :class="[
-          'group relative rounded-xl overflow-hidden border-2 transition-all text-left disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2',
-          props.selectedTemplateId === template.id ? 'border-indigo-500 ring-4 ring-indigo-500/20 scale-105' : 'border-slate-200 dark:border-slate-800 hover:border-indigo-300',
-        ]"
-        @click="selectTemplate(template.id)"
-      >
-        <div v-if="template.coverUrl" class="h-32 w-full bg-slate-100 overflow-hidden">
-          <img :src="template.coverUrl" class="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" :alt="template.name" />
-        </div>
+	        :aria-pressed="props.selectedTemplateId === template.id"
+	        :class="[
+	          'group relative rounded-xl overflow-hidden border-2 transition-colors transition-transform duration-200 text-left disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2',
+	          props.selectedTemplateId === template.id ? 'border-indigo-500 ring-4 ring-indigo-500/20 scale-105' : 'border-slate-200 dark:border-slate-800 hover:border-indigo-300',
+	        ]"
+	        @click="selectTemplate(template.id)"
+	      >
+	        <div v-if="template.coverUrl" class="h-32 w-full bg-slate-100 overflow-hidden">
+	          <img
+	            :src="template.coverUrl"
+	            width="640"
+	            height="256"
+	            loading="lazy"
+	            decoding="async"
+	            class="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500"
+	            :alt="template.name"
+	          />
+	        </div>
         <div v-else :class="['h-32 w-full flex items-center justify-center', template.thumbnailColor]">
           <span class="text-white font-bold opacity-80 text-lg">Aa</span>
         </div>
@@ -62,12 +70,12 @@ const selectTemplate = (id: string) => {
       </button>
     </div>
 
-    <div v-if="!props.externalToolbar" class="flex justify-center">
-      <button
-        :disabled="props.loading || !props.templates.length"
-        class="px-10 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:text-slate-500 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-500/30 transition-all flex items-center gap-3"
-        @click="emit('generate')"
-      >
+	    <div v-if="!props.externalToolbar" class="flex justify-center">
+	      <button
+	        :disabled="props.loading || !props.templates.length"
+	        class="px-10 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:text-slate-500 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-500/30 transition-colors flex items-center gap-3"
+	        @click="emit('generate')"
+	      >
         <LucideIcon :name="props.loading ? 'loader-2' : 'sparkles'" :size="20" :class="props.loading ? 'animate-spin' : ''" />
         <span>{{ props.loading ? t('ppt.generating') : t('ppt.generate') }}</span>
       </button>

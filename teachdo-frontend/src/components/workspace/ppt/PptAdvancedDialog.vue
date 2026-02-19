@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import LucideIcon from '@/components/common/LucideIcon.vue';
+import { trapTabKey } from '@/utils/focusTrap';
 
 interface Props {
   open: boolean;
@@ -26,6 +27,7 @@ const emit = defineEmits<Emits>();
 const { t } = useI18n();
 
 const advancedDialogRef = ref<HTMLElement | null>(null);
+const webSearchInputRef = ref<HTMLInputElement | null>(null);
 
 const close = () => emit('update:open', false);
 
@@ -40,9 +42,14 @@ const uploadedFileModel = computed({
 });
 
 const onKeydown = (e: KeyboardEvent) => {
-  if (e.key !== 'Escape') return;
   if (!props.open) return;
-  close();
+  if (e.key === 'Escape') {
+    close();
+    return;
+  }
+  if (e.key === 'Tab' && advancedDialogRef.value) {
+    trapTabKey(e, advancedDialogRef.value);
+  }
 };
 
 watch(
@@ -52,7 +59,10 @@ watch(
       document.body.style.overflow = 'hidden';
       document.addEventListener('keydown', onKeydown);
       await nextTick();
-      advancedDialogRef.value?.focus();
+      webSearchInputRef.value?.focus?.();
+      if (document.activeElement !== webSearchInputRef.value) {
+        advancedDialogRef.value?.focus();
+      }
       return;
     }
 
@@ -75,7 +85,12 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <Transition name="td-modal">
       <div v-if="props.open" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="close" />
+        <button
+          type="button"
+          class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+          :aria-label="t('common.close')"
+          @click="close"
+        />
 
         <div
           ref="advancedDialogRef"
@@ -107,6 +122,7 @@ onBeforeUnmount(() => {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label class="flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
                 <input
+                  ref="webSearchInputRef"
                   v-model="webSearchModel"
                   :disabled="props.loading"
                   type="checkbox"

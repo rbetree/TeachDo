@@ -420,14 +420,14 @@ onBeforeUnmount(() => {
 
         <div class="relative">
           <LucideIcon name="search" :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            :placeholder="t('kb.search')"
-            class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-all"
-          />
-        </div>
-      </div>
+	          <input
+	            v-model="searchQuery"
+	            type="text"
+	            :placeholder="t('kb.search')"
+	            class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-colors"
+	          />
+	        </div>
+	      </div>
     </div>
 
     <!-- Page Variant: 原页面布局 -->
@@ -450,14 +450,14 @@ onBeforeUnmount(() => {
         </div>
         <div class="relative flex-1 md:w-64">
           <LucideIcon name="search" :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            :placeholder="t('kb.search')"
-            class="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-transparent focus:bg-white dark:focus:bg-slate-900 border focus:border-indigo-500 rounded-lg text-sm outline-none transition-all"
-          />
-        </div>
-      </div>
+	          <input
+	            v-model="searchQuery"
+	            type="text"
+	            :placeholder="t('kb.search')"
+	            class="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-transparent focus:bg-white dark:focus:bg-slate-900 border focus:border-indigo-500 rounded-lg text-sm outline-none transition-colors"
+	          />
+	        </div>
+	      </div>
     </div>
 
     <div :class="['flex-1 flex overflow-hidden', isPanel ? 'flex-col gap-0' : 'flex-col md:flex-row gap-6']">
@@ -583,7 +583,7 @@ onBeforeUnmount(() => {
 				                        <div class="flex items-center gap-1 shrink-0">
 				                          <button
 				                            type="button"
-				                            class="w-7 h-7 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+				                            class="w-11 h-11 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
 				                            :aria-label="t('kb.action.export')"
 				                            :title="t('kb.action.export')"
 				                            :disabled="file.status !== 'ready' || exportingFileId === file.id"
@@ -593,7 +593,7 @@ onBeforeUnmount(() => {
 				                          </button>
 				                          <button
 				                            type="button"
-				                            class="w-7 h-7 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+				                            class="w-11 h-11 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
 				                            :aria-label="t('kb.action.delete')"
 				                            :title="t('kb.action.delete')"
 				                            :disabled="file.status === 'uploading'"
@@ -610,7 +610,7 @@ onBeforeUnmount(() => {
 				                          <span>{{ file.progress ?? 0 }}%</span>
 				                        </div>
 				                        <div class="h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-				                          <div class="h-full bg-indigo-500 transition-all duration-300" :style="{ width: `${file.progress ?? 0}%` }"></div>
+				                          <div class="h-full bg-indigo-500 transition-[width] duration-300" :style="{ width: `${file.progress ?? 0}%` }"></div>
 				                        </div>
 				                      </div>
 				              </div>
@@ -620,16 +620,17 @@ onBeforeUnmount(() => {
 
         <!-- Page Variant：原表格布局 -->
         <template v-else>
-          <div
-            class="m-4 p-8 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-all duration-200 cursor-pointer"
-            :class="isDragging
-              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-              : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800'"
-            @click="openFilePicker"
-            @dragover.prevent="handleDragOver"
-            @dragleave.prevent="handleDragLeave"
-            @drop="handleDrop"
-          >
+	          <button
+	            type="button"
+	            class="m-4 p-8 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
+	            :class="isDragging
+	              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+	              : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800'"
+	            @click="openFilePicker"
+	            @dragover.prevent="handleDragOver"
+	            @dragleave.prevent="handleDragLeave"
+	            @drop="handleDrop"
+	          >
             <div class="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-sm mb-3">
               <LucideIcon name="upload-cloud" :size="24" :class="isDragging ? 'text-indigo-600' : 'text-slate-400'" />
             </div>
@@ -637,9 +638,9 @@ onBeforeUnmount(() => {
               <p class="text-sm font-bold text-slate-700 dark:text-slate-200">
                 {{ isDragging ? t('kb.drop.title') : t('kb.drop.title') }}
               </p>
-              <p class="text-xs text-slate-500 mt-1">{{ t('kb.drop.desc') }}</p>
-            </div>
-          </div>
+	              <p class="text-xs text-slate-500 mt-1">{{ t('kb.drop.desc') }}</p>
+	            </div>
+	          </button>
 
           <div class="grid grid-cols-12 gap-4 px-6 py-3 border-b border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50 dark:bg-slate-900/50">
             <div class="col-span-6">{{ t('kb.table.name') }}</div>
@@ -700,10 +701,10 @@ onBeforeUnmount(() => {
                       <span>{{ t('kb.status.uploading') }}</span>
                       <span>{{ file.progress ?? 0 }}%</span>
                     </div>
-                    <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                      <div class="h-full bg-indigo-500 transition-all duration-300" :style="{ width: `${file.progress ?? 0}%` }"></div>
-                    </div>
-                  </div>
+	                    <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+	                      <div class="h-full bg-indigo-500 transition-[width] duration-300" :style="{ width: `${file.progress ?? 0}%` }"></div>
+	                    </div>
+	                  </div>
                   <span
                     v-else
                     class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
@@ -712,25 +713,25 @@ onBeforeUnmount(() => {
                   </span>
 	                </div>
 	                <div class="col-span-1 text-right">
-	                  <div class="inline-flex items-center justify-end gap-2">
-	                    <button
-	                      type="button"
-	                      class="text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-40"
-	                      :aria-label="t('kb.action.export')"
-	                      :title="t('kb.action.export')"
-	                      :disabled="file.status !== 'ready' || exportingFileId === file.id"
-	                      @click="handleExport(file)"
-	                    >
+		                  <div class="inline-flex items-center justify-end gap-2">
+		                    <button
+		                      type="button"
+		                      class="w-11 h-11 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+		                      :aria-label="t('kb.action.export')"
+		                      :title="t('kb.action.export')"
+		                      :disabled="file.status !== 'ready' || exportingFileId === file.id"
+		                      @click="handleExport(file)"
+		                    >
 	                      <LucideIcon name="download" :size="16" />
 	                    </button>
-	                    <button
-	                      type="button"
-	                      class="text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40"
-	                      :aria-label="t('kb.action.delete')"
-	                      :title="t('kb.action.delete')"
-	                      :disabled="file.status === 'uploading'"
-	                      @click="handleDelete(file.id)"
-	                    >
+		                    <button
+		                      type="button"
+		                      class="w-11 h-11 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+		                      :aria-label="t('kb.action.delete')"
+		                      :title="t('kb.action.delete')"
+		                      :disabled="file.status === 'uploading'"
+		                      @click="handleDelete(file.id)"
+		                    >
 	                      <LucideIcon name="trash-2" :size="16" />
 	                    </button>
 	                  </div>
