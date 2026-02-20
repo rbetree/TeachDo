@@ -16,7 +16,7 @@
 > 说明：当前后端 `main_api /kb/files/{user_id}` 已保证 `folder_id` 归一化并缺省为 0，因此前端主要走规则 1/2。
 
 ## 前端改动（TeachDo Frontend）
-### 1) i18n 文案（`teachdo-frontend/src/i18n/index.ts`）
+### 1) i18n 文案（`frontend/src/i18n/index.ts`）
 新增 key（中英都补齐）：
 - `kb.source.uploaded`：`素材` / `Materials`
 - `kb.source.generated`：`产物` / `Artifacts`
@@ -24,7 +24,7 @@
 - `kb.source.uploaded_full`：`上传素材` / `Uploaded materials`
 - `kb.source.generated_full`：`生成产物` / `Generated artifacts`
 
-### 2) 来源判定与复用工具（新增 `teachdo-frontend/src/utils/kbSource.ts`）
+### 2) 来源判定与复用工具（新增 `frontend/src/utils/kbSource.ts`）
 - 导出：
   - `type KbSource = 'uploaded' | 'generated' | 'unknown'`
   - `getKbSource(folderId?: number): KbSource`
@@ -35,7 +35,7 @@
   - 未知：`slate` 系
 - 标签样式统一为：`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border`
 
-### 3) 知识库列表展示（`teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue`）
+### 3) 知识库列表展示（`frontend/src/components/workspace/KnowledgeBaseView.vue`）
 - 在**两种布局**都加来源标签：
   - Page Variant（表格布局）：在“文件名”行右侧追加 pill 标签（不挤占 truncate，必要时放到下一行）
   - Panel Variant（侧栏卡片布局）：在文件标题区域或状态区域旁追加 pill 标签

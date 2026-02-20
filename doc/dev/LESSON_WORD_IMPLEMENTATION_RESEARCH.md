@@ -58,7 +58,7 @@
 
 ```mermaid
 flowchart LR
-  subgraph FE["teachdo-frontend"]
+  subgraph FE["frontend"]
     UI["Workspace Tabs (Outline / Lesson / PPT)"]
     API["apiClient + aiService"]
     UI --> API
@@ -243,7 +243,7 @@ data: [DONE]
 ## Phase 0：前端样式/模板选择（对齐 PPT 模板选择）
 
 1. 定义 `LessonStyle`（默认预设 + 可配置参数），并持久化到 `material`（与 `material.lessonPlan` 同级）
-2. Lesson 页增加“样式/模板选择”入口（位置对齐 PPT：Workspace header actions；参考 `teachdo-frontend/src/components/workspace/ppt/PptTemplateSelector.vue` 的交互）
+2. Lesson 页增加“样式/模板选择”入口（位置对齐 PPT：Workspace header actions；参考 `frontend/src/components/workspace/ppt/PptTemplateSelector.vue` 的交互）
 3. Lesson 纸张预览使用样式渲染（字体/字号/行距/段距/页边距），并支持实时切换样式验证
 
 DoD：
@@ -265,9 +265,9 @@ DoD：
 
 ## Phase 2：前端接入 SSE（参考 PPT 生成实现）
 
-1. 新增 `lessonService`：SSE 解析（复用 `SseParser`）、AbortController 取消、错误/完成态收敛（参考 `teachdo-frontend/src/services/ai/pptService.ts` 的 `streamAipptSlides`）
+1. 新增 `lessonService`：SSE 解析（复用 `SseParser`）、AbortController 取消、错误/完成态收敛（参考 `frontend/src/services/ai/pptService.ts` 的 `streamAipptSlides`）
 2. Lesson 页实现状态机：`idle/generating/cancelled/done/error`
-3. 流式预览：按 section 增量更新并落库到 `material.lessonPlan`（生成中也可保存部分结果用于回显；取消/重试交互参考 `teachdo-frontend/src/components/workspace/ppt/usePptGeneration.ts`）
+3. 流式预览：按 section 增量更新并落库到 `material.lessonPlan`（生成中也可保存部分结果用于回显；取消/重试交互参考 `frontend/src/components/workspace/ppt/usePptGeneration.ts`）
 
 DoD：
 

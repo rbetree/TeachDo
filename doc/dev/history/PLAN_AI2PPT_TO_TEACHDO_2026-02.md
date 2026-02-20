@@ -9,15 +9,15 @@
 - 本文在原有计划基础上补充细化，目标是形成可直接执行的实施文档。
 - 原计划/背景文档参考：`doc/dev/DEVELOPMENT_PLAN.md`（本文优先用于落地实施，若两者冲突以本文为准）。
 - 核心方向不变：
-1. 保留现有 `teachdo-frontend`，在其上重构。
+1. 保留现有 `frontend`，在其上重构。
 2. 不迁移历史旧前端样式流程页，仅迁移能力链路。
 3. 以 TeachDo 核心链路可用为 V1 首要目标（能力来源为现有 ai2ppt 链路）。
 - 最后更新：2026-02-16。
 
 ## 1. 项目目标
-- 保留现有 `teachdo-frontend` 的工作台视觉与交互结构。
+- 保留现有 `frontend` 的工作台视觉与交互结构。
 - 在工作台内替换原 PPT 生成单元，接入现有 PPT 生成引擎能力链路。
-- 以 `teachdo-frontend` 作为唯一前端入口，确保单前端架构。
+- 以 `frontend` 作为唯一前端入口，确保单前端架构。
 - 新建 `teachdo` 仓库，使用干净历史（不保留 ai2ppt 的 git commit 历史），仅迁移需要的代码与文档。
 
 ## 2. 已确认范围与原则
@@ -25,7 +25,7 @@
 1. TeachDo 工作台布局、页面风格、信息架构。
 2. 课程/单元管理与 Tab 工作流。
 - 替换：
-1. `teachdo-frontend` 现有 PPT 生成模块的业务能力实现。
+1. `frontend` 现有 PPT 生成模块的业务能力实现。
 2. 虚构接口调用与不稳定解析逻辑。
 - 不迁移：
 1. 历史旧前端页面样式与流程页面（`Home/Outline/PPT`）。
@@ -64,7 +64,7 @@
 - TeachDo 当前工作台已具备可替换边界：
 1. `CourseWorkspaceView` 以 `PPTView` 作为独立单元。
 2. `aiService` 已有部分真实接口调用，但夹杂虚构接口。
-- 当前 `start.py` 与 `docker-compose.yml` 仍指向旧 `frontend/`，需切换到 `teachdo-frontend/`。
+- 当前 `start.py` 与 `docker-compose.yml` 仍指向旧 `frontend/`，需切换到 `frontend/`。
 
 ## 4. V1 验收标准
 1. 大纲能力：仅基于主题输入流式生成大纲并可保存（V1 不在大纲阶段引用知识库/上传素材）。
@@ -96,7 +96,7 @@
 - `GET /data/{filename}`：模板相关静态资源。
 
 ### 5.3 TeachDo 服务层标准化（目标形态）
-- 统一在 `teachdo-frontend/src/services/aiService.ts` 维护接口调用，不再散落组件内直接 `fetch`。
+- 统一在 `frontend/src/services/aiService.ts` 维护接口调用，不再散落组件内直接 `fetch`。
 - `BASE_API = '/api'`，所有请求走相对路径（不使用 `http://localhost:6800` 这类绝对地址）。
 - 统一提供：
 1. `checkBackend()`
@@ -106,7 +106,7 @@
 - 对 V1 非核心能力（lesson/assistant）提供可运行兜底，避免硬失败。
  - 统一会话/知识库作用域：`sessionId/user_id = course.id`（course-scoped）。
 
-### 5.4 数据模型调整（teachdo-frontend）
+### 5.4 数据模型调整（frontend）
 - `CourseUnit` 增加 `outlineMeta`：记录来源模式、文件名、时间戳。
 - `CourseUnit` 增加 `editorDocument`：记录编辑器文档快照（slides/theme/viewport）。
 - `CourseUnit` 保留 `presentation`：用于预览与快速回显。
@@ -293,7 +293,7 @@
 - 目标：工作台预览与编辑器渲染必须一致，因此不能用“TeachDo 自定义的简化 slide 数据结构”替代编辑器的 `Slide` 类型。
 - 推荐方案：迁移并复用旧前端的生成器与类型体系（迁移来源：ai2ppt 仓库）：
 1. `frontend/src/hooks/useAIPPT.ts` 的 `AIPPTGenerator(templateSlides, aiSlides, imgs)` 负责把 `AIPPTSlide[]` 映射为编辑器 `Slide[]`。
-2. `frontend/src/types/slides.ts`、`frontend/src/configs/*`、`frontend/src/utils/*` 中与渲染/导出相关的类型与工具按需迁入 `teachdo-frontend/src/editor-runtime`。
+2. `frontend/src/types/slides.ts`、`frontend/src/configs/*`、`frontend/src/utils/*` 中与渲染/导出相关的类型与工具按需迁入 `frontend/src/editor-runtime`。
 - TeachDo 侧的数据落点：
 1. 生成时：把生成出的 `Slide[]` + `theme` + `viewport` 写入 `CourseUnit.editorDocument`（用于后续预览与进入编辑器）。
 2. 预览时：直接读取 `CourseUnit.editorDocument` 渲染（只读模式）。
@@ -321,20 +321,20 @@
   - [ ] 配置新的 remote
   - [x] 首次 `git commit`（`chore: initial import`；commit 前确认 `.gitignore` 不会提交本地环境文件）
 - [x] 2. 修正忽略规则（在新仓库中执行）：
-  - [x] 确认根目录 `.gitignore` 未忽略 `/teachdo-frontend`
+  - [x] 确认根目录 `.gitignore` 未忽略 `/frontend`
   - [x] （可选）补充忽略：`.run/`、`.kilocode/`（如不希望提交 IDE/工具配置目录）
-- [x] 3. 修改 `start.py`：前端目录从 `frontend/` 切换为 `teachdo-frontend/`。
-  - 同步统一端口：`teachdo-frontend/vite.config.ts` 当前 `server.port=5174`，因此 `start.py` 默认 `FRONTEND_PORT` 也应调整为 `5174`（保留环境变量覆盖能力）。
-- [x] 4. 为 `teachdo-frontend/vite.config.ts` 增加 dev proxy：
+- [x] 3. 修改 `start.py`：前端目录从 `frontend/` 切换为 `frontend/`。
+  - 同步统一端口：`frontend/vite.config.ts` 当前 `server.port=5174`，因此 `start.py` 默认 `FRONTEND_PORT` 也应调整为 `5174`（保留环境变量覆盖能力）。
+- [x] 4. 为 `frontend/vite.config.ts` 增加 dev proxy：
   - `/api` -> `http://127.0.0.1:6800`，rewrite 去掉 `/api` 前缀。
 - [x] 5. TeachDo 前端服务层与 API 基址统一（为后续 C/D 阶段铺路）：
-  - 将 `teachdo-frontend/src/services/aiService.ts` 统一改为 `BASE_API='/api'`（不依赖 `VITE_API_BASE`、不写死 `http://localhost:6800`）。
+  - 将 `frontend/src/services/aiService.ts` 统一改为 `BASE_API='/api'`（不依赖 `VITE_API_BASE`、不写死 `http://localhost:6800`）。
   - 抽一个可复用的 SSE 解析工具（按 `5.6.1` 规则），供大纲与 PPT 两处共用，避免各写一套导致解析边界不一致。
   - DoD：
-    1. `python start.py` 能启动 `teachdo-frontend`。
+    1. `python start.py` 能启动 `frontend`。
     2. Dev 环境前端通过 `/api/*` 访问后端，无需改代码切换 baseUrl。
     3. Docker/生产部署相关内容延后到“开发完成后”再处理（见阶段 H）。
-    4. 可运行一键验证脚本并通过（至少验证 `/healthz`、`/templates` 通过 `teachdo-frontend` 的 `/api` 代理可访问，见 `8.4`）。
+    4. 可运行一键验证脚本并通过（至少验证 `/healthz`、`/templates` 通过 `frontend` 的 `/api` 代理可访问，见 `8.4`）。
 
 ### 阶段 B：工作台路由化
 - [x] 1. 将当前 tab 内部状态切换为 URL 驱动切换（可直达）。
@@ -412,10 +412,10 @@
 
 ### 阶段 E：编辑器独立页 + 工作台预览
 - [x] 0. 工具链与依赖对齐（编辑器体量最大，需优先保证可编译）：
-  - [x] 采用策略 A（已确认）：保留 TeachDo 工具链，在 `teachdo-frontend` 内逐步引入旧编辑器依赖并修复编译问题（可能会遇到 Vite 5 -> 7 的兼容差异）。
-  - 回退策略（仅当 A 卡住时启用）：将 `teachdo-frontend` 的构建工具链下调对齐旧编辑器（Vite/TS/ESLint），先确保编辑器能跑，再逐步升级。
-  - [x] `teachdo-frontend` 已可 `npm run build` 通过（存在 Sass `@import` 弃用警告，不阻断构建）。
-- [x] 1. 将现有编辑器能力迁入 `teachdo-frontend/src/editor-runtime`（隔离 pinia/store/types/utils/components）。
+  - [x] 采用策略 A（已确认）：保留 TeachDo 工具链，在 `frontend` 内逐步引入旧编辑器依赖并修复编译问题（可能会遇到 Vite 5 -> 7 的兼容差异）。
+  - 回退策略（仅当 A 卡住时启用）：将 `frontend` 的构建工具链下调对齐旧编辑器（Vite/TS/ESLint），先确保编辑器能跑，再逐步升级。
+  - [x] `frontend` 已可 `npm run build` 通过（存在 Sass `@import` 弃用警告，不阻断构建）。
+- [x] 1. 将现有编辑器能力迁入 `frontend/src/editor-runtime`（隔离 pinia/store/types/utils/components）。
 - [x] 2. 依赖迁移（必须，来自旧 `frontend/package.json`，按实际引用增量加入）：
 - 典型必需：`dexie`、`prosemirror-*`、`echarts`、`html-to-image`、`lodash`、`nanoid`、`tippy.js`、`vuedraggable`、`tinycolor2`、`svg-pathdata`、`svg-arc-to-cubic-bezier` 等。
 - 目标：编辑器路由能编译运行，且导出 PPTX 可用（依赖缺失会直接导致功能不可用）。
@@ -453,29 +453,29 @@
 
 ### 阶段 G：回归与发布
 - [x] 1. 链路回归：大纲、模板、流式生成、编辑、导出全流程（2026-02-16：按 `8.1` 人工回归通过）。
-- [x] 2. 工程校验：`typecheck`、`lint`、`build`（2026-02-16：`teachdo-frontend` 已通过）。
+- [x] 2. 工程校验：`typecheck`、`lint`、`build`（2026-02-16：`frontend` 已通过）。
 - [x] 3. 文档更新：开发启动、路由说明、接口映射、已知限制（2026-02-16：已更新根 README + 关键部署/接口文档）。
 - [x] 4. 品牌与命名清理（交付前必须完成）：
   - [x] 用户可见（UI 文案/标题/帮助文档）不出现 `ai2ppt/AI2PPT`。
   - [x] 代码实现（前端+后端）不出现 `ai2ppt/AI2PPT` 字符串：
-    1. teachdo-frontend：移除注释/变量/模块名中的历史词。
+    1. frontend：移除注释/变量/模块名中的历史词。
     2. backend：将 `AI2PPT_*` 环境变量等历史命名替换为 `TEACHDO_*`（并同步更新读取逻辑与文档）。
 - 完成记录（2026-02-16）：
   - `git commit`：`2b99dcb chore(stage-g): release cleanup`
-  - `rg -n "ai2ppt|AI2PPT" teachdo-frontend backend`：无匹配
-  - 前端：`teachdo-frontend` 执行 `npm run typecheck && npm run lint && npm run build` 通过
+  - `rg -n "ai2ppt|AI2PPT" frontend backend`：无匹配
+  - 前端：`frontend` 执行 `npm run typecheck && npm run lint && npm run build` 通过
   - 后端：执行 `venv/bin/python -m pytest backend -q` 通过
 - DoD：
   - [x] 1. 核心流程通过，构建通过（2026-02-16：已回归确认）。
   - [x] 2. 文档可支撑新成员按文档启动与联调。
   - [x] 3. 用户可见页面和对外帮助文档中不出现 `ai2ppt/AI2PPT`（迁移说明文档可保留）。
-  - [x] 4. 在新仓库执行 `rg -n \"ai2ppt|AI2PPT\" teachdo-frontend backend` 无匹配结果（文档目录不做此约束）。
+  - [x] 4. 在新仓库执行 `rg -n \"ai2ppt|AI2PPT\" frontend backend` 无匹配结果（文档目录不做此约束）。
 
 ### 阶段 H：部署与 Docker（开发完成后再做）
-1. 修改 `docker-compose.yml`：frontend 构建上下文切换为 `./teachdo-frontend`。
-2. 为 `teachdo-frontend` 补齐生产容器化文件：
-- 增加 `teachdo-frontend/Dockerfile`（构建 dist + 静态托管）。
-- 增加 `teachdo-frontend/nginx.conf`，反代 `/api/` 到 `main_api:6800`，并关闭 buffering 以兼容 SSE。
+1. 修改 `docker-compose.yml`：frontend 构建上下文切换为 `./frontend`。
+2. 为 `frontend` 补齐生产容器化文件：
+- 增加 `frontend/Dockerfile`（构建 dist + 静态托管）。
+- 增加 `frontend/nginx.conf`，反代 `/api/` 到 `main_api:6800`，并关闭 buffering 以兼容 SSE。
 3. 验证 `docker compose up --build` 可运行，且 SSE 在代理下不被缓冲截断。
 
 ## 7. 任务拆分与里程碑建议
@@ -536,7 +536,7 @@
 
 #### 8.4.2 使用方式（示例）
 1. 验证前端 `/api` 代理是否正确（阶段 A 必做）：
-- 前提：`teachdo-frontend` dev server 已在 `5174` 启动，后端 main_api 已在 `6800` 启动。
+- 前提：`frontend` dev server 已在 `5174` 启动，后端 main_api 已在 `6800` 启动。
 - 命令：`python3 scripts/verify_endpoints.py --base-url http://127.0.0.1:5174 --prefix /api --skip-outline --skip-ppt`
 2. 验证后端直连基础接口（不依赖前端）：
 - 命令：`python3 scripts/verify_endpoints.py --base-url http://127.0.0.1:6800`
@@ -569,14 +569,14 @@
 
 ## 11. 交付清单
 1. 新仓库 `teachdo`（含历史迁移说明）。
-2. `teachdo-frontend` 单前端可启动/可构建。
+2. `frontend` 单前端可启动/可构建。
 3. 工作台全标签路由化。
 4. Outline/PPT/Editor 主链路可用。
 5. 更新后的开发文档与发布说明。
 
 ## 12. 默认假设
 1. V1 不新增 `/teachdo/*` 后端接口，以现有 `main_api` 能力为准。
-2. `teachdo-frontend` 为唯一前端入口，`frontend/` 退出运行链路。
+2. `frontend` 为唯一前端入口，`frontend/` 退出运行链路。
 3. 优先保证 TeachDo 核心链路完整可用，非 PPT 模块按可运行收敛。
 
 ## 13. 已确认补充

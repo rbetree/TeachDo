@@ -6,16 +6,15 @@ TeachDo 是面向教师的智能备课平台，主链路为 Outline -> PPT 生�
 
 - 一键启动（推荐）：`cp env_template.txt .env && python start.py`
 - 后端全服务：`cd backend && pip install -r requirements.txt && python start_backend.py`
-- TeachDo 前端开发：`cd teachdo-frontend && npm i && npm run dev`
-- 前端质量校验：`cd teachdo-frontend && npm run typecheck && npm run lint && npm run build`
+- TeachDo 前端开发：`cd frontend && npm i && npm run dev`
+- 前端质量校验：`cd frontend && npm run typecheck && npm run lint && npm run build`
 - 后端测试：`pytest backend -q`
 - 接口冒烟：`python scripts/verify_endpoints.py`
 
 ## Repository Structure
 
 - `backend/`: FastAPI 多服务（`main_api`、`simpleOutline`、`slide_agent`、`personaldb`、`mock_api`）
-- `teachdo-frontend/`: TeachDo 当前唯一前端入口（Vue 3 + Vite + TS）
-- `frontend/`: legacy 前端（不在当前主运行链路）
+- `frontend/`: TeachDo 当前唯一前端入口（Vue 3 + Vite + TS）
 - `doc/`: 项目文档与开发计划
 - `scripts/`: 校验与辅助脚本
 - `template/`: PPT 模板资源
@@ -34,6 +33,6 @@ TeachDo 是面向教师的智能备课平台，主链路为 Outline -> PPT 生�
 - 大纲服务：`backend/simpleOutline/main_api.py`
 - PPT 内容服务：`backend/slide_agent/main_api.py`
 - KB 服务：`backend/personaldb/main.py`
-- 前端入口：`teachdo-frontend/src/main.ts`
-- 前端路由：`teachdo-frontend/src/router/index.ts`
+- 前端入口：`frontend/src/main.ts`
+- 前端路由：`frontend/src/router/index.ts`
 - 开发计划：`doc/dev/PLAN.md`

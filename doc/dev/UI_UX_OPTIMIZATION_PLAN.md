@@ -1,6 +1,6 @@
 # TeachDo 前端 UI/UX 深度审查与优化方案（2026-02-19）
 
-> 适用范围：`teachdo-frontend/`（**不含** `teachdo-frontend/src/editor-runtime/**` 的内部控件与交互细节）  
+> 适用范围：`frontend/`（**不含** `frontend/src/editor-runtime/**` 的内部控件与交互细节）  
 > 参考标准：Vercel Web Interface Guidelines（已抓取最新版：`/tmp/web-interface-guidelines-command.md`）+ 项目现有代码结构与约束  
 > 更新：2026-02-19（P0/P1/P2 已全部落地，见第 3/5/6 节）
 
@@ -17,17 +17,17 @@
 ## 1.1 执行状态（截至 2026-02-19）
 > 下面列的是“落地证据定位”（修复后的代码位置），便于复查与回归。
 
-- ✅ TopBar 语义化导航 + A11y + i18n：`teachdo-frontend/src/components/layout/AppTopBar.vue:70`
-- ✅ Skip Link：`teachdo-frontend/src/layouts/MainLayout.vue:12`
-- ✅ Assistant：Shift+Enter/Enter + Stop + A11y：`teachdo-frontend/src/components/workspace/AssistantView.vue:300`
-- ✅ Outline：可取消生成（AbortController）：`teachdo-frontend/src/components/workspace/OutlineView.vue:54`
-- ✅ PPT：可取消生成 + 取消后 banner/部分结果策略：`teachdo-frontend/src/components/workspace/PPTView.vue:151`
-- ✅ KB：触控目标 + 进度条动效 + 上传 dropzone 键盘可达：`teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue:586`
-- ✅ Dialog：统一 focus trap + backdrop 键盘等价：`teachdo-frontend/src/utils/focusTrap.ts:9`
-- ✅ Settings：文案 i18n + Key 显隐按钮 A11y：`teachdo-frontend/src/views/SettingsView.vue:48`
-- ✅ LessonPlan：建设中禁用态 + 提示：`teachdo-frontend/src/components/workspace/LessonPlanView.vue:165`
-- ✅ 动效治理：移除 `transition-all`/`transition: all`（范围内）：`teachdo-frontend/src/components/common/ToastContainer.vue:76`
-- ✅ 字体与暗色一致性：`teachdo-frontend/index.html:7`、`teachdo-frontend/src/style.css:33`
+- ✅ TopBar 语义化导航 + A11y + i18n：`frontend/src/components/layout/AppTopBar.vue:70`
+- ✅ Skip Link：`frontend/src/layouts/MainLayout.vue:12`
+- ✅ Assistant：Shift+Enter/Enter + Stop + A11y：`frontend/src/components/workspace/AssistantView.vue:300`
+- ✅ Outline：可取消生成（AbortController）：`frontend/src/components/workspace/OutlineView.vue:54`
+- ✅ PPT：可取消生成 + 取消后 banner/部分结果策略：`frontend/src/components/workspace/PPTView.vue:151`
+- ✅ KB：触控目标 + 进度条动效 + 上传 dropzone 键盘可达：`frontend/src/components/workspace/KnowledgeBaseView.vue:586`
+- ✅ Dialog：统一 focus trap + backdrop 键盘等价：`frontend/src/utils/focusTrap.ts:9`
+- ✅ Settings：文案 i18n + Key 显隐按钮 A11y：`frontend/src/views/SettingsView.vue:48`
+- ✅ LessonPlan：建设中禁用态 + 提示：`frontend/src/components/workspace/LessonPlanView.vue:165`
+- ✅ 动效治理：移除 `transition-all`/`transition: all`（范围内）：`frontend/src/components/common/ToastContainer.vue:76`
+- ✅ 字体与暗色一致性：`frontend/index.html:7`、`frontend/src/style.css:33`
 
 ---
 
@@ -53,73 +53,73 @@
 ## 3. Web Interface Guidelines 审查结果（原问题与修复证据，已全部修复）
 > 按文件分组，使用 `file:line`（VS Code 可点击）。以下定位均为“修复后的证据”。
 
-## teachdo-frontend/src/components/layout/AppTopBar.vue
-- `teachdo-frontend/src/components/layout/AppTopBar.vue:70` - 内部导航改用 `RouterLink`（支持 Cmd/Ctrl+Click / 中键），并为 icon-only 提供 `aria-label`
-- `teachdo-frontend/src/components/layout/AppTopBar.vue:22` - 状态文案改为 i18n（`nav.status.*`）
-- `teachdo-frontend/src/components/layout/AppTopBar.vue:170` - 主题/语言切换补 `aria-label`（`a11y.toggle_theme` / `a11y.toggle_language`）
+## frontend/src/components/layout/AppTopBar.vue
+- `frontend/src/components/layout/AppTopBar.vue:70` - 内部导航改用 `RouterLink`（支持 Cmd/Ctrl+Click / 中键），并为 icon-only 提供 `aria-label`
+- `frontend/src/components/layout/AppTopBar.vue:22` - 状态文案改为 i18n（`nav.status.*`）
+- `frontend/src/components/layout/AppTopBar.vue:170` - 主题/语言切换补 `aria-label`（`a11y.toggle_theme` / `a11y.toggle_language`）
 
-## teachdo-frontend/src/layouts/MainLayout.vue
-- `teachdo-frontend/src/layouts/MainLayout.vue:12` - 增加 Skip Link
-- `teachdo-frontend/src/layouts/MainLayout.vue:18` - `<main id="main-content" tabindex="-1">`
+## frontend/src/layouts/MainLayout.vue
+- `frontend/src/layouts/MainLayout.vue:12` - 增加 Skip Link
+- `frontend/src/layouts/MainLayout.vue:18` - `<main id="main-content" tabindex="-1">`
 
-## teachdo-frontend/src/components/workspace/AssistantView.vue
-- `teachdo-frontend/src/components/workspace/AssistantView.vue:300` - Enter 发送、Shift+Enter 换行（不再 `.prevent`）
-- `teachdo-frontend/src/components/workspace/AssistantView.vue:306` - 生成中可 Stop（AbortController.abort），并补齐输入框/按钮的 A11y 标签
+## frontend/src/components/workspace/AssistantView.vue
+- `frontend/src/components/workspace/AssistantView.vue:300` - Enter 发送、Shift+Enter 换行（不再 `.prevent`）
+- `frontend/src/components/workspace/AssistantView.vue:306` - 生成中可 Stop（AbortController.abort），并补齐输入框/按钮的 A11y 标签
 
-## teachdo-frontend/src/components/workspace/OutlineView.vue
-- `teachdo-frontend/src/components/workspace/OutlineView.vue:54` - 生成链路引入 `AbortController` 并透传 `signal`
-- `teachdo-frontend/src/components/workspace/OutlineView.vue:115` - `cancelGenerate()` + abort 视为“用户取消”（toast.info）
-- `teachdo-frontend/src/components/workspace/OutlineView.vue:256` - 生成中显示“取消”按钮（`common.cancel`）
-- `teachdo-frontend/src/i18n/index.ts:205` - `outline.toast.canceled`
+## frontend/src/components/workspace/OutlineView.vue
+- `frontend/src/components/workspace/OutlineView.vue:54` - 生成链路引入 `AbortController` 并透传 `signal`
+- `frontend/src/components/workspace/OutlineView.vue:115` - `cancelGenerate()` + abort 视为“用户取消”（toast.info）
+- `frontend/src/components/workspace/OutlineView.vue:256` - 生成中显示“取消”按钮（`common.cancel`）
+- `frontend/src/i18n/index.ts:205` - `outline.toast.canceled`
 
-## teachdo-frontend/src/components/workspace/ppt/usePptGeneration.ts
-- `teachdo-frontend/src/components/workspace/ppt/usePptGeneration.ts:24` - 透传 `signal` + `generationCanceled/draftPreviewActive` 状态（用于“取消后保留部分结果”策略）
-- `teachdo-frontend/src/components/workspace/ppt/usePptGeneration.ts:232` - `cancelGenerate()`
+## frontend/src/components/workspace/ppt/usePptGeneration.ts
+- `frontend/src/components/workspace/ppt/usePptGeneration.ts:24` - 透传 `signal` + `generationCanceled/draftPreviewActive` 状态（用于“取消后保留部分结果”策略）
+- `frontend/src/components/workspace/ppt/usePptGeneration.ts:232` - `cancelGenerate()`
 
-## teachdo-frontend/src/components/workspace/PPTView.vue
-- `teachdo-frontend/src/components/workspace/PPTView.vue:151` - 生成中显示“取消”按钮（`common.cancel`）
-- `teachdo-frontend/src/components/workspace/PPTView.vue:228` - 取消后展示 banner（允许回到已保存版本/重新生成）
-- `teachdo-frontend/src/i18n/index.ts:243` - `ppt.toast.canceled` / `ppt.toast.canceled_empty`
+## frontend/src/components/workspace/PPTView.vue
+- `frontend/src/components/workspace/PPTView.vue:151` - 生成中显示“取消”按钮（`common.cancel`）
+- `frontend/src/components/workspace/PPTView.vue:228` - 取消后展示 banner（允许回到已保存版本/重新生成）
+- `frontend/src/i18n/index.ts:243` - `ppt.toast.canceled` / `ppt.toast.canceled_empty`
 
-## teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue
-- `teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue:586` - 导出/删除按钮命中区提升到 44×44（`w-11 h-11`）
-- `teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue:613` - 进度条仅对 width 动画（`transition-[width]`）
-- `teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue:624` - 上传 dropzone 改为 `<button type="button">`（键盘可达 + focus-visible）
+## frontend/src/components/workspace/KnowledgeBaseView.vue
+- `frontend/src/components/workspace/KnowledgeBaseView.vue:586` - 导出/删除按钮命中区提升到 44×44（`w-11 h-11`）
+- `frontend/src/components/workspace/KnowledgeBaseView.vue:613` - 进度条仅对 width 动画（`transition-[width]`）
+- `frontend/src/components/workspace/KnowledgeBaseView.vue:624` - 上传 dropzone 改为 `<button type="button">`（键盘可达 + focus-visible）
 
-## teachdo-frontend/src/utils/focusTrap.ts
-- `teachdo-frontend/src/utils/focusTrap.ts:9` - 统一 focus trap 工具（Dialog 的 Tab/Shift+Tab 循环）
+## frontend/src/utils/focusTrap.ts
+- `frontend/src/utils/focusTrap.ts:9` - 统一 focus trap 工具（Dialog 的 Tab/Shift+Tab 循环）
 
-## teachdo-frontend/src/components/workspace/TeachingMaterialCreateDialog.vue
-- `teachdo-frontend/src/components/workspace/TeachingMaterialCreateDialog.vue:105` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
-- `teachdo-frontend/src/components/workspace/TeachingMaterialCreateDialog.vue:65` - Tab focus trap（`trapTabKey`）
+## frontend/src/components/workspace/TeachingMaterialCreateDialog.vue
+- `frontend/src/components/workspace/TeachingMaterialCreateDialog.vue:105` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
+- `frontend/src/components/workspace/TeachingMaterialCreateDialog.vue:65` - Tab focus trap（`trapTabKey`）
 
-## teachdo-frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue
-- `teachdo-frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue:91` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
-- `teachdo-frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue:46` - Tab focus trap（`trapTabKey`）
+## frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue
+- `frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue:91` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
+- `frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue:46` - Tab focus trap（`trapTabKey`）
 
-## teachdo-frontend/src/components/workspace/ppt/PptAdvancedDialog.vue
-- `teachdo-frontend/src/components/workspace/ppt/PptAdvancedDialog.vue:88` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
-- `teachdo-frontend/src/components/workspace/ppt/PptAdvancedDialog.vue:51` - Tab focus trap（`trapTabKey`）
+## frontend/src/components/workspace/ppt/PptAdvancedDialog.vue
+- `frontend/src/components/workspace/ppt/PptAdvancedDialog.vue:88` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
+- `frontend/src/components/workspace/ppt/PptAdvancedDialog.vue:51` - Tab focus trap（`trapTabKey`）
 
-## teachdo-frontend/src/components/workspace/KbFilePickerDialog.vue
-- `teachdo-frontend/src/components/workspace/KbFilePickerDialog.vue:312` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
-- `teachdo-frontend/src/components/workspace/KbFilePickerDialog.vue:269` - Tab focus trap（`trapTabKey`）
+## frontend/src/components/workspace/KbFilePickerDialog.vue
+- `frontend/src/components/workspace/KbFilePickerDialog.vue:312` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
+- `frontend/src/components/workspace/KbFilePickerDialog.vue:269` - Tab focus trap（`trapTabKey`）
 
-## teachdo-frontend/src/views/SettingsView.vue
-- `teachdo-frontend/src/views/SettingsView.vue:48` - `toast/confirm` 文案改为 i18n
-- `teachdo-frontend/src/views/SettingsView.vue:118` - Key 显隐按钮补 `aria-label/title/aria-pressed`
+## frontend/src/views/SettingsView.vue
+- `frontend/src/views/SettingsView.vue:48` - `toast/confirm` 文案改为 i18n
+- `frontend/src/views/SettingsView.vue:118` - Key 显隐按钮补 `aria-label/title/aria-pressed`
 
-## teachdo-frontend/src/components/workspace/LessonPlanView.vue
-- `teachdo-frontend/src/components/workspace/LessonPlanView.vue:165` - “建设中”统一为禁用态按钮 + 明确提示（避免误点/误解）
+## frontend/src/components/workspace/LessonPlanView.vue
+- `frontend/src/components/workspace/LessonPlanView.vue:165` - “建设中”统一为禁用态按钮 + 明确提示（避免误点/误解）
 
-## teachdo-frontend/src/components/common/ToastContainer.vue
-- `teachdo-frontend/src/components/common/ToastContainer.vue:76` - 动效从 `transition: all` 改为仅 `opacity, transform`
+## frontend/src/components/common/ToastContainer.vue
+- `frontend/src/components/common/ToastContainer.vue:76` - 动效从 `transition: all` 改为仅 `opacity, transform`
 
-## teachdo-frontend/index.html
-- `teachdo-frontend/index.html:7` - 增加 `color-scheme` / `theme-color`，并将字体加载移到 `<head><link rel=\"stylesheet\">` + `preconnect`
+## frontend/index.html
+- `frontend/index.html:7` - 增加 `color-scheme` / `theme-color`，并将字体加载移到 `<head><link rel=\"stylesheet\">` + `preconnect`
 
-## teachdo-frontend/src/style.css
-- `teachdo-frontend/src/style.css:33` - `color-scheme`（浅/深）与暗色原生控件一致性
+## frontend/src/style.css
+- `frontend/src/style.css:33` - `color-scheme`（浅/深）与暗色原生控件一致性
 
 ---
 
@@ -141,9 +141,9 @@
 **状态**：✅ 已完成（2026-02-19）
 
 **改动文件**
-- `teachdo-frontend/src/components/layout/AppTopBar.vue`
-- `teachdo-frontend/src/layouts/MainLayout.vue`
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/components/layout/AppTopBar.vue`
+- `frontend/src/layouts/MainLayout.vue`
+- `frontend/src/i18n/index.ts`
 
 **要点**
 - 对所有在小屏会变成“纯图标”的按钮：增加 `aria-label`（或 `sr-only` 文本）。
@@ -160,8 +160,8 @@
 **状态**：✅ 已完成（2026-02-19）
 
 **改动文件**
-- `teachdo-frontend/src/components/workspace/AssistantView.vue`
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/components/workspace/AssistantView.vue`
+- `frontend/src/i18n/index.ts`
 
 **要点**
 - 替换 `@keydown.enter.prevent`：Enter 发送、Shift+Enter 换行。
@@ -177,8 +177,8 @@
 **状态**：✅ 已完成（2026-02-19）
 
 **改动文件**
-- `teachdo-frontend/src/components/workspace/OutlineView.vue`
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/components/workspace/OutlineView.vue`
+- `frontend/src/i18n/index.ts`
 
 **要点**
 - 每次生成前创建新的 `AbortController`，并把 `signal` 透传到 `aiService.generateOutline(...)`。
@@ -194,9 +194,9 @@
 **状态**：✅ 已完成（2026-02-19）
 
 **改动文件**
-- `teachdo-frontend/src/components/workspace/ppt/usePptGeneration.ts`
-- `teachdo-frontend/src/components/workspace/PPTView.vue`
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/components/workspace/ppt/usePptGeneration.ts`
+- `frontend/src/components/workspace/PPTView.vue`
+- `frontend/src/i18n/index.ts`
 
 **要点**
 - `usePptGeneration.handleGenerate()` 内创建 controller，透传到 `aiService.streamAipptSlides({ ..., signal })`。
@@ -211,7 +211,7 @@
 **状态**：✅ 已完成（2026-02-19）
 
 **改动文件**
-- `teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue`
+- `frontend/src/components/workspace/KnowledgeBaseView.vue`
 
 **要点**
 - 导出/删除按钮由 `w-7 h-7` 提升到 ≥44×44（如 `w-11 h-11`）。
@@ -227,11 +227,11 @@
 **状态**：✅ 已完成（2026-02-19）
 
 **改动文件**
-- `teachdo-frontend/src/components/workspace/TeachingMaterialCreateDialog.vue`
-- `teachdo-frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue`
-- `teachdo-frontend/src/components/workspace/ppt/PptAdvancedDialog.vue`
-- `teachdo-frontend/src/components/workspace/KbFilePickerDialog.vue`
-- 新增：`teachdo-frontend/src/utils/focusTrap.ts`
+- `frontend/src/components/workspace/TeachingMaterialCreateDialog.vue`
+- `frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue`
+- `frontend/src/components/workspace/ppt/PptAdvancedDialog.vue`
+- `frontend/src/components/workspace/KbFilePickerDialog.vue`
+- 新增：`frontend/src/utils/focusTrap.ts`
 
 **要点**
 - `trapTabKey()`：Tab/Shift+Tab 循环。
@@ -248,8 +248,8 @@
 **状态**：✅ 已完成（2026-02-19）
 
 **改动文件**
-- `teachdo-frontend/src/views/SettingsView.vue`
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/views/SettingsView.vue`
+- `frontend/src/i18n/index.ts`
 
 **要点**
 - 眼睛按钮补 `aria-label/title`（show/hide）。
@@ -261,8 +261,8 @@
 **状态**：✅ 已完成（2026-02-19）
 
 **改动文件**
-- `teachdo-frontend/src/components/workspace/LessonPlanView.vue`
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/components/workspace/LessonPlanView.vue`
+- `frontend/src/i18n/index.ts`
 
 ---
 
@@ -270,7 +270,7 @@
 **状态**：✅ 已完成（2026-02-19）
 
 **改动文件**
-- `teachdo-frontend/src/components/workspace/OutlineView.vue`（空态 icon、CTA 前缀等）
+- `frontend/src/components/workspace/OutlineView.vue`（空态 icon、CTA 前缀等）
 
 **验收**
 - UI 不再使用 emoji 作为功能性图标（符合统一风格与可控性）。
@@ -282,7 +282,7 @@
 **状态**：✅ 已完成（2026-02-19）
 
 **验收**
-- `rg -n "transition-all|transition:\\s*all" teachdo-frontend/src --glob '!editor-runtime/**'` 无命中。
+- `rg -n "transition-all|transition:\\s*all" frontend/src --glob '!editor-runtime/**'` 无命中。
 
 ---
 
@@ -290,8 +290,8 @@
 **状态**：✅ 已完成（2026-02-19）
 
 **改动文件**
-- `teachdo-frontend/index.html`
-- `teachdo-frontend/src/style.css`
+- `frontend/index.html`
+- `frontend/src/style.css`
 
 **要点**
 - 将 Google Fonts 从 `@import` 移到 `<head><link rel="stylesheet">`，并加入 `preconnect`。
@@ -302,10 +302,10 @@
 
 ## 6. 验证与测试（每阶段都要跑）
 ### 自动化（已执行：2026-02-19）
-- ✅ `cd teachdo-frontend && npm run typecheck`
-- ✅ `cd teachdo-frontend && npm run lint`
-- ✅ `cd teachdo-frontend && npm run build`
-- ✅ `cd teachdo-frontend/src && rg -n "transition-all|transition:\\s*all" . --glob '!editor-runtime/**'`（范围内无命中）
+- ✅ `cd frontend && npm run typecheck`
+- ✅ `cd frontend && npm run lint`
+- ✅ `cd frontend && npm run build`
+- ✅ `cd frontend/src && rg -n "transition-all|transition:\\s*all" . --glob '!editor-runtime/**'`（范围内无命中）
 
 备注：
 - `npm run build` 可能仍会出现 Sass `@import` deprecation 警告与 chunk-size 警告，来源集中在 `editor-runtime` 相关 chunk，本方案范围明确排除该目录的深度改造。

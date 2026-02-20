@@ -20,7 +20,7 @@
 - 通用：TopBar、Toast、全局样式（Tailwind + `style.css`）
 
 **不做（明确排除）**
-- 不审查/不改造 `teachdo-frontend/src/editor-runtime/**` 的控件可访问性与交互（仅允许“入口衔接”层面的轻改动，如必要）。
+- 不审查/不改造 `frontend/src/editor-runtime/**` 的控件可访问性与交互（仅允许“入口衔接”层面的轻改动，如必要）。
 - 不引入新的重型 UI 框架；默认不新增运行时依赖（可新增少量 dev-only lint 规则属于 P2 可选）。
 
 ---
@@ -28,44 +28,44 @@
 ## 关键问题清单（含证据定位）
 ### A11y / 交互一致性
 1) **小屏 icon-only 导航按钮缺少可访问名称**
-- `teachdo-frontend/src/components/layout/AppTopBar.vue:126`（workspace 按钮在 <lg 无文字）
-- `teachdo-frontend/src/components/layout/AppTopBar.vue:136`
-- `teachdo-frontend/src/components/layout/AppTopBar.vue:146`
-- `teachdo-frontend/src/components/layout/AppTopBar.vue:156`
-- `teachdo-frontend/src/components/layout/AppTopBar.vue:175`（主题切换按钮）
-- `teachdo-frontend/src/components/layout/AppTopBar.vue:70`（Logo 回到 workspace 小屏也无文字）
+- `frontend/src/components/layout/AppTopBar.vue:126`（workspace 按钮在 <lg 无文字）
+- `frontend/src/components/layout/AppTopBar.vue:136`
+- `frontend/src/components/layout/AppTopBar.vue:146`
+- `frontend/src/components/layout/AppTopBar.vue:156`
+- `frontend/src/components/layout/AppTopBar.vue:175`（主题切换按钮）
+- `frontend/src/components/layout/AppTopBar.vue:70`（Logo 回到 workspace 小屏也无文字）
 
 2) **Assistant 输入框无法 Shift+Enter 换行（.prevent 导致默认行为被阻止）**
-- `teachdo-frontend/src/components/workspace/AssistantView.vue:279`–`288`
+- `frontend/src/components/workspace/AssistantView.vue:279`–`288`
 
 3) **KB 列表操作按钮触控目标不足 44×44**
-- `teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue:584`–`603`（`w-7 h-7`）
+- `frontend/src/components/workspace/KnowledgeBaseView.vue:584`–`603`（`w-7 h-7`）
 
 4) **弹窗缺少 focus trap（Tab 可逃逸到页面底层）**
-- `teachdo-frontend/src/components/workspace/TeachingMaterialCreateDialog.vue`（现仅 focus 到 panel）
-- `teachdo-frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue`
+- `frontend/src/components/workspace/TeachingMaterialCreateDialog.vue`（现仅 focus 到 panel）
+- `frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue`
 
 ### 心流 / 可控性
 5) **Outline / PPT 生成不可取消；Assistant 生成不可显式停止**
-- `teachdo-frontend/src/components/workspace/OutlineView.vue:50`–`86`（无 AbortController）
-- `teachdo-frontend/src/components/workspace/ppt/usePptGeneration.ts:94`–`159`（`streamAipptSlides` 未透传 `signal`）
-- `teachdo-frontend/src/components/workspace/PPTView.vue:136`–`205`（toolbar 无取消入口）
+- `frontend/src/components/workspace/OutlineView.vue:50`–`86`（无 AbortController）
+- `frontend/src/components/workspace/ppt/usePptGeneration.ts:94`–`159`（`streamAipptSlides` 未透传 `signal`）
+- `frontend/src/components/workspace/PPTView.vue:136`–`205`（toolbar 无取消入口）
 - Assistant 已有 `AbortController` 但 UI 无“停止”入口（`AssistantView.vue`）
 
 ### 文案 / 国际化
 6) **TopBar 状态指示硬编码英文（且与 i18n 已存在 key 重复）**
-- `teachdo-frontend/src/components/layout/AppTopBar.vue:111`–`121`
+- `frontend/src/components/layout/AppTopBar.vue:111`–`121`
 
 7) **Settings 的“演示”提示、confirm/toast 文案硬编码 + 眼睛按钮无 aria-label**
-- `teachdo-frontend/src/views/SettingsView.vue:111`–`113`
+- `frontend/src/views/SettingsView.vue:111`–`113`
 
 ### 动效 / 全局体验
 8) **`transition-all` 与 `transition: all` 分散存在，可能触发布局相关动画**
 - `transition-all`：`TeachingMaterialSelectionView.vue:171`、`OutlineView.vue:283/318`、`PPTView.vue:103`、`PptTemplateSelector.vue:44/68`、`PptPreviewPanel.vue:223/239/267/297/315`、`KnowledgeBaseView.vue:613` 等
-- `transition: all`：`teachdo-frontend/src/components/common/ToastContainer.vue:76`
+- `transition: all`：`frontend/src/components/common/ToastContainer.vue:76`
 
 9) **字体通过 CSS `@import` 引入（可优化为 head link，提升加载与可控性）**
-- `teachdo-frontend/src/style.css:1`
+- `frontend/src/style.css:1`
 
 ---
 
@@ -86,8 +86,8 @@
 ### P0（必须）A11y 基线 + 可取消/可停止
 #### 1) TopBar：为小屏 icon-only 导航补齐可访问名称 + 状态文案 i18n
 **改动文件**
-- `teachdo-frontend/src/components/layout/AppTopBar.vue`
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/components/layout/AppTopBar.vue`
+- `frontend/src/i18n/index.ts`
 
 **具体改法（决策已定）**
 - 给以下按钮统一加 `:aria-label="t('...')"` 与 `:title="t('...')"`：
@@ -111,8 +111,8 @@
 
 #### 2) Assistant：修复 Shift+Enter 换行 + 增加“停止生成”入口 + A11y 标签
 **改动文件**
-- `teachdo-frontend/src/components/workspace/AssistantView.vue`
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/components/workspace/AssistantView.vue`
+- `frontend/src/i18n/index.ts`
 
 **具体改法**
 - 把 `@keydown.enter.prevent`（`AssistantView.vue:287`）改为显式 keydown handler：
@@ -141,9 +141,9 @@
 
 #### 3) Outline：增加“取消生成” + AbortController 全链路
 **改动文件**
-- `teachdo-frontend/src/components/workspace/OutlineView.vue`
-- `teachdo-frontend/src/services/ai/outlineService.ts`
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/components/workspace/OutlineView.vue`
+- `frontend/src/services/ai/outlineService.ts`
+- `frontend/src/i18n/index.ts`
 
 **具体改法**
 - 在 `OutlineView.vue` 增加 `abortControllerRef`：
@@ -168,10 +168,10 @@
 
 #### 4) PPT 生成：增加“取消生成” + 部分结果保留策略
 **改动文件**
-- `teachdo-frontend/src/components/workspace/ppt/usePptGeneration.ts`
-- `teachdo-frontend/src/components/workspace/PPTView.vue`
-- `teachdo-frontend/src/services/ai/pptService.ts`（只需确认 `signal` 已支持；当前已支持）
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/components/workspace/ppt/usePptGeneration.ts`
+- `frontend/src/components/workspace/PPTView.vue`
+- `frontend/src/services/ai/pptService.ts`（只需确认 `signal` 已支持；当前已支持）
+- `frontend/src/i18n/index.ts`
 
 **具体改法**
 - `usePptGeneration`：
@@ -201,7 +201,7 @@
 
 #### 5) KB：触控目标修正（导出/删除按钮 ≥44×44）+ 进度条避免 `transition-all`
 **改动文件**
-- `teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue`
+- `frontend/src/components/workspace/KnowledgeBaseView.vue`
 
 **具体改法**
 - 将 `w-7 h-7`（`KnowledgeBaseView.vue:584`、`:594`）调整为 `w-11 h-11 rounded-xl`（与工作台 header icon button 一致）
@@ -214,9 +214,9 @@
 
 #### 6) Dialog：为创建/删除教学资料补 focus trap（Tab 循环）与初始聚焦
 **改动文件**
-- `teachdo-frontend/src/components/workspace/TeachingMaterialCreateDialog.vue`
-- `teachdo-frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue`
-- 新增：`teachdo-frontend/src/utils/focusTrap.ts`（或 `src/utils/modalA11y.ts`，二选一，以下以 `focusTrap.ts` 为准）
+- `frontend/src/components/workspace/TeachingMaterialCreateDialog.vue`
+- `frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue`
+- 新增：`frontend/src/utils/focusTrap.ts`（或 `src/utils/modalA11y.ts`，二选一，以下以 `focusTrap.ts` 为准）
 
 **实现决策（统一方案）**
 - 新增工具函数：
@@ -240,8 +240,8 @@
 ### P1（高收益）产品化细节：Settings/Copy、Lesson“建设中”、KB 上传体验
 #### 7) Settings：补齐 A11y + i18n（硬编码清零）
 **改动文件**
-- `teachdo-frontend/src/views/SettingsView.vue`
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/views/SettingsView.vue`
+- `frontend/src/i18n/index.ts`
 
 **具体改法**
 - 眼睛按钮补 `aria-label/title`（见 `SettingsView.vue:111`）
@@ -260,8 +260,8 @@
 
 #### 8) LessonPlan：把“建设中”体验做成“不可误解的禁用态”
 **改动文件**
-- `teachdo-frontend/src/components/workspace/LessonPlanView.vue`
-- `teachdo-frontend/src/i18n/index.ts`（如需）
+- `frontend/src/components/workspace/LessonPlanView.vue`
+- `frontend/src/i18n/index.ts`（如需）
 
 **具体改法**
 - “教案生成（建设中）”按钮改为 disabled + 明确 tooltip/title，点击不再 toast（避免用户误以为失败）
@@ -275,8 +275,8 @@
 
 #### 9) KB 上传体验（多文件 + 明确支持格式）
 **改动文件**
-- `teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue`
-- `teachdo-frontend/src/i18n/index.ts`
+- `frontend/src/components/workspace/KnowledgeBaseView.vue`
+- `frontend/src/i18n/index.ts`
 
 **具体改法**
 - `<input type="file">` 增加 `multiple`
@@ -293,23 +293,23 @@
 ### P2（可选）可持续治理：动效/字体/性能告警收敛
 #### 10) 动效：彻底替换范围内的 `transition-all` 与 `transition: all`
 **改动文件（本次范围内出现点全改）**
-- `teachdo-frontend/src/views/TeachingMaterialSelectionView.vue`（`transition-all` → `transition-shadow transition-transform` 或 `transition`)
-- `teachdo-frontend/src/components/workspace/OutlineView.vue`
-- `teachdo-frontend/src/components/workspace/PPTView.vue`
-- `teachdo-frontend/src/components/workspace/ppt/PptTemplateSelector.vue`
-- `teachdo-frontend/src/components/workspace/ppt/PptPreviewPanel.vue`
-- `teachdo-frontend/src/components/workspace/KnowledgeBaseView.vue`
-- `teachdo-frontend/src/components/common/ToastContainer.vue`（`transition: all` → `transition: opacity, transform`）
+- `frontend/src/views/TeachingMaterialSelectionView.vue`（`transition-all` → `transition-shadow transition-transform` 或 `transition`)
+- `frontend/src/components/workspace/OutlineView.vue`
+- `frontend/src/components/workspace/PPTView.vue`
+- `frontend/src/components/workspace/ppt/PptTemplateSelector.vue`
+- `frontend/src/components/workspace/ppt/PptPreviewPanel.vue`
+- `frontend/src/components/workspace/KnowledgeBaseView.vue`
+- `frontend/src/components/common/ToastContainer.vue`（`transition: all` → `transition: opacity, transform`）
 
 **验收**
-- `rg -n "transition-all|transition:\\s*all" teachdo-frontend/src` 在非 `editor-runtime` 范围内无命中。
+- `rg -n "transition-all|transition:\\s*all" frontend/src` 在非 `editor-runtime` 范围内无命中。
 
 ---
 
 #### 11) 字体加载与色彩方案
 **改动文件**
-- `teachdo-frontend/index.html`
-- `teachdo-frontend/src/style.css`
+- `frontend/index.html`
+- `frontend/src/style.css`
 
 **具体改法**
 - 把 `src/style.css` 中 Google Fonts `@import` 移到 `index.html` `<link rel="stylesheet">`，并加 `preconnect`。
@@ -324,16 +324,16 @@
 
 ## 公共接口 / 类型变更（需要在计划中标明）
 - i18n 新增 key（P0/P1 已列出，需中英双语补齐）
-- 新增工具模块：`teachdo-frontend/src/utils/focusTrap.ts`
+- 新增工具模块：`frontend/src/utils/focusTrap.ts`
 - `aiService.generateOutline` / `aiService.streamAipptSlides` 调用侧新增 `AbortController` 使用（对外 API 不变，仅新增可选参数透传）
 
 ---
 
 ## 验证与测试（自动化 + 手工验收）
 ### 自动化（每个阶段都要跑）
-- `cd teachdo-frontend && npm run typecheck`
-- `cd teachdo-frontend && npm run lint`
-- `cd teachdo-frontend && npm run build`
+- `cd frontend && npm run typecheck`
+- `cd frontend && npm run lint`
+- `cd frontend && npm run build`
 
 ### 手工验收场景（按主链路）
 1) **TopBar**
@@ -352,7 +352,7 @@
 ---
 
 ## 假设与默认（已按你选择定死）
-- 不审查/不改 `teachdo-frontend/src/editor-runtime/**`（PPT 编辑器内部）。
+- 不审查/不改 `frontend/src/editor-runtime/**`（PPT 编辑器内部）。
 - 工作台内不增加“教学资料快速切换”侧栏/下拉；仍以“返回列表”切换。
 - 输出文档已整理为 `doc/dev/UI_UX_OPTIMIZATION_PLAN.md`；建议在 `doc/dev/PLAN.md` 增加一条链接（可选）。
 - 默认不引入新的运行时依赖；如需 lint 强化（如 vue-a11y 插件）放在 P2 可选。

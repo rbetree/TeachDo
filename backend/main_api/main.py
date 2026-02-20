@@ -129,7 +129,7 @@ class LessonPlanProcedureStep(BaseModel):
 
 class LessonPlan(BaseModel):
     """
-    LessonPlan（与 teachdo-frontend/types.ts 对齐）
+    LessonPlan（与 frontend/types.ts 对齐）
     """
 
     title: str

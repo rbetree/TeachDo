@@ -4,7 +4,7 @@
 # 将 rgba($color: var(--editor-theme-color), $alpha: .05) 
 # 转换为 rgba(209, 68, 36, 0.05) 或使用color-mix
 
-EDITOR_DIR="teachdo-frontend/src/editor-runtime/views/Editor"
+EDITOR_DIR="frontend/src/editor-runtime/views/Editor"
 
 echo "开始修复rgba()语法..."
 

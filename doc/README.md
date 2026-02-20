@@ -34,7 +34,7 @@
 
 ## 4. 前端（架构 / API 调用）
 
-- TeachDo 前端入口与开发：`teachdo-frontend/README.md`、`teachdo-frontend/teachdo_local_dev.md`
+- TeachDo 前端入口与开发：`frontend/README.md`、`frontend/teachdo_local_dev.md`
 - 前端统一技术文档（历史/对照）：`doc/dev/FRONTEND_GUIDE.md`
 - 前端 API 调用与封装（services 层）：`doc/dev/FRONTEND_API_CALLS.md`
 - 前端未使用页面审计：`doc/dev/FRONTEND_UNUSED_PAGES_AUDIT.md`

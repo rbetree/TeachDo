@@ -16,10 +16,10 @@ TeachDo 仓库的详细工程规范与常用操作手册。
 - 一键启动：`cp env_template.txt .env && python start.py`
 - 后端全服务：`cd backend && pip install -r requirements.txt && python start_backend.py`
 - 单服务启动（示例）：`cd backend/main_api && cp env_template .env && uvicorn main:app --reload --port 6800`
-- TeachDo 前端：`cd teachdo-frontend && npm i && npm run dev`
-- 前端构建：`cd teachdo-frontend && npm run build`
-- 前端静态检查：`cd teachdo-frontend && npm run lint`
-- 前端类型检查：`cd teachdo-frontend && npm run typecheck`
+- TeachDo 前端：`cd frontend && npm i && npm run dev`
+- 前端构建：`cd frontend && npm run build`
+- 前端静态检查：`cd frontend && npm run lint`
+- 前端类型检查：`cd frontend && npm run typecheck`
 - 后端测试：`pytest backend -q`
 - 可选容器联调：`docker compose up`
 
@@ -31,8 +31,7 @@ TeachDo 仓库的详细工程规范与常用操作手册。
 - `backend/slide_agent/`: PPT 内容生成服务
 - `backend/personaldb/`: 知识库检索与向量化
 - `backend/mock_api/`: mock/演示服务
-- `teachdo-frontend/`: 当前主前端项目
-- `frontend/`: legacy 前端（非 TeachDo 主链路）
+- `frontend/`: 当前主前端项目（Vue 3 + Vite + TypeScript）
 - `doc/`: 设计与开发文档
 - `scripts/`: 运维/校验脚本
 
@@ -42,7 +41,7 @@ TeachDo 仓库的详细工程规范与常用操作手册。
 - 遵循 PEP 8，4 空格缩进，优先补充 type hints
 - 命名：函数/模块 `snake_case`，类 `PascalCase`
 - 测试命名：`test_*.py`
-- Vue/TypeScript（`teachdo-frontend`）
+- Vue/TypeScript（`frontend`）
 - 2 空格缩进
 - 组件文件 `PascalCase`，组合式函数 `useXxx.ts`，状态管理在 store 中集中维护
 - API 请求集中在服务层，避免散落到视图组件
@@ -50,7 +49,7 @@ TeachDo 仓库的详细工程规范与常用操作手册。
 ## 测试与质量门槛
 
 - 后端：`pytest backend -q`
-- 前端：`npm run typecheck && npm run lint && npm run build`
+- 前端：`cd frontend && npm run typecheck && npm run lint && npm run build`
 - 涉及 SSE 或跨服务链路时，优先验证：
 - Outline 生成
 - PPT 流式生成与状态回写
@@ -72,7 +71,7 @@ TeachDo 仓库的详细工程规范与常用操作手册。
 
 - 使用 `env_template.txt` 生成 `.env`，禁止提交密钥到仓库。
 - 关键变量：`HOST`、`MAIN_API_PORT`、`OUTLINE_API_PORT`、`CONTENT_API_PORT`、`PERSONAL_DB`。
-- 默认端口以项目当前配置为准（常见为 `6800`、`10001`、`10011`，前端本地开发见 `teachdo-frontend` 配置）。
+- 默认端口以项目当前配置为准（常见为 `6800`、`10001`、`10011`、`9100`，前端本地开发默认 `5174`，详见 `frontend/vite.config.ts`）。
 
 ## 常见任务入口
 

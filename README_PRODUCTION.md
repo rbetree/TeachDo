@@ -84,7 +84,7 @@ TeachDo/
 ├── backend/
 │   ├── start_backend.py   # 原开发模式启动脚本
 │   └── ...
-└── teachdo-frontend/
+└── frontend/
     ├── dist/              # 构建后的静态文件
     └── ...
 ```
@@ -154,7 +154,7 @@ cd backend
 python start_backend.py
 
 # 前端开发启动
-cd teachdo-frontend
+cd frontend
 npm run dev
 ```
 
@@ -213,7 +213,7 @@ sudo kill -9 <PID>
 node --version  # 需要 v18.18+
 
 # 手动构建
-cd teachdo-frontend
+cd frontend
 npm install
 npm run build
 ```

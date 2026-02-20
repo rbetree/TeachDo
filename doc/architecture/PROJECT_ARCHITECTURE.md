@@ -2117,7 +2117,7 @@ graph TB
 **启动命令**:
 ```bash
 # 前端（TeachDo）
-cd teachdo-frontend && npm run dev
+cd frontend && npm run dev
 
 # 后端（方式一：一键启动）
 cd backend && python start_backend.py

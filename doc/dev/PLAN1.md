@@ -34,7 +34,7 @@
 - [DONE] 助教：全局单会话真实对话（可引用当前教学资料已选 `kbFileIds`），提供“清除上下文”，不做历史持久化
 
 ## 公共接口/类型变更（对前后端的“契约”）
-### 前端类型（`teachdo-frontend/types.ts`）
+### 前端类型（`frontend/types.ts`）
 - 删除/弃用：`CourseGroup`、`CourseUnit`
 - 新增：`TeachingMaterial`（UI 文案名：教学资料）
   - 字段（你选的合并方案：标题+学科+简介+目标）：
@@ -118,7 +118,7 @@
 ---
 
 ## 前端修改计划（Vue3 + Pinia + Router + Tailwind）
-### 1) 路由重构（`teachdo-frontend/src/router/index.ts`）
+### 1) 路由重构（`frontend/src/router/index.ts`）
 - 移除所有 `course/:courseId/...`、`unit/:unitId/...` 路由
 - 新增单层教学资料路由：
   - `GET /`：`workspace` → 教学资料列表页
@@ -129,7 +129,7 @@
   - 自动选择 `currentMaterialId`
   - `tab` 非法 → 重定向到 outline
 
-### 2) Store 与持久化（`teachdo-frontend/src/stores/appStore.ts` + `src/utils/appStoreIdb.ts`）
+### 2) Store 与持久化（`frontend/src/stores/appStore.ts` + `src/utils/appStoreIdb.ts`）
 - `AppStoreState` 改为：
   - `materials: TeachingMaterial[]`
   - `currentMaterialId: string | null`
@@ -241,9 +241,9 @@
 - 后端：`pytest backend -q`
   - 必须覆盖：`/tools/aippt` 透传 `kb_file_ids`、personaldb `/search` fileIds 过滤逻辑
 - 前端：  
-  - `cd teachdo-frontend && npm run typecheck`  
-  - `cd teachdo-frontend && npm run lint`  
-  - `cd teachdo-frontend && npm run build`
+  - `cd frontend && npm run typecheck`  
+  - `cd frontend && npm run lint`  
+  - `cd frontend && npm run build`
 
 ### 快速验收（P0 手工用例）
 > 建议用隐身窗口或先清理站点数据，避免旧 localStorage/IndexedDB 影响。

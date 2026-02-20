@@ -1,6 +1,6 @@
 # 前端 API 调用与封装（services 层）
 
-本文件聚焦 **TeachDo 前端 `teachdo-frontend/src/services/aiService.ts` 的 API 封装**：有哪些方法、分别请求哪些后端端点、开发/生产环境如何走 `/api` 代理。
+本文件聚焦 **TeachDo 前端 `frontend/src/services/aiService.ts` 的 API 封装**：有哪些方法、分别请求哪些后端端点、开发/生产环境如何走 `/api` 代理。
 
 不在本文档范围：
 - **后端接口的完整请求/响应契约**：以 `doc/backend/backend_api_reference.md` 为准
@@ -11,11 +11,11 @@
 
 ## 1) Base URL 与代理（为什么前端统一用 `/api`）
 
-前端在 `teachdo-frontend/src/services/aiService.ts` 中固定：
+前端在 `frontend/src/services/aiService.ts` 中固定：
 
 - `BASE_API = '/api'`
 
-开发环境下由 Vite 代理转发（`teachdo-frontend/vite.config.ts`）：
+开发环境下由 Vite 代理转发（`frontend/vite.config.ts`）：
 
 - `http://127.0.0.1:5174/api/*` → 转发到 `http://127.0.0.1:6800/*`
 - 并去掉路径前缀 `/api`（`rewrite: path.replace(/^\\/api/, '')`）
@@ -24,7 +24,7 @@
 
 ---
 
-## 2) `teachdo-frontend/src/services/aiService.ts` 方法清单（方法 → 端点）
+## 2) `frontend/src/services/aiService.ts` 方法清单（方法 → 端点）
 
 ### 2.1 静态资源与模板
 
@@ -62,8 +62,8 @@
 3. 按 `data: ...`（以及 `[DONE]`）协议逐段解析并更新 UI
 
 项目里的典型实现位置：
-- `teachdo-frontend/src/utils/sse.ts`
-- `teachdo-frontend/src/services/aiService.ts`
+- `frontend/src/utils/sse.ts`
+- `frontend/src/services/aiService.ts`
 
 ---
 

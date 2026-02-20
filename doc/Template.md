@@ -1,5 +1,5 @@
 # 如何制作模版
-- Step1: 启动 TeachDo 前端（`teachdo-frontend`），进入 PPT 编辑器页面：
+- Step1: 启动 TeachDo 前端（`frontend`），进入 PPT 编辑器页面：
   - 工作台路径：选择课程 → 选择单元 → 进入 `PPT` 标签 → 点击「进行编辑」
   - 或直接访问：`http://127.0.0.1:5174/course/{courseId}/unit/{unitId}/ppt/editor`
 - Step2: 点击左上角导入json,或者已有的PPT文件都可以（自己的公司的或者个人学习任何已有pptx文件)

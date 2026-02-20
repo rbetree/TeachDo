@@ -19,8 +19,7 @@ TeachDo/
 │   ├── slide_agent/         # PPT 内容生成服务
 │   ├── personaldb/          # KB（向量化/检索）
 │   └── mock_api/            # 可选：mock SSE 联调用
-├── teachdo-frontend/        # ✅ TeachDo 唯一前端入口（Vue 3 + Vite + TS）
-├── frontend/                # legacy 前端源码（不在 TeachDo 运行链路内）
+├── frontend/                # ✅ TeachDo 唯一前端入口（Vue 3 + Vite + TS）
 ├── scripts/                 # 验证脚本与工具
 └── doc/                     # 项目文档（含迁移说明）
 ```
@@ -49,12 +48,12 @@ python start_backend.py
 前端：
 
 ```bash
-cd teachdo-frontend
+cd frontend
 npm i
 npm run dev
 ```
 
-说明：前端统一请求相对路径 `/api/*`，开发环境由 `teachdo-frontend/vite.config.ts` 代理到 `http://127.0.0.1:6800/*`。
+说明：前端统一请求相对路径 `/api/*`，开发环境由 `frontend/vite.config.ts` 代理到 `http://127.0.0.1:6800/*`。
 
 ## 🧭 路由速查（TeachDo）
 
@@ -65,7 +64,7 @@ npm run dev
 ## ✅ 工程校验（发布前必跑）
 
 ```bash
-cd teachdo-frontend
+cd frontend
 npm run typecheck
 npm run lint
 npm run build
@@ -81,4 +80,3 @@ npm run build
 ## ⚠️ 已知限制
 
 - `lesson/assistant` 等非核心页当前以“可运行收敛”为目标，部分交互入口处于禁用状态
-- `docker-compose.yml` 的前端服务已切换为 `teachdo-frontend/`（legacy `frontend/` 将逐步清理）

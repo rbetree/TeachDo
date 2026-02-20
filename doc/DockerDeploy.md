@@ -31,4 +31,4 @@ docker compose up --build
 ## 3) 本地开发（非 Docker）说明
 
 如果你用 Vite 本地启动前端（`npm run dev`），并在宿主机启动后端服务，请根据实际 IP/端口调整代理配置：
-- `teachdo-frontend/vite.config.ts`
+- `frontend/vite.config.ts`

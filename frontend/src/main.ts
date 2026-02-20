@@ -1,23 +1,42 @@
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import App from './App.vue'
-import router from './router'
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import App from './App.vue';
+import './style.css';
+import { setupAppStore } from './stores/appStore';
+import { createAppRouter } from './router';
+import { i18n } from './i18n';
+import { toast } from './utils/toast';
+import { ensureEditorRuntimePlugins } from './utils/editorRuntime';
 
-// 外部库样式
-import '@icon-park/vue-next/styles/index.css'
-import 'prosemirror-view/style/prosemirror.css'
-import 'animate.css'
+const app = createApp(App);
+const pinia = createPinia();
 
-// 新的设计系统样式 (优先级最高)
-import '@/assets/styles/index.scss'
+app.use(pinia);
+setupAppStore(pinia);
+const router = createAppRouter(pinia);
 
-// 插件
-import Icon from '@/plugins/icon'
-import Directive from '@/plugins/directive'
+router.beforeEach(async (to) => {
+  if (to.name !== 'material-ppt-editor') return true;
+  try {
+    await ensureEditorRuntimePlugins(app);
+    return true;
+  } catch (err) {
+    console.error('[Editor Runtime Init Failed]', err);
+    toast.error(i18n.global.t('common.error'));
+    return { name: 'workspace' };
+  }
+});
+app.use(router);
+app.use(i18n);
 
-const app = createApp(App)
-app.use(Icon)
-app.use(Directive)
-app.use(createPinia())
-app.use(router)
-app.mount('#app')
+app.config.errorHandler = (err, instance, info) => {
+  console.error('[Vue Error]', err, info);
+  toast.error(i18n.global.t('common.error'));
+};
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[Unhandled Promise]', event.reason);
+  toast.error(i18n.global.t('common.error'));
+});
+
+void router.isReady().then(() => app.mount('#app'));
