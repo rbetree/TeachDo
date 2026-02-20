@@ -19,16 +19,6 @@ interface AIPPTPayload {
   sessionId?: string
 }
 
-interface AIWritingPayload {
-  content: string
-  command: string
-}
-
-interface AIByIDPayload {
-  id: string|number
-  language?: string
-}
-
 
 export default {
   getMockData(filename: string): Promise<any> {
@@ -87,39 +77,6 @@ export default {
         generateFromUploadedFile,
         generateFromWebSearch,
         sessionId,
-      }),
-    })
-  },
-
-  AIPPTByID({
-    id,
-    language,
-  }: AIByIDPayload): Promise<any> {
-    return fetch(`${SERVER_URL}/tools/aippt_by_id`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        id,
-        language,
-      }),
-    })
-  },
-
-  AI_Writing({
-    content,
-    command,
-  }: AIWritingPayload): Promise<any> {
-    return fetch(`${SERVER_URL}/tools/ai_writing`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        content,
-        command,
-        stream: true,
       }),
     })
   },

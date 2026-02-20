@@ -44,7 +44,6 @@
 | 功能 | 前端入口 | API（main_api） | 说明 |
 |---|---|---|---|
 | 根据大纲生成内容 | `/course/:courseId/unit/:unitId/ppt` | `POST /tools/aippt` | 大纲 → SSE Slide Schema（模板映射在前端完成） |
-| 根据 ID 生成内容（实验） | （无默认入口） | `POST /tools/aippt_by_id` | 实验接口 |
 
 ### 3.3 模板与静态资源
 

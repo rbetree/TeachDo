@@ -52,8 +52,8 @@ Screen (放映模式)
 
 #### ✅ APP 页面 (`/app/:id?`)
 
-- **功能**: 一个特殊的PPT生成入口，通过URL中的 `id` 参数直接调用后端 `AIPPTByID` 接口生成PPT。
-- **用途**: 用于“分享”或“从链接继续”的功能。
+- **功能**: legacy 的实验入口（通过 URL `id` 调用后端 `AIPPTByID` 生成 PPT）。由于 `/tools/aippt_by_id` 已移除，该入口当前已不可用。
+- **用途**: 历史上的“分享/从链接继续”方案（已废弃，后续应随 legacy 前端一并清理）。
 
 #### ✅ Mobile 目录 (`views/Mobile/`)
 

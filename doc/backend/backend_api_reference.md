@@ -148,26 +148,7 @@ curl -N -X POST 'http://127.0.0.1:6800/tools/aippt' \
 
 ---
 
-### 1.5 `POST /tools/aippt_by_id`（实验接口，当前未完成）
-
-请求（JSON）：
-
-```json
-{
-  "id": "xxx",
-  "language": "chinese"
-}
-```
-
-响应：
-- `Content-Type: application/json; charset=utf-8`
-- 当前实现会逐行输出 JSON 字符串/文本（非 SSE）。
-
-注意：该接口在当前代码中没有接入真实的数据源，可能直接返回“没有找到该文章”等状态信息。
-
----
-
-### 1.6 `GET /templates`（模板列表）
+### 1.5 `GET /templates`（模板列表）
 
 响应示例：
 
@@ -185,7 +166,7 @@ curl -N -X POST 'http://127.0.0.1:6800/tools/aippt' \
 
 ---
 
-### 1.7 `GET /data/{filename}`（模板静态资源）
+### 1.6 `GET /data/{filename}`（模板静态资源）
 
 用途：读取 `backend/main_api/template/` 下的静态文件（模板 JSON、封面图等）。
 
@@ -195,7 +176,7 @@ curl -N -X POST 'http://127.0.0.1:6800/tools/aippt' \
 
 ---
 
-### 1.8 `GET /files/{user_id}`（列出用户入库文件，代理 personaldb）
+### 1.7 `GET /files/{user_id}`（列出用户入库文件，代理 personaldb）
 
 用途：`main_api` 代理调用 `personaldb GET /files/{user_id}`。
 
@@ -209,7 +190,7 @@ curl -N -X POST 'http://127.0.0.1:6800/tools/aippt' \
 
 ---
 
-### 1.9 `GET /proxy?url=...`（透明代理外部资源）
+### 1.8 `GET /proxy?url=...`（透明代理外部资源）
 
 用途：代理外部资源（主要用于图片等二进制内容），解决前端跨域与导出时的外链访问问题。
 
@@ -219,7 +200,7 @@ curl -N -X POST 'http://127.0.0.1:6800/tools/aippt' \
 
 ---
 
-### 1.10 `GET /healthz`（健康检查）
+### 1.9 `GET /healthz`（健康检查）
 
 响应：
 

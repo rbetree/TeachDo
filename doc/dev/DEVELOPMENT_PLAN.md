@@ -246,7 +246,7 @@
   - 响应式设计：桌面3rem标题，移动端2rem
   - 使用PageLayout和Container组件
   
-- ✅ [`frontend/src/views/APP/index.vue`](../../frontend/src/views/APP/index.vue) - `/app/:id?` 入口：通过 `AIPPTByID` 按 id 生成 PPT（实验入口）
+- ✅ [`frontend/src/views/APP/index.vue`](../../frontend/src/views/APP/index.vue) - `/app/:id?` 入口：通过 `AIPPTByID` 按 id 生成 PPT（实验入口；`/tools/aippt_by_id` 已移除，当前不可用）
   - 页面内选择模板：通过 `slideStore.fetchTemplates()` 获取 `/api/templates`
   - 读取后端逐行 JSON：区分 `status`（进度文案）与 slide 数据，并在首次收到 slide 后跳转 `/editor`
   - 展示“根据上传文件生成 / 使用网络搜索”选项（写入 `mainStore.generateFromUploadedFile/generateFromWebSearch` 状态）
@@ -1125,7 +1125,7 @@ she
 | V8.3.2 | 在 main_api 中实现 `/api/knowledge/files`、`DELETE /api/knowledge/files/{file_id}` 等代理接口 | V8.3.1 | 待开始 |
 | V8.3.3 | 在 personaldb 中补充删除接口（基于 `delete_file_vectors`），对齐 `/files/{user_id}` 列表返回结构 | V8.3.1 | 待开始 |
 | V8.3.4 | 前端实现“我的文档/知识库文件列表”视图，可选择已有文件用于生成 PPT | V2.2.3, V8.3.2 | 待开始 |
-| V8.3.5 | 补全 `/tools/aippt_by_id` / `/api/knowledge/generate_from_id` 流程：基于已有向量/文件 ID 生成 PPT | V3.3.4, V8.3.2 | 待开始 |
+| V8.3.5 | （已取消）基于已有向量/文件 ID 生成 PPT 的实验链路（`/tools/aippt_by_id` / `/api/knowledge/generate_from_id`） | V3.3.4, V8.3.2 | 已取消 |
 | V8.3.6 | 为知识库增删查相关流程补充最小化回归测试和文档（backend-architecture、API 文档更新） | V8.3.2, V8.3.3, V8.3.5 | 待开始 |
 
 ---
@@ -1329,7 +1329,7 @@ _需要在V3.2.1和其他识别任务中详细记录_
   - 使用场景: 知识库文档管理与清理（待实现）
 - **POST** `/api/knowledge/generate_from_id`
   - 请求体: `{ file_id: string, language: string }`
-  - 基于已向量化的文档生成 PPT 内容，对齐 `/tools/aippt_by_id` 语义（当前实现为占位，需要补完链路）
+  - （已取消）原计划基于已向量化文档直接生成 PPT 内容（对齐 `/tools/aippt_by_id` 语义）。如需恢复该能力，需要重新定义入口与协议。
 
 #### 错误处理规范
 - **SSE断连**: 前端需实现重连机制和超时处理 (10秒心跳)

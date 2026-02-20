@@ -205,7 +205,6 @@ graph LR
 | `/tools/aippt_outline_unified` | POST | 统一大纲接口：主题必填，可选上传文件（SSE 流式） |
 | `/tools/aippt_outline_from_file` | POST | 文档生成大纲（SSE 流式） |
 | `/tools/aippt` | POST | 生成 PPT 内容（SSE 流式） |
-| `/tools/aippt_by_id` | POST | 基于 ID 的实验接口（当前未完成） |
 | `/templates` | GET | 获取模板列表 |
 | `/data/{filename}` | GET | 获取模板文件 |
 | `/files/{user_id}` | GET | 获取用户文档列表 |

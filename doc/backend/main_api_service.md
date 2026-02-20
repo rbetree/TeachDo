@@ -24,7 +24,6 @@
 | `POST`   | `/tools/aippt_outline_unified`     | 统一的大纲生成接口：主题必填，可选上传文件；如有文件会先交给 personaldb 解析/向量化，再生成大纲。        | `personaldb` 服务, `outline_client`         |
 | `POST`   | `/tools/aippt_outline_from_file`   | 接收用户上传的文件（或 URL），将其发送到知识库进行处理，并基于文件内容流式生成 PPT 大纲。                | `personaldb` 服务, `outline_client`         |
 | `POST`   | `/tools/aippt`                     | 接收 Markdown 格式的大纲，流式生成完整的 PPT 幻灯片内容（JSON 格式）。                                 | `content_client` -> `slide_agent` 服务      |
-| `POST`   | `/tools/aippt_by_id`               | (已部分实现) 根据知识库中已有的文件 ID 生成 PPT。                                                      | `personaldb` 服务, `content_client`         |
 | `GET`    | `/templates`                       | 返回可用的 PPT 模板列表，包含模板名称、ID 和封面图片路径。                                             | 本地静态配置                                |
 | `GET`    | `/data/{filename}`                 | 提供对 `template/` 目录下的静态文件（主要是模板封面图）的访问。                                        | 本地文件系统                                |
 | `GET`    | `/files/{user_id}`                 | 列出指定用户在 `personaldb` 知识库中存储的所有文件。                                                   | `personaldb` 服务                           |

@@ -361,9 +361,6 @@ async def aippt_outline(request: AipptRequest):
 class AipptContentRequest(BaseModel):
     content: str
 
-class AipptByIDRequest(BaseModel):
-    id: str
-
 def preset_json_to_slides(markdown_text):
     """不用传递参数 markdown_text，使用假的数据 data_response_content。
     如果发现 items 中有 kind == 'chart'，则将其单独拆成一条 slide。
@@ -424,39 +421,6 @@ def preset_json_to_slides(markdown_text):
             slides.append(one)
     print(slides)
     return slides
-
-async def aippt_file_id_streamer(id: str):
-    """根据用户的已有的文件数据中的文件id来生成ppt
-    id: 文件的id
-    """
-    yield f'data: {json.dumps({"type": "status", "message": "正在解析文件..."}, ensure_ascii=False)}\n\n'.encode("utf-8")
-    await asyncio.sleep(3)
-    yield f'data: {json.dumps({"type": "status", "message": "正在生成大纲..."}, ensure_ascii=False)}\n\n'.encode("utf-8")
-    # 返回markdown_response的大纲内容
-    for char in markdown_response:
-        yield f'data: {json.dumps({"type": "outline", "text": char}, ensure_ascii=False)}\n\n'.encode("utf-8")
-        await asyncio.sleep(0.01)
-    yield f'data: {json.dumps({"type": "status", "message": "大纲生成完毕，即将生成PPT..."}, ensure_ascii=False)}\n\n'.encode("utf-8")
-    await asyncio.sleep(1)
-    slides = preset_json_to_slides(id)
-    for slide in slides:
-        payload = json.dumps(slide, ensure_ascii=False)
-        yield f"data: {payload}\n\n".encode("utf-8")
-        await asyncio.sleep(1)
-    yield b"data: [DONE]\n\n"
-
-
-@app.post("/tools/aippt_by_id")
-async def aippt_by_id(request: AipptByIDRequest):
-    return StreamingResponse(
-        aippt_file_id_streamer(request.id),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
-    )
 
 async def aippt_content_streamer(markdown_content: str):
     """Parses markdown and streams slide data as JSON objects."""

@@ -133,14 +133,12 @@ frontend/src/
 |---|---|---|---|
 | `/api/tools/aippt_outline_unified` | POST | 统一大纲生成（主题必填，可选上传文件） | SSE |
 | `/api/tools/aippt` | POST | 生成 PPT 内容 | SSE |
-| `/api/tools/aippt_by_id` | POST | 实验：通过 id 生成 PPT | JSON Lines（非 SSE） |
 | `/api/templates` | GET | 获取模板列表 | JSON |
 | `/api/data/{filename}` | GET | 获取模板 JSON/封面等静态资源 | File |
 | `/api/proxy?url=...` | GET | 代理外链资源（导出用） | Stream |
 
 备注：
 - 兼容/legacy：`/api/tools/aippt_outline`、`/api/tools/aippt_outline_from_file`（当前前端路由页面未使用）
-- 前端存在调用但后端未实现：`/api/tools/ai_writing`（本仓库 `main_api` 无该端点，当前会 404）
 
 ### 5.2 SSE 流式处理
 
