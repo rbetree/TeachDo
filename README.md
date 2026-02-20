@@ -81,4 +81,4 @@ npm run build
 ## ⚠️ 已知限制
 
 - `lesson/assistant` 等非核心页当前以“可运行收敛”为目标，部分交互入口处于禁用状态
-- `docker-compose.yml` 的前端服务仍指向 legacy `frontend/`（容器化切换在阶段 H 处理）
+- `docker-compose.yml` 的前端服务已切换为 `teachdo-frontend/`（legacy `frontend/` 将逐步清理）

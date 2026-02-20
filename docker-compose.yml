@@ -95,7 +95,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./teachdo-frontend
       dockerfile: Dockerfile
     ports:
       - "${FRONTEND_PORT:-5174}:80"

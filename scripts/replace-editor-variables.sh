@@ -4,7 +4,7 @@
 # 用途: 将编辑器中的SCSS变量替换为CSS变量
 # 排除: EditorHeader目录（已迁移到全局CSS变量）
 
-EDITOR_DIR="frontend/src/views/Editor"
+EDITOR_DIR="teachdo-frontend/src/editor-runtime/views/Editor"
 
 echo "开始替换编辑器SCSS变量..."
 
