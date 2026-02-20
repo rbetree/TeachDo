@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { EditorDocument, KBFile, LessonPlan, Presentation } from '#root/types';
+import type { EditorDocument, KBFile, LessonPlan, LessonStyle, Presentation } from '#root/types';
 
 /**
  * TeachDo 持久化（IndexedDB）
@@ -31,6 +31,7 @@ export interface MaterialLargeRecord {
   materialId: string;
   outlineContent: string;
   lessonPlan: LessonPlan | null;
+  lessonStyle: LessonStyle | null;
   presentation: Presentation | null;
   editorDocument: EditorDocument | null;
   updatedAt: number;
@@ -102,6 +103,25 @@ function deserializeKbFiles(list: PersistedKBFile[] | undefined): KBFile[] {
   }));
 }
 
+function toPersistable<T>(value: T, fallback: T): T {
+  if (value == null) return value;
+
+  const clone = (globalThis as { structuredClone?: <U>(input: U) => U }).structuredClone;
+  if (typeof clone === 'function') {
+    try {
+      return clone(value);
+    } catch {
+      // Vue Proxy 等对象会在 structuredClone 失败，继续走 JSON 兜底。
+    }
+  }
+
+  try {
+    return JSON.parse(JSON.stringify(value)) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function deleteLegacyIndexedDb(): Promise<void> {
   if (!isBrowser) return;
   try {
@@ -146,18 +166,25 @@ export async function loadAppLarge(): Promise<{ kbFiles: KBFile[] } | null> {
 export async function saveMaterialLarge(materialId: string, input: {
   outlineContent: string;
   lessonPlan: LessonPlan | null;
+  lessonStyle: LessonStyle | null;
   presentation: Presentation | null;
   editorDocument: EditorDocument | null;
 }): Promise<boolean> {
   const db = getDb();
   if (!db) return false;
   try {
+    const lessonPlan = toPersistable<LessonPlan | null>(input.lessonPlan ?? null, null);
+    const lessonStyle = toPersistable<LessonStyle | null>(input.lessonStyle ?? null, null);
+    const presentation = toPersistable<Presentation | null>(input.presentation ?? null, null);
+    const editorDocument = toPersistable<EditorDocument | null>(input.editorDocument ?? null, null);
+
     await db.materialLarge.put({
       materialId,
       outlineContent: input.outlineContent ?? '',
-      lessonPlan: input.lessonPlan ?? null,
-      presentation: input.presentation ?? null,
-      editorDocument: input.editorDocument ?? null,
+      lessonPlan,
+      lessonStyle,
+      presentation,
+      editorDocument,
       updatedAt: Date.now(),
     });
     return true;

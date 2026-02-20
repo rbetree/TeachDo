@@ -98,6 +98,7 @@ function reviveMaterialsLiteV1(raw: unknown): TeachingMaterial[] {
     // 大对象会在 setupAppStore 中异步从 IndexedDB 回填
     outlineContent: '',
     lessonPlan: undefined,
+    lessonStyle: undefined,
     presentation: undefined,
     editorDocument: undefined,
   })) as TeachingMaterial[];
@@ -185,6 +186,7 @@ export const useAppStore = defineStore('app', {
           await saveMaterialLarge(material.id, {
             outlineContent: material.outlineContent ?? '',
             lessonPlan: material.lessonPlan ?? null,
+            lessonStyle: material.lessonStyle ?? null,
             presentation: material.presentation ?? null,
             editorDocument: material.editorDocument ?? null,
           });
@@ -209,12 +211,14 @@ export const useAppStore = defineStore('app', {
           !prev ||
           prev.outlineContent !== material.outlineContent ||
           prev.lessonPlan !== material.lessonPlan ||
+          prev.lessonStyle !== material.lessonStyle ||
           prev.presentation !== material.presentation ||
           prev.editorDocument !== material.editorDocument;
         if (!largeChanged) return;
         await saveMaterialLarge(material.id, {
           outlineContent: material.outlineContent ?? '',
           lessonPlan: material.lessonPlan ?? null,
+          lessonStyle: material.lessonStyle ?? null,
           presentation: material.presentation ?? null,
           editorDocument: material.editorDocument ?? null,
         });
@@ -316,6 +320,7 @@ export const setupAppStore = (pinia: Pinia) => {
       if (!record) continue;
       if (!material.outlineContent) material.outlineContent = record.outlineContent || '';
       if (material.lessonPlan == null) material.lessonPlan = record.lessonPlan ?? undefined;
+      if (material.lessonStyle == null) material.lessonStyle = record.lessonStyle ?? undefined;
       if (material.presentation == null) material.presentation = record.presentation ?? undefined;
       if (material.editorDocument == null) material.editorDocument = record.editorDocument ?? undefined;
     }

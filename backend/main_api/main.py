@@ -1,5 +1,6 @@
 import asyncio
 import json
+import io
 import random
 import re
 import os
@@ -17,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi import UploadFile, File, HTTPException, Form
 from fastapi import FastAPI, HTTPException, Query, Request, Response
-from typing import AsyncGenerator, Literal
+from typing import AsyncGenerator, Literal, Any
 try:
     # 兼容在 `backend/main_api` 目录下直接运行（例如 `uvicorn main:app`）
     from outline_client import A2AOutlineClientWrapper
@@ -119,6 +120,527 @@ class AssistantChatRequest(BaseModel):
     material: AssistantMaterialContext | None = None
     language: str = "zh"
 
+
+class LessonPlanProcedureStep(BaseModel):
+    step: str
+    duration: str
+    activity: str
+
+
+class LessonPlan(BaseModel):
+    """
+    LessonPlan（与 teachdo-frontend/types.ts 对齐）
+    """
+
+    title: str
+    targetAudience: str
+    duration: str
+    objectives: list[str]
+    materials: list[str]
+    procedure: list[LessonPlanProcedureStep]
+    homework: str
+
+
+class LessonPlanRequest(BaseModel):
+    title: str
+    subject: str | None = None
+    description: str | None = None
+    objectives: str | None = None
+    outlineContent: str
+    language: str = "zh"
+    sessionId: str | None = None
+    user_id: str | None = None
+    kb_file_ids: list[str] | None = None
+
+
+class LessonStyle(BaseModel):
+    """
+    Lesson 导出样式（V1）
+    - 作为“展示/导出层”参数，不参与 LessonPlan 内容生成
+    """
+
+    fontZh: str = "微软雅黑"
+    titleSizePt: int = 20
+    h1SizePt: int = 16
+    h2SizePt: int = 14
+    bodySizePt: int = 12
+    lineSpacing: float = 1.5
+
+    # 页边距（cm）
+    marginTopCm: float = 2.54
+    marginBottomCm: float = 2.54
+    marginLeftCm: float = 2.54
+    marginRightCm: float = 2.54
+
+
+class LessonExportDocxRequest(BaseModel):
+    lessonPlan: LessonPlan
+    style: LessonStyle | None = None
+    language: str | None = None
+
+
+def _split_objectives_text(text: str) -> list[str]:
+    """
+    将自由文本教学目标拆成条目列表（用于无 LLM 的兜底生成）。
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return []
+    bits = re.split(r"[；;。\n]+", raw)
+    cleaned: list[str] = []
+    for b in bits:
+        item = (b or "").strip()
+        if not item:
+            continue
+        if item in cleaned:
+            continue
+        cleaned.append(item)
+    return cleaned
+
+
+def _guess_procedure_steps_from_outline(outline_md: str, *, max_steps: int = 6) -> list[str]:
+    """
+    从 Markdown 大纲里猜测教学流程步骤（用于无 LLM 的兜底生成）。
+    """
+    steps: list[str] = []
+    for raw_line in (outline_md or "").splitlines():
+        line = (raw_line or "").strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            title = line.lstrip("#").strip()
+            if title and title not in steps:
+                steps.append(title)
+        elif line.startswith(("-", "*", "+")):
+            title = line.lstrip("-*+").strip()
+            if title and title not in steps:
+                steps.append(title)
+        if len(steps) >= max_steps:
+            break
+    return steps
+
+
+def _fallback_generate_lesson_plan(req: LessonPlanRequest) -> LessonPlan:
+    """
+    无 LLM 配置时的兜底教案生成：
+    - 保证端到端链路可用（SSE 预览 + docx 导出）
+    - 质量不追求最优，但内容结构完整、可读
+    """
+    lang = (req.language or "zh").strip().lower()
+    want_english = lang in {"en", "english"}
+
+    title = (req.title or "").strip() or ("Lesson Plan" if want_english else "教案")
+    objectives = _split_objectives_text(req.objectives or "")
+    if not objectives:
+        objectives = [
+            "理解本节课核心概念与关键结论" if not want_english else "Understand the key concepts and core conclusions",
+            "能完成基础例题/练习并进行简单迁移" if not want_english else "Solve basic exercises and apply the concept",
+        ]
+
+    steps = _guess_procedure_steps_from_outline(req.outlineContent or "", max_steps=6)
+    if not steps:
+        steps = [
+            "导入与复习" if not want_english else "Warm-up & review",
+            "新知讲解" if not want_english else "Concept introduction",
+            "例题与练习" if not want_english else "Examples & practice",
+            "总结提升" if not want_english else "Wrap-up",
+        ]
+
+    # 简单分配时长（总时长默认 45 分钟）
+    total_minutes = 45
+    minutes_each = max(5, int(round(total_minutes / max(1, len(steps)))))
+    procedure: list[LessonPlanProcedureStep] = []
+    for idx, name in enumerate(steps):
+        m = minutes_each
+        duration = f"{m}分钟" if not want_english else f"{m} min"
+        activity = (
+            f"围绕「{name}」组织讲解与互动，包含提问、板书要点与即时练习。"
+            if not want_english
+            else f"Teach and interact around “{name}”, including questions, key points, and quick practice."
+        )
+        procedure.append(
+            LessonPlanProcedureStep(
+                step=f"{idx + 1}. {name}",
+                duration=duration,
+                activity=activity,
+            )
+        )
+
+    materials = [
+        "课件/PPT",
+        "板书/白板",
+        "练习题/作业纸",
+    ] if not want_english else ["Slides", "Whiteboard", "Practice sheets"]
+
+    homework = (
+        "完成课后练习 1~3 题，并用自己的话总结本课关键结论（不少于 100 字）。"
+        if not want_english
+        else "Finish exercises 1–3 and summarize the key takeaway in your own words (100+ words)."
+    )
+
+    return LessonPlan(
+        title=title,
+        targetAudience=("中学学生" if not want_english else "Students"),
+        duration=("45分钟" if not want_english else "45 min"),
+        objectives=objectives,
+        materials=materials,
+        procedure=procedure,
+        homework=homework,
+    )
+
+
+def _try_get_lesson_llm_settings() -> dict[str, str] | None:
+    """
+    Lesson 生成的模型配置：
+    - 优先读取 LESSON_*，未配置则回退到 OUTLINE_*（减少新增配置成本）
+    - 仅支持 openai 兼容协议（base_url + /chat/completions）
+    - 若缺少必要配置，返回 None（由兜底生成保证链路可用）
+    """
+    llm_type = (os.getenv("LESSON_TYPE") or os.getenv("OUTLINE_TYPE") or "").strip().lower()
+    llm_model = (os.getenv("LESSON_MODEL") or os.getenv("OUTLINE_MODEL") or "").strip()
+    llm_api_key = (os.getenv("LESSON_API_KEY") or os.getenv("OUTLINE_API_KEY") or "").strip()
+    llm_base_url = (os.getenv("LESSON_BASE_URL") or os.getenv("OUTLINE_BASE_URL") or "https://api.openai.com/v1").strip()
+
+    if not llm_type or not llm_model or not llm_api_key:
+        return None
+    if llm_type != "openai":
+        raise RuntimeError(f"当前 Lesson 仅支持 openai 协议，检测到 LESSON_TYPE/OUTLINE_TYPE={llm_type}")
+    return {"type": llm_type, "model": llm_model, "api_key": llm_api_key, "base_url": llm_base_url}
+
+
+def _strip_json_code_fence(text: str) -> str:
+    """
+    兼容模型把 JSON 包在 ```json ... ``` 围栏内的情况。
+    """
+    s = (text or "").strip()
+    if not s.startswith("```"):
+        return s
+    lines = s.splitlines()
+    if len(lines) < 2:
+        return s
+    if not lines[0].strip().startswith("```"):
+        return s
+    end_idx = -1
+    for i in range(len(lines) - 1, -1, -1):
+        if lines[i].strip() == "```":
+            end_idx = i
+            break
+    if end_idx <= 0:
+        return s
+    return "\n".join(lines[1:end_idx]).strip()
+
+
+def _extract_first_json_object(text: str) -> dict[str, Any]:
+    """
+    从模型输出中提取第一个 JSON 对象。
+    - 允许前后夹杂说明文字
+    - 失败则抛出异常，由上层决定兜底策略
+    """
+    s = _strip_json_code_fence(text)
+    start = s.find("{")
+    end = s.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("未找到 JSON 对象边界")
+    candidate = s[start : end + 1].strip()
+    obj = json.loads(candidate)
+    if not isinstance(obj, dict):
+        raise ValueError("JSON 顶层不是对象")
+    return obj
+
+
+def _build_lesson_system_prompt(*, req: LessonPlanRequest, kb_context: str) -> str:
+    """
+    Lesson 生成 system prompt（用于 LLM 路径）。
+    """
+    lang = (req.language or "zh").strip().lower()
+    want_english = lang in {"en", "english"}
+
+    if want_english:
+        base = (
+            "You are TeachDo's lesson plan generator.\n"
+            "Generate a structured lesson plan based on the provided outline.\n"
+            "Rules:\n"
+            "- Follow the outline structure and do NOT invent topics that are unrelated.\n"
+            "- Output must be STRICT JSON only (no markdown, no code fences).\n"
+            "- Keep it practical for classroom use.\n"
+        )
+    else:
+        base = (
+            "你是 TeachDo 的教案生成器。\n"
+            "请基于给定的大纲生成结构化教案。\n"
+            "规则：\n"
+            "- 必须参考大纲结构，不要引入无关主题。\n"
+            "- 输出必须是严格 JSON（不要 markdown、不要代码块围栏）。\n"
+            "- 内容要可落地、可直接用于课堂。\n"
+        )
+
+    context_bits: list[str] = []
+    title = (req.title or "").strip()
+    if title:
+        context_bits.append(("Title: " if want_english else "标题：") + title)
+    if req.subject:
+        context_bits.append(("Subject: " if want_english else "学科：") + str(req.subject).strip())
+    if req.description:
+        context_bits.append(("Background: " if want_english else "背景：") + str(req.description).strip())
+    if req.objectives:
+        context_bits.append(("User objectives: " if want_english else "用户提供的教学目标：") + str(req.objectives).strip())
+
+    outline = (req.outlineContent or "").strip()
+    context_bits.append(("Outline (Markdown):\n" if want_english else "课程大纲（Markdown）：\n") + outline)
+
+    if kb_context and kb_context.strip():
+        context_bits.append(("KB snippets:\n" if want_english else "知识库检索片段：\n") + kb_context.strip())
+
+    return base + "\n\n" + "\n".join(context_bits).strip()
+
+
+async def _generate_lesson_section_with_llm(
+    *,
+    llm_settings: dict[str, str],
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float = 0.4,
+    max_output_chars: int = 20_000,
+) -> dict[str, Any]:
+    """
+    调用 OpenAI 兼容协议生成一个 JSON 片段（section/meta）。
+    """
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    text = ""
+    async for delta in iter_assistant_text_chunks(
+        model=llm_settings["model"],
+        api_key=llm_settings["api_key"],
+        base_url=llm_settings["base_url"],
+        messages=messages,
+        temperature=temperature,
+    ):
+        text += delta
+        if len(text) > max_output_chars:
+            break
+
+    return _extract_first_json_object(text)
+
+
+async def stream_lesson_plan_sse(req: LessonPlanRequest) -> AsyncGenerator[bytes, None]:
+    """
+    LessonPlan SSE：
+    - data: {"type":"section",...}
+    - data: {"type":"final","data":{LessonPlan}}
+    - data: {"type":"error","text":"..."}
+    - data: [DONE]
+    """
+    outline = (req.outlineContent or "").strip()
+    if not outline:
+        payload = json.dumps({"type": "error", "text": "outlineContent 不能为空"}, ensure_ascii=False, separators=(",", ":"))
+        yield _encode_sse_data(payload)
+        yield b"data: [DONE]\n\n"
+        return
+
+    user_id = str(req.user_id or "default_user")
+    resolved_kb_file_ids = _normalize_kb_file_ids(req.kb_file_ids)
+    personaldb_url = _get_personaldb_url()
+
+    kb_context = ""
+    if resolved_kb_file_ids and personaldb_url and await _is_personaldb_ready(personaldb_url):
+        # query 选用 “标题 + 大纲” 的组合，尽量贴近教案生成语义
+        query = f"{(req.title or '').strip()}\n{outline}".strip()
+        kb_context = await _search_personaldb_kb_context(
+            personaldb_url,
+            user_id=user_id,
+            query=query,
+            kb_file_ids=resolved_kb_file_ids,
+            topk=5,
+        )
+
+    llm_settings: dict[str, str] | None = None
+    try:
+        llm_settings = _try_get_lesson_llm_settings()
+    except Exception as exc:
+        # 配置异常：作为错误事件返回，但仍保证 [DONE] 收尾
+        payload = json.dumps({"type": "error", "text": f"Lesson 模型配置错误：{exc}"}, ensure_ascii=False, separators=(",", ":"))
+        yield _encode_sse_data(payload)
+        yield b"data: [DONE]\n\n"
+        return
+
+    # 兜底：无 LLM 配置时，直接按 outline 生成一个可用版本
+    if not llm_settings:
+        plan = _fallback_generate_lesson_plan(req)
+        yield _encode_sse_data(json.dumps({"type": "section", "section": "objectives", "data": plan.objectives}, ensure_ascii=False, separators=(",", ":")))
+        yield _encode_sse_data(json.dumps({"type": "section", "section": "materials", "data": plan.materials}, ensure_ascii=False, separators=(",", ":")))
+        yield _encode_sse_data(json.dumps({"type": "section", "section": "procedure", "data": [p.model_dump() for p in plan.procedure]}, ensure_ascii=False, separators=(",", ":")))
+        yield _encode_sse_data(json.dumps({"type": "section", "section": "homework", "data": plan.homework}, ensure_ascii=False, separators=(",", ":")))
+        yield _encode_sse_data(json.dumps({"type": "final", "data": plan.model_dump()}, ensure_ascii=False, separators=(",", ":")))
+        yield b"data: [DONE]\n\n"
+        return
+
+    system_prompt = _build_lesson_system_prompt(req=req, kb_context=kb_context)
+    lang = (req.language or "zh").strip().lower()
+    want_english = lang in {"en", "english"}
+
+    last_flush = asyncio.get_event_loop().time()
+
+    try:
+        # meta
+        meta_prompt = (
+            'Return STRICT JSON only: {"targetAudience":"...","duration":"..."}.\n'
+            'duration should be like "45分钟" (zh) or "45 min" (en).'
+            if want_english
+            else '仅输出严格 JSON：{"targetAudience":"...","duration":"..."}。\n'
+                 'duration 形如 "45分钟"。'
+        )
+        meta = await _generate_lesson_section_with_llm(
+            llm_settings=llm_settings,
+            system_prompt=system_prompt,
+            user_prompt=meta_prompt,
+            temperature=0.3,
+        )
+        target_audience = str(meta.get("targetAudience") or ("Students" if want_english else "中学学生")).strip() or ("Students" if want_english else "中学学生")
+        duration = str(meta.get("duration") or ("45 min" if want_english else "45分钟")).strip() or ("45 min" if want_english else "45分钟")
+
+        # objectives
+        obj_prompt = (
+            'Return STRICT JSON only: {"objectives":["..."]}.\n'
+            "Write 3-6 concise objectives."
+            if want_english
+            else '仅输出严格 JSON：{"objectives":["..."]}。\n'
+                 "写 3~6 条可执行的教学目标。"
+        )
+        obj = await _generate_lesson_section_with_llm(
+            llm_settings=llm_settings,
+            system_prompt=system_prompt,
+            user_prompt=obj_prompt,
+            temperature=0.4,
+        )
+        objectives = obj.get("objectives")
+        if not isinstance(objectives, list):
+            objectives = []
+        objectives = [str(x).strip() for x in objectives if str(x).strip()]
+        if not objectives:
+            objectives = _fallback_generate_lesson_plan(req).objectives
+
+        # 心跳：每10秒发一次注释，避免某些代理断连接
+        now = asyncio.get_event_loop().time()
+        if now - last_flush > 10:
+            yield b": keep-alive\n\n"
+            last_flush = now
+
+        yield _encode_sse_data(json.dumps({"type": "section", "section": "objectives", "data": objectives}, ensure_ascii=False, separators=(",", ":")))
+
+        # materials
+        mat_prompt = (
+            'Return STRICT JSON only: {"materials":["..."]}.\n'
+            "List 3-8 materials/tools needed."
+            if want_english
+            else '仅输出严格 JSON：{"materials":["..."]}。\n'
+                 "列出 3~8 项教学材料/工具。"
+        )
+        mat = await _generate_lesson_section_with_llm(
+            llm_settings=llm_settings,
+            system_prompt=system_prompt,
+            user_prompt=mat_prompt,
+            temperature=0.4,
+        )
+        materials = mat.get("materials")
+        if not isinstance(materials, list):
+            materials = []
+        materials = [str(x).strip() for x in materials if str(x).strip()]
+        if not materials:
+            materials = _fallback_generate_lesson_plan(req).materials
+
+        now = asyncio.get_event_loop().time()
+        if now - last_flush > 10:
+            yield b": keep-alive\n\n"
+            last_flush = now
+
+        yield _encode_sse_data(json.dumps({"type": "section", "section": "materials", "data": materials}, ensure_ascii=False, separators=(",", ":")))
+
+        # procedure
+        proc_prompt = (
+            'Return STRICT JSON only: {"procedure":[{"step":"...","duration":"...","activity":"..."}]}.\n'
+            "Write 4-8 steps; duration like '5 min'."
+            if want_english
+            else '仅输出严格 JSON：{"procedure":[{"step":"...","duration":"...","activity":"..."}]}。\n'
+                 "写 4~8 步教学流程；duration 形如 '5分钟'。"
+        )
+        proc = await _generate_lesson_section_with_llm(
+            llm_settings=llm_settings,
+            system_prompt=system_prompt,
+            user_prompt=proc_prompt,
+            temperature=0.5,
+        )
+        procedure_raw = proc.get("procedure")
+        procedure: list[LessonPlanProcedureStep] = []
+        if isinstance(procedure_raw, list):
+            for item in procedure_raw:
+                if not isinstance(item, dict):
+                    continue
+                step = str(item.get("step") or "").strip()
+                dur = str(item.get("duration") or "").strip()
+                act = str(item.get("activity") or "").strip()
+                if not step or not act:
+                    continue
+                if not dur:
+                    dur = "5 min" if want_english else "5分钟"
+                procedure.append(LessonPlanProcedureStep(step=step, duration=dur, activity=act))
+        if not procedure:
+            procedure = _fallback_generate_lesson_plan(req).procedure
+
+        now = asyncio.get_event_loop().time()
+        if now - last_flush > 10:
+            yield b": keep-alive\n\n"
+            last_flush = now
+
+        yield _encode_sse_data(json.dumps({"type": "section", "section": "procedure", "data": [p.model_dump() for p in procedure]}, ensure_ascii=False, separators=(",", ":")))
+
+        # homework
+        hw_prompt = (
+            'Return STRICT JSON only: {"homework":"..."}.\n'
+            "Keep it concise."
+            if want_english
+            else '仅输出严格 JSON：{"homework":"..."}。\n'
+                 "内容简洁可执行。"
+        )
+        hw = await _generate_lesson_section_with_llm(
+            llm_settings=llm_settings,
+            system_prompt=system_prompt,
+            user_prompt=hw_prompt,
+            temperature=0.4,
+        )
+        homework = str(hw.get("homework") or "").strip()
+        if not homework:
+            homework = _fallback_generate_lesson_plan(req).homework
+
+        now = asyncio.get_event_loop().time()
+        if now - last_flush > 10:
+            yield b": keep-alive\n\n"
+            last_flush = now
+
+        yield _encode_sse_data(json.dumps({"type": "section", "section": "homework", "data": homework}, ensure_ascii=False, separators=(",", ":")))
+
+        plan = LessonPlan(
+            title=(req.title or "").strip() or ("Lesson Plan" if want_english else "教案"),
+            targetAudience=target_audience,
+            duration=duration,
+            objectives=objectives,
+            materials=materials,
+            procedure=procedure,
+            homework=homework,
+        )
+        yield _encode_sse_data(json.dumps({"type": "final", "data": plan.model_dump()}, ensure_ascii=False, separators=(",", ":")))
+    except asyncio.CancelledError:
+        logger.info("客户端已断开 /tools/lesson_plan SSE 连接，提前结束流")
+        raise
+    except Exception as exc:
+        logger.error("LessonPlan 生成流异常: %s", exc, exc_info=True)
+        payload = json.dumps({"type": "error", "text": f"教案生成异常：{exc}"}, ensure_ascii=False, separators=(",", ":"))
+        yield _encode_sse_data(payload)
+    finally:
+        yield b"data: [DONE]\n\n"
+
 async def iter_outline_text_chunks(prompt: str, language: str = "chinese"):
     """
     抽象出大纲 Agent 的文本增量迭代器：
@@ -135,15 +657,6 @@ async def iter_outline_text_chunks(prompt: str, language: str = "chinese"):
             if not text:
                 continue
             yield text
-
-
-async def stream_agent_response(prompt: str, language: str = "chinese"):
-    """
-    兼容旧用法：返回纯文本增量（非 SSE）。
-    目前仅用于 /tools/aippt_by_id 这类内部串联场景。
-    """
-    async for text in iter_outline_text_chunks(prompt, language):
-        yield text
 
 
 async def stream_outline_sse(prompt: str, language: str = "chinese"):
@@ -975,6 +1488,218 @@ async def aippt_content(request: AipptContentRequest):
     )
 
 
+@app.post("/tools/lesson_plan")
+async def lesson_plan(request: LessonPlanRequest):
+    """
+    教案生成（SSE）：
+    - 每个 section 输出一条 JSON 事件
+    - 结束以 data: [DONE] 收尾
+    """
+
+    async def event_generator():
+        async for chunk in stream_lesson_plan_sse(request):
+            yield chunk
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def _lesson_safe_export_filename(title: str) -> str:
+    """
+    构造可用于 Content-Disposition 的 docx 文件名。
+    """
+    base = _kb_safe_filename(title) or "lesson_plan"
+    if base.lower().endswith(".docx"):
+        return base
+    return f"{base}.docx"
+
+
+def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: str) -> bytes:
+    """
+    生成 docx bytes（python-docx）。
+    - 直接按 LessonPlan 写文档，减少模板渲染带来的运行时依赖和不确定性
+    """
+    try:
+        from docx import Document
+        from docx.oxml.ns import qn
+        from docx.shared import Pt, Cm
+    except Exception as exc:  # pragma: no cover - 依赖缺失时给出明确错误
+        raise RuntimeError(f"缺少 python-docx 依赖：{exc}") from exc
+
+    lang = (language or "zh").strip().lower()
+    want_english = lang in {"en", "english"}
+
+    def _safe_float(value: Any, fallback: float) -> float:
+        try:
+            return float(value)
+        except Exception:
+            return fallback
+
+    doc = Document()
+    section = doc.sections[0]
+    section.top_margin = Cm(_safe_float(style.marginTopCm, 2.54))
+    section.bottom_margin = Cm(_safe_float(style.marginBottomCm, 2.54))
+    section.left_margin = Cm(_safe_float(style.marginLeftCm, 2.54))
+    section.right_margin = Cm(_safe_float(style.marginRightCm, 2.54))
+
+    def _set_style_font(style_name: str, *, size_pt: int):
+        try:
+            st = doc.styles[style_name]
+        except Exception:
+            return
+        st.font.name = style.fontZh
+        st.font.size = Pt(int(size_pt))
+        try:
+            st._element.rPr.rFonts.set(qn("w:eastAsia"), style.fontZh)
+        except Exception:
+            pass
+
+    _set_style_font("Normal", size_pt=style.bodySizePt)
+    _set_style_font("Title", size_pt=style.titleSizePt)
+    _set_style_font("Heading 1", size_pt=style.h1SizePt)
+    _set_style_font("Heading 2", size_pt=style.h2SizePt)
+    _set_style_font("List Bullet", size_pt=style.bodySizePt)
+    _set_style_font("List Number", size_pt=style.bodySizePt)
+
+    def _set_run_font(run: Any, *, size_pt: int, bold: bool = False):
+        run.font.name = style.fontZh
+        run.font.size = Pt(int(size_pt))
+        run.bold = bool(bold)
+        try:
+            run._element.rPr.rFonts.set(qn("w:eastAsia"), style.fontZh)
+        except Exception:
+            pass
+
+    def _add_paragraph(text: str, *, size_pt: int, bold: bool = False, style_name: str | None = None):
+        p = doc.add_paragraph()
+        if style_name:
+            try:
+                p.style = style_name
+            except Exception:
+                pass
+        run = p.add_run((text or "").strip() or ("N/A" if want_english else "—"))
+        _set_run_font(run, size_pt=size_pt, bold=bold)
+        try:
+            p.paragraph_format.line_spacing = float(style.lineSpacing)
+        except Exception:
+            pass
+        return p
+
+    # Title
+    _add_paragraph(
+        (plan.title or "").strip() or ("Lesson Plan" if want_english else "教案"),
+        size_pt=style.titleSizePt,
+        bold=True,
+        style_name="Title",
+    )
+
+    # Meta
+    aud_label = "Audience" if want_english else "受众"
+    dur_label = "Duration" if want_english else "时长"
+    _add_paragraph(
+        f"{aud_label}：{(plan.targetAudience or '').strip() or ('Students' if want_english else '中学学生')} | "
+        f"{dur_label}：{(plan.duration or '').strip() or ('45 min' if want_english else '45分钟')}",
+        size_pt=style.bodySizePt,
+    )
+
+    # Objectives
+    _add_paragraph(
+        "Objectives" if want_english else "教学目标",
+        size_pt=style.h1SizePt,
+        bold=True,
+        style_name="Heading 1",
+    )
+    if plan.objectives:
+        for item in plan.objectives:
+            _add_paragraph(str(item), size_pt=style.bodySizePt, style_name="List Bullet")
+    else:
+        _add_paragraph("No objectives provided." if want_english else "未提供教学目标。", size_pt=style.bodySizePt, style_name="List Bullet")
+
+    # Materials
+    _add_paragraph(
+        "Materials" if want_english else "教学材料",
+        size_pt=style.h1SizePt,
+        bold=True,
+        style_name="Heading 1",
+    )
+    if plan.materials:
+        for item in plan.materials:
+            _add_paragraph(str(item), size_pt=style.bodySizePt, style_name="List Bullet")
+    else:
+        _add_paragraph("No materials provided." if want_english else "未提供教学材料。", size_pt=style.bodySizePt, style_name="List Bullet")
+
+    # Procedure
+    _add_paragraph(
+        "Procedure" if want_english else "教学流程",
+        size_pt=style.h1SizePt,
+        bold=True,
+        style_name="Heading 1",
+    )
+    if plan.procedure:
+        for item in plan.procedure:
+            step = (item.step or "").strip() or ("Untitled Step" if want_english else "未命名步骤")
+            duration = (item.duration or "").strip() or ("N/A" if want_english else "未填写时长")
+            activity = (item.activity or "").strip() or ("No activity details." if want_english else "未填写活动说明。")
+            if want_english:
+                _add_paragraph(f"{step} ({duration})", size_pt=style.bodySizePt, bold=True, style_name="List Number")
+            else:
+                _add_paragraph(f"{step}（{duration}）", size_pt=style.bodySizePt, bold=True, style_name="List Number")
+            _add_paragraph(activity, size_pt=style.bodySizePt)
+    else:
+        _add_paragraph(
+            "No procedure provided." if want_english else "未提供教学流程。",
+            size_pt=style.bodySizePt,
+            style_name="List Number",
+        )
+
+    # Homework
+    _add_paragraph(
+        "Homework" if want_english else "课后作业",
+        size_pt=style.h1SizePt,
+        bold=True,
+        style_name="Heading 1",
+    )
+    _add_paragraph((plan.homework or "").strip() or ("No homework provided." if want_english else "未提供课后作业。"), size_pt=style.bodySizePt)
+
+    out = io.BytesIO()
+    doc.save(out)
+    return out.getvalue()
+
+
+@app.post("/lesson/export/docx")
+async def lesson_export_docx(request: LessonExportDocxRequest):
+    """
+    导出教案为标准 .docx（附件下载）。
+    """
+    plan = request.lessonPlan
+    style = request.style or LessonStyle()
+    language = request.language or "zh"
+
+    try:
+        content = _build_lesson_docx_bytes(plan=plan, style=style, language=language)
+    except Exception as exc:
+        logger.error("lesson_export_docx 失败: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    filename = _lesson_safe_export_filename(plan.title)
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded}",
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @app.post("/tools/assistant_chat")
 async def assistant_chat(request: AssistantChatRequest):
     """
@@ -1353,66 +2078,6 @@ async def get_templates():
     ]
 
     return {"data": templates}
-
-class AipptByIDRequest(BaseModel):
-    id: str
-    language: str = "chinese"  # 添加language字段，默认为chinese
-
-async def aippt_file_id_streamer(id: str, language: str = "chinese"):
-    """根据用户的已有的文件数据中的文件id来生成ppt
-    id: 文件的id，例如论文的pmid
-    """
-    yield json.dumps({"type": "status", "message": "正在解析文件..."}, ensure_ascii=False) + '\n'
-    paper_markdown = ""
-    if not paper_markdown:
-        yield json.dumps({"type": "status", "message": "没有找到该文章"}, ensure_ascii=False) + '\n'
-        return
-    personaldb_api_url = os.getenv("PERSONAL_DB")
-    if not personaldb_api_url:
-        raise HTTPException(status_code=500, detail="PERSONAL_DB 未配置")
-    # 论文名称
-    file_name = f"{id}.md"
-    data = {
-        "userId": id,
-        "fileId": id,
-        "folderId": 123,
-        "fileType": "txt"
-    }
-    files = {"file": (file_name, paper_markdown, "text/plain")}
-    upload_url = f"{personaldb_api_url.rstrip('/')}/upload/"
-    response = httpx.post(upload_url, data=data, files=files, timeout=40.0)
-    result = response.json()
-    if not result.get("id"):
-        yield json.dumps({"type": "status", "message": "论文向量化失败，请联系管理员"}, ensure_ascii=False) + '\n'
-    yield json.dumps({"type": "status", "message": "正在生成大纲..."}, ensure_ascii=False) + '\n'
-    outline = ""
-    async for outline_trunk in stream_agent_response(paper_markdown, language):
-        outline += outline_trunk
-    yield json.dumps({"type": "status", "message": "大纲生成完毕，即将生成PPT..."}, ensure_ascii=False) + '\n'
-
-    match = re.search(r"(# .*)", outline, flags=re.DOTALL)
-
-    if match:
-        result = outline[match.start():]
-    else:
-        result = outline
-    logger.info(f"用户输入的markdown大纲是：{result}")
-    content_wrapper = A2AContentClientWrapper(session_id=uuid.uuid4().hex, agent_url=CONTENT_API)
-    # 传入不同的参数，使用不同的搜索,可以同时使用多个搜索
-    search_engine = ["KnowledgeBaseSearch"]
-    # 方便测试，这个已经在知识库中插入了对应的数据
-    metadata = {"user_id": id, "search_engine": search_engine, "language": language}
-    logger.info(f"aippt_by_id**=====>metadata数据为：{metadata}")
-    async for chunk_data in content_wrapper.generate(user_question=result, metadata=metadata):
-        logger.info(f"生成正文输出的chunk_data: {chunk_data}")
-        if chunk_data["type"] == "text":
-            slide = chunk_data["text"]
-            yield slide + '\n'
-
-
-@app.post("/tools/aippt_by_id")
-async def aippt_by_id(request: AipptByIDRequest):
-    return StreamingResponse(aippt_file_id_streamer(request.id, request.language), media_type="application/json; charset=utf-8")
 
 
 @app.get("/files/{user_id}")

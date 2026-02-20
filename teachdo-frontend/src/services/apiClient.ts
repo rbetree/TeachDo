@@ -108,6 +108,16 @@ async function extractErrorMessage(res: Response): Promise<string> {
       const json = await res.json();
       const message = json?.error?.message || json?.message;
       if (typeof message === 'string' && message.trim()) return message.trim();
+
+      const detail = json?.detail;
+      if (typeof detail === 'string' && detail.trim()) return detail.trim();
+      if (Array.isArray(detail)) {
+        const text = detail
+          .map((item) => (typeof item === 'string' ? item : JSON.stringify(item)))
+          .filter((item) => typeof item === 'string' && item.trim())
+          .join('; ');
+        if (text.trim()) return text;
+      }
     } catch {
       // ignore
     }
@@ -219,4 +229,3 @@ export async function ensureBackendAvailable(): Promise<void> {
     throw new ApiError('offline', 'Backend service is offline.', { url: apiUrl('/healthz') });
   }
 }
-

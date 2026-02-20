@@ -28,6 +28,22 @@ export interface KBFile {
   sourceMaterialTitle?: string;
 }
 
+export interface LessonStyle {
+  /**
+   * 中文字体（展示/导出层样式）
+   */
+  fontZh: string;
+  titleSizePt: number;
+  h1SizePt: number;
+  h2SizePt: number;
+  bodySizePt: number;
+  lineSpacing: number;
+  marginTopCm?: number;
+  marginBottomCm?: number;
+  marginLeftCm?: number;
+  marginRightCm?: number;
+}
+
 interface LessonPlanSection {
   step: string;
   duration: string;
@@ -104,6 +120,7 @@ export interface TeachingMaterial {
   kbFileIds: string[];
   outlineContent?: string;
   lessonPlan?: LessonPlan;
+  lessonStyle?: LessonStyle;
   presentation?: Presentation;
   selectedTemplateId?: string;
   editorDocument?: EditorDocument;

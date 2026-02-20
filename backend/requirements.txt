@@ -16,3 +16,5 @@ python-multipart
 openai
 chromadb
 markitdown[all]>=0.1.2
+python-docx
+docxtpl
