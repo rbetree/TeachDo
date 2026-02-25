@@ -380,9 +380,18 @@ const handleEditorInput = () => {
     </Teleport>
 
     <!-- Main Content Area -->
-    <div :class="['workspace-card flex-1 relative', hasExternalToolbar ? 'mt-4' : '', mode === 'COMPARE' ? 'bg-slate-100 dark:bg-slate-950' : '']">
+    <div
+      :class="[
+        'workspace-card flex-1 min-h-0 relative flex flex-col',
+        hasExternalToolbar ? 'mt-4' : '',
+        mode === 'COMPARE' ? 'bg-slate-100 dark:bg-slate-950' : '',
+      ]"
+    >
       <!-- --- COMPARE MODE --- -->
-      <div v-if="mode === 'COMPARE'" class="h-full grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
+      <div
+        v-if="mode === 'COMPARE'"
+        class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800"
+      >
         <!-- Left: Original -->
         <div class="flex flex-col h-full min-h-0 bg-white dark:bg-slate-900">
           <div class="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center sticky top-0 z-10">
@@ -446,20 +455,22 @@ const handleEditorInput = () => {
       </div>
 
       <!-- --- PREVIEW MODE --- -->
-      <div v-if="mode === 'PREVIEW'" class="h-full min-h-0 overflow-y-auto custom-scrollbar p-8 md:p-12 max-w-4xl mx-auto bg-white dark:bg-slate-900">
-        <article class="prose dark:prose-invert prose-indigo max-w-none">
-          <div
-            ref="editorRef"
-            class="outline-editor space-y-4 font-serif text-slate-800 dark:text-slate-200 leading-relaxed text-sm md:text-base outline-none focus:outline-none min-h-[18rem]"
-            :contenteditable="!loading"
-            :data-placeholder="t('outline.placeholder')"
-            spellcheck="false"
-            @focus="handleEditorFocus"
-            @blur="handleEditorBlur"
-            @input="handleEditorInput"
-            v-html="displayHtml"
-          ></div>
-        </article>
+      <div v-if="mode === 'PREVIEW'" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 md:p-6">
+        <div class="max-w-4xl mx-auto w-full">
+          <article class="prose dark:prose-invert prose-indigo max-w-none">
+            <div
+              ref="editorRef"
+              class="outline-editor space-y-4 font-serif text-slate-800 dark:text-slate-200 leading-relaxed text-sm md:text-base outline-none focus:outline-none min-h-[18rem]"
+              :contenteditable="!loading"
+              :data-placeholder="t('outline.placeholder')"
+              spellcheck="false"
+              @focus="handleEditorFocus"
+              @blur="handleEditorBlur"
+              @input="handleEditorInput"
+              v-html="displayHtml"
+            ></div>
+          </article>
+        </div>
       </div>
     </div>
   </div>

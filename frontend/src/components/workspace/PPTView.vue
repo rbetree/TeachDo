@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import type { TeachingMaterial } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
+import WorkspaceNeedOutlineState from '@/components/workspace/WorkspaceNeedOutlineState.vue';
 import PptPreviewPanel from '@/components/workspace/ppt/PptPreviewPanel.vue';
 import PptTemplateSelector from '@/components/workspace/ppt/PptTemplateSelector.vue';
 import { usePptGeneration } from '@/components/workspace/ppt/usePptGeneration';
@@ -103,23 +104,14 @@ const handleRegenerate = async () => {
 
 <template>
   <div v-if="!hasOutline" class="h-full flex flex-col min-h-0">
-    <div class="workspace-card flex-1 min-h-0 p-4 md:p-6">
-      <div class="h-full w-full flex flex-col items-center justify-center text-slate-400 p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-slate-50/50 dark:bg-slate-900/30">
-        <div class="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center mb-4">
-          <LucideIcon name="presentation" :size="32" class="opacity-60" />
-        </div>
-        <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300">{{ t('ppt.need_outline.title') }}</h3>
-        <p class="text-sm mt-2 mb-6 max-w-md text-center text-slate-500">{{ t('ppt.need_outline.desc') }}</p>
-        <button
-          type="button"
-          class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-base shadow-lg hover:shadow-indigo-500/30 transition-colors transition-shadow transition-transform transform hover:-translate-y-0.5 flex items-center gap-2"
-          @click="goToOutline"
-        >
-          <LucideIcon name="layout-list" :size="18" />
-          <span>{{ t('ppt.need_outline.cta') }}</span>
-        </button>
-      </div>
-    </div>
+    <WorkspaceNeedOutlineState
+      icon="presentation"
+      cta-icon="layout-list"
+      :title="t('ppt.need_outline.title')"
+      :description="t('ppt.need_outline.desc')"
+      :cta-label="t('ppt.need_outline.cta')"
+      @cta="goToOutline"
+    />
   </div>
 
   <div v-else class="h-full flex flex-col min-h-0" :class="hasExternalToolbar ? 'gap-0' : 'gap-6'">

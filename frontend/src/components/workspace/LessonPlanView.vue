@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import type { LessonPlan, LessonStyle, TeachingMaterial } from '#root/types';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
+import WorkspaceNeedOutlineState from '@/components/workspace/WorkspaceNeedOutlineState.vue';
 import LessonStyleDialog from '@/components/workspace/lesson/LessonStyleDialog.vue';
 import { aiService } from '@/services/aiService';
 import { ApiError } from '@/services/apiClient';
@@ -260,86 +261,87 @@ const goToOutline = () => {
 
 <template>
   <div v-if="!hasOutline" class="h-full flex flex-col min-h-0">
-    <div class="workspace-card flex-1 min-h-0 p-4 md:p-6">
-      <div
-        class="h-full w-full flex flex-col items-center justify-center text-slate-400 p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-slate-50/50 dark:bg-slate-900/30"
-      >
-        <div class="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center mb-4">
-          <span class="text-3xl grayscale opacity-50">📑</span>
-        </div>
-        <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300">{{ t('lesson.need_outline.title') }}</h3>
-        <p class="text-sm mt-2 mb-6 max-w-md text-center text-slate-500">
-          {{ t('lesson.need_outline.desc') }}
-        </p>
-        <button
-          class="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-slate-200/50 dark:shadow-none"
-          @click="goToOutline"
-        >
-          {{ t('lesson.go_outline') }}
-        </button>
-      </div>
-    </div>
+    <WorkspaceNeedOutlineState
+      icon="file-text"
+      cta-icon="layout-list"
+      :title="t('lesson.need_outline.title')"
+      :description="t('lesson.need_outline.desc')"
+      :cta-label="t('lesson.go_outline')"
+      @cta="goToOutline"
+    />
   </div>
 
   <div v-else class="h-full flex flex-col min-h-0" :class="hasExternalToolbar ? 'gap-0' : 'gap-6'">
     <Teleport :to="props.headerActionHost || 'body'" :disabled="!hasExternalToolbar">
       <div
-        class="flex items-center justify-end gap-2 flex-wrap"
+        class="flex items-center justify-between gap-2"
         :class="
           hasExternalToolbar
             ? 'w-full h-full'
             : 'bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm min-h-[44px]'
         "
       >
-        <button
-          ref="styleButtonRef"
-          type="button"
-          class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
-          :disabled="generating || exporting"
-          @click="openStyleDialog"
-        >
-          <LucideIcon name="settings-2" class="w-4 h-4" /> {{ t('lesson.style.button') }}
-        </button>
+        <div class="flex items-center gap-2 min-w-0 overflow-x-auto no-scrollbar">
+          <div class="toolbar-cluster shrink-0">
+            <span class="toolbar-item text-slate-600 dark:text-slate-300">
+              <LucideIcon name="file-text" class="w-4 h-4" />
+              <span>{{ t('workspace.tab.lesson') }}</span>
+            </span>
+          </div>
+        </div>
 
-        <button
-          v-if="!generating"
-          type="button"
-          class="toolbar-item bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
-          :disabled="exporting"
-          @click="generateLesson"
-        >
-          <LucideIcon :name="plan ? 'refresh-cw' : 'sparkles'" class="w-4 h-4" />
-          {{ plan ? t('lesson.update') : t('lesson.generate') }}
-        </button>
-        <button
-          v-else
-          type="button"
-          class="toolbar-item bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
-          @click="cancelGenerate"
-        >
-          <LucideIcon name="x" class="w-4 h-4" /> {{ t('common.cancel') }}
-        </button>
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            ref="styleButtonRef"
+            type="button"
+            class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+            :disabled="generating || exporting"
+            @click="openStyleDialog"
+          >
+            <LucideIcon name="settings-2" class="w-4 h-4" /> {{ t('lesson.style.button') }}
+          </button>
 
-        <button
-          v-if="plan"
-          type="button"
-          class="toolbar-item text-slate-500 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 disabled:opacity-50"
-          :disabled="generating"
-          @click="copyToClipboard"
-        >
-          {{ copied ? t('lesson.copied') : t('lesson.copy') }}
-        </button>
+          <button
+            v-if="!generating"
+            type="button"
+            class="toolbar-item bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+            :disabled="exporting"
+            @click="generateLesson"
+          >
+            <LucideIcon :name="plan ? 'refresh-cw' : 'sparkles'" class="w-4 h-4" />
+            {{ plan ? t('lesson.update') : t('lesson.generate') }}
+          </button>
+          <button
+            v-else
+            type="button"
+            class="toolbar-item bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800/40 hover:bg-red-100 dark:hover:bg-red-900/30"
+            @click="cancelGenerate"
+          >
+            <LucideIcon name="x" class="w-4 h-4" />
+            <span>{{ t('common.cancel') }}</span>
+          </button>
 
-        <button
-          v-if="plan"
-          type="button"
-          class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
-          :disabled="generating || exporting"
-          @click="exportDocx"
-        >
-          <LucideIcon :name="exporting ? 'loader-2' : 'download'" class="w-4 h-4" :class="exporting ? 'animate-spin' : ''" />
-          {{ t('lesson.download') }}
-        </button>
+          <button
+            v-if="plan"
+            type="button"
+            class="toolbar-item text-slate-500 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 disabled:opacity-50"
+            :disabled="generating"
+            @click="copyToClipboard"
+          >
+            {{ copied ? t('lesson.copied') : t('lesson.copy') }}
+          </button>
+
+          <button
+            v-if="plan"
+            type="button"
+            class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+            :disabled="generating || exporting"
+            @click="exportDocx"
+          >
+            <LucideIcon :name="exporting ? 'loader-2' : 'download'" class="w-4 h-4" :class="exporting ? 'animate-spin' : ''" />
+            {{ t('lesson.download') }}
+          </button>
+        </div>
       </div>
     </Teleport>
 
