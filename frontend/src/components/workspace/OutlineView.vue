@@ -25,26 +25,34 @@ const { t } = useI18n();
 const loading = ref(false);
 const outlineText = ref('');
 const newOutlineText = ref('');
-const mode = ref<'EDIT' | 'PREVIEW' | 'COMPARE'>('PREVIEW');
+const mode = ref<'PREVIEW' | 'COMPARE'>('PREVIEW');
 const pendingController = ref<AbortController | null>(null);
+const editorRef = ref<HTMLElement | null>(null);
+const editorFocused = ref(false);
+const editorFrozenHtml = ref('');
+
+const hasUnsavedChanges = computed(() => (outlineText.value || '') !== (props.currentMaterial.outlineContent || ''));
 
 // Sync state if material changes externally
 watch(
   () => props.currentMaterial.id,
   () => {
-    if (mode.value !== 'COMPARE' && mode.value !== 'EDIT') {
-      outlineText.value = props.currentMaterial.outlineContent || '';
-    }
+    outlineText.value = props.currentMaterial.outlineContent || '';
     newOutlineText.value = '';
     mode.value = 'PREVIEW';
+    editorFocused.value = false;
+    editorFrozenHtml.value = '';
   },
   { immediate: true },
 );
 
 watch(
   () => props.currentMaterial.outlineContent,
-  (next) => {
-    if (mode.value === 'COMPARE' || mode.value === 'EDIT') return;
+  (next, prev) => {
+    if (mode.value === 'COMPARE') return;
+    if (editorFocused.value) return;
+    // 本地内容未被用户修改时，才同步外部变更
+    if ((outlineText.value || '') !== (prev || '')) return;
     outlineText.value = next || '';
   },
 );
@@ -200,9 +208,116 @@ const renderMarkdown = (content: string) => {
   }).join('');
 };
 
-	const markdownHtml = computed(() => renderMarkdown(outlineText.value));
-	const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
-	const hasExternalToolbar = computed(() => !!props.headerActionHost);
+const markdownHtml = computed(() => renderMarkdown(outlineText.value));
+const newMarkdownHtml = computed(() => renderMarkdown(newOutlineText.value));
+const hasExternalToolbar = computed(() => !!props.headerActionHost);
+const displayHtml = computed(() => (editorFocused.value ? editorFrozenHtml.value : markdownHtml.value));
+
+const inlineMarkdownFromNode = (node: Node): string => {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
+  if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+  const el = node as HTMLElement;
+  const tag = el.tagName.toLowerCase();
+
+  if (tag === 'br') return '\n';
+
+  const text = Array.from(el.childNodes)
+    .map((child) => inlineMarkdownFromNode(child))
+    .join('');
+
+  if (tag === 'strong' || tag === 'b') {
+    const trimmed = text.trim();
+    return trimmed ? `**${trimmed}**` : '';
+  }
+
+  return text;
+};
+
+const htmlToMarkdown = (html: string): string => {
+  const doc = new DOMParser().parseFromString(html || '', 'text/html');
+  const root = doc.body;
+  const lines: string[] = [];
+
+  const pushTextLines = (text: string) => {
+    const normalized = String(text || '').replace(/\u00a0/g, ' ');
+    const parts = normalized.split('\n').map((p) => p.trim());
+    for (const part of parts) lines.push(part);
+  };
+
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = (node.textContent || '').replace(/\u00a0/g, ' ').trim();
+      if (text) lines.push(text);
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+    const el = node as HTMLElement;
+    const tag = el.tagName.toLowerCase();
+
+    if (tag === 'br') {
+      lines.push('');
+      return;
+    }
+
+    if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
+      const prefix = tag === 'h1' ? '# ' : tag === 'h2' ? '## ' : '### ';
+      const text = inlineMarkdownFromNode(el).replace(/\n+/g, ' ').trim();
+      lines.push(`${prefix}${text}`.trimEnd());
+      return;
+    }
+
+    if (tag === 'li') {
+      const text = inlineMarkdownFromNode(el).replace(/\n+/g, ' ').trim();
+      lines.push(`- ${text}`.trimEnd());
+      return;
+    }
+
+    if (tag === 'ul' || tag === 'ol') {
+      for (const child of Array.from(el.childNodes)) walk(child);
+      return;
+    }
+
+    if (tag === 'p' || tag === 'div') {
+      const text = inlineMarkdownFromNode(el);
+      if (!text.trim()) {
+        lines.push('');
+        return;
+      }
+      pushTextLines(text);
+      return;
+    }
+
+    for (const child of Array.from(el.childNodes)) walk(child);
+  };
+
+  for (const node of Array.from(root.childNodes)) walk(node);
+
+  while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  return lines.join('\n');
+};
+
+const syncMarkdownFromEditor = () => {
+  const el = editorRef.value;
+  if (!el) return;
+  outlineText.value = htmlToMarkdown(el.innerHTML);
+};
+
+const handleEditorFocus = () => {
+  editorFocused.value = true;
+  editorFrozenHtml.value = editorRef.value?.innerHTML ?? markdownHtml.value;
+};
+
+const handleEditorBlur = () => {
+  syncMarkdownFromEditor();
+  editorFocused.value = false;
+  editorFrozenHtml.value = '';
+};
+
+const handleEditorInput = () => {
+  syncMarkdownFromEditor();
+};
 </script>
 
 <template>
@@ -216,31 +331,11 @@ const renderMarkdown = (content: string) => {
           : 'bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm sticky top-0 z-10 min-h-[44px]'"
       >
         <div class="flex items-center gap-2 min-w-0 overflow-x-auto no-scrollbar">
-          <div class="flex items-center gap-1 shrink-0">
-            <button
-              :disabled="mode === 'COMPARE'"
-              :class="[
-                'toolbar-item',
-                mode === 'PREVIEW'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 disabled:opacity-50'
-              ]"
-              @click="mode = 'PREVIEW'"
-            >
-              <LucideIcon name="eye" class="w-4 h-4" /> {{ t('outline.preview') }}
-            </button>
-            <button
-              :disabled="mode === 'COMPARE'"
-              :class="[
-                'toolbar-item',
-                mode === 'EDIT'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 disabled:opacity-50'
-              ]"
-              @click="mode = 'EDIT'"
-            >
-              <LucideIcon name="edit-3" class="w-4 h-4" /> {{ t('outline.edit') }}
-            </button>
+          <div class="toolbar-cluster shrink-0">
+            <span class="toolbar-item text-slate-600 dark:text-slate-300">
+              <LucideIcon name="layout-list" class="w-4 h-4" />
+              <span>{{ t('workspace.tab.outline') }}</span>
+            </span>
           </div>
 
           <div v-if="mode === 'COMPARE'" class="toolbar-item text-indigo-600 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-sm shrink-0">
@@ -260,16 +355,20 @@ const renderMarkdown = (content: string) => {
           </button>
           <template v-if="mode !== 'COMPARE'">
             <button
-              v-if="outlineText"
               :disabled="loading"
               class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-600 disabled:opacity-60"
               @click="handleGenerateWrapper"
             >
-              <LucideIcon :name="loading ? 'loader-2' : 'refresh-cw'" class="w-4 h-4" :class="{ 'animate-spin': loading }" />
-              <span>{{ t('outline.regenerate') }}</span>
+              <LucideIcon
+                :name="loading ? 'loader-2' : (outlineText ? 'refresh-cw' : 'sparkles')"
+                class="w-4 h-4"
+                :class="{ 'animate-spin': loading }"
+              />
+              <span>{{ outlineText ? t('outline.regenerate') : t('outline.generate_cta') }}</span>
             </button>
             <button
-              v-if="mode === 'EDIT' && props.currentMaterial.outlineContent !== outlineText"
+              v-if="hasUnsavedChanges"
+              :disabled="loading"
               class="toolbar-item bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm"
               @click="handleSave"
             >
@@ -349,39 +448,33 @@ const renderMarkdown = (content: string) => {
       <!-- --- PREVIEW MODE --- -->
       <div v-if="mode === 'PREVIEW'" class="h-full min-h-0 overflow-y-auto custom-scrollbar p-8 md:p-12 max-w-4xl mx-auto bg-white dark:bg-slate-900">
         <article class="prose dark:prose-invert prose-indigo max-w-none">
-          <div v-if="outlineText" class="space-y-4 font-serif text-slate-800 dark:text-slate-200 leading-relaxed text-sm md:text-base" v-html="markdownHtml"></div>
-          <div v-else class="flex flex-col items-center justify-center h-96 text-center">
-            <div class="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mb-6">
-              <LucideIcon name="file-text" :size="32" class="text-indigo-600 dark:text-indigo-300" />
-            </div>
-            <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-2">{{ t('outline.empty.title') }}</h3>
-            <p class="text-slate-500 dark:text-slate-400 max-w-md mb-8">
-              {{ t('outline.empty.desc') }}
-            </p>
-            <button
-              class="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-indigo-500/30 transition-colors transition-shadow transition-transform transform hover:-translate-y-0.5 flex items-center gap-2"
-              @click="handleGenerateWrapper"
-            >
-              <LucideIcon name="sparkles" :size="18" />
-              {{ t('outline.generate_cta') }}
-            </button>
-          </div>
+          <div
+            ref="editorRef"
+            class="outline-editor space-y-4 font-serif text-slate-800 dark:text-slate-200 leading-relaxed text-sm md:text-base outline-none focus:outline-none min-h-[18rem]"
+            :contenteditable="!loading"
+            :data-placeholder="t('outline.placeholder')"
+            spellcheck="false"
+            @focus="handleEditorFocus"
+            @blur="handleEditorBlur"
+            @input="handleEditorInput"
+            v-html="displayHtml"
+          ></div>
         </article>
       </div>
-
-      <!-- --- EDIT MODE --- -->
-      <textarea
-        v-if="mode === 'EDIT'"
-        v-model="outlineText"
-        class="w-full h-full p-8 md:p-12 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-mono text-sm leading-relaxed resize-none outline-none focus:ring-inset focus:ring-2 focus:ring-indigo-500/10"
-        :placeholder="t('outline.placeholder')"
-        spellcheck="false"
-      />
     </div>
   </div>
 </template>
 
 <style scoped>
+.outline-editor:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(100, 116, 139, 0.85);
+}
+
+.dark .outline-editor:empty::before {
+  color: rgba(148, 163, 184, 0.6);
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px;
   height: 8px;

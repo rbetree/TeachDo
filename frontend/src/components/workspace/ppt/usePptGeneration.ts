@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
-import type { Presentation, PPTTemplate, TeachingMaterial } from '#root/types';
+import type { EditorDocument, Presentation, PPTTemplate, TeachingMaterial } from '#root/types';
 import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import type { ImgPoolItem } from '@/editor-runtime/aippt/aipptGenerator';
@@ -24,6 +24,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
   const pendingController = ref<AbortController | null>(null);
   const generationCanceled = ref(false);
   const draftPreviewActive = ref(false);
+  const draftEditorDocument = ref<EditorDocument | null>(null);
 
   const generateFromWebSearch = ref(true);
   const selectedKbFileIds = ref<string[]>([]);
@@ -79,6 +80,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
       loading.value = false;
       generationCanceled.value = false;
       draftPreviewActive.value = false;
+      draftEditorDocument.value = null;
       syncFromMaterial(params.currentMaterial.value);
       if (templates.value.length) {
         ensureSelectedTemplate(templates.value);
@@ -102,6 +104,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
 
     generationCanceled.value = false;
     draftPreviewActive.value = true;
+    draftEditorDocument.value = null;
     pendingController.value?.abort();
     const controller = new AbortController();
     pendingController.value = controller;
@@ -113,7 +116,6 @@ export function usePptGeneration(params: UsePptGenerationParams) {
     const kbFileIds = kbFileIdsForRequest.value;
     const useKb = kbFileIds.length > 0;
 
-    const editorSlides: any[] = [];
     let width = 960;
     let height = 540;
     let theme: any = undefined;
@@ -125,6 +127,20 @@ export function usePptGeneration(params: UsePptGenerationParams) {
       width = Number(templateData?.width || 960);
       height = Number(templateData?.height || 540);
       theme = templateData?.theme;
+
+      draftEditorDocument.value = {
+        title: material.title,
+        templateId: template.id,
+        width,
+        height,
+        theme,
+        slides: [],
+        viewport: {
+          size: width,
+          ratio: width ? height / width : 0.5625,
+        },
+        updatedAt: Date.now(),
+      };
 
       const mapper = createAipptGenerator();
       mapper.reset();
@@ -149,7 +165,10 @@ export function usePptGeneration(params: UsePptGenerationParams) {
           }
 
           const generated = mapper.generateSlides(templateSlides as any, [slide]);
-          if (generated.length) editorSlides.push(...generated);
+          if (generated.length && draftEditorDocument.value) {
+            draftEditorDocument.value.slides.push(...generated);
+            draftEditorDocument.value.updatedAt = Date.now();
+          }
 
           const preview = mapAipptSlideToPreview(slide);
           if (preview) {
@@ -162,6 +181,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
       });
 
       const result: Presentation = presentation.value || { theme: template.id, slides: [] };
+      const editorDocSlides = (draftEditorDocument.value?.slides || []) as any[];
 
       params.emitUpdateMaterial({
         presentation: result,
@@ -172,7 +192,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
           width,
           height,
           theme,
-          slides: editorSlides,
+          slides: editorDocSlides,
           viewport: {
             size: width,
             ratio: width ? height / width : 0.5625,
@@ -200,17 +220,19 @@ export function usePptGeneration(params: UsePptGenerationParams) {
 
       toast.success(params.t('ppt.toast.generated'));
       draftPreviewActive.value = false;
+      draftEditorDocument.value = null;
     } catch (error) {
       if (error instanceof ApiError && error.kind === 'abort') {
         generationCanceled.value = true;
 
         const result: Presentation = presentation.value || { theme: template.id, slides: [] };
-        const hasAnySlides = (result.slides || []).length > 0;
+        const hasAnySlides = (draftEditorDocument.value?.slides?.length || 0) > 0 || (result.slides || []).length > 0;
 
         if (hasAnySlides) {
           toast.info(params.t('ppt.toast.canceled'));
         } else {
           draftPreviewActive.value = false;
+          draftEditorDocument.value = null;
           presentation.value = material.presentation || null;
           viewState.value = material.presentation ? 'PREVIEW' : 'SELECT_TEMPLATE';
           toast.info(params.t('ppt.toast.canceled_empty'));
@@ -221,6 +243,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
       console.error(error);
       toast.error(params.t('ppt.toast.error'));
       draftPreviewActive.value = false;
+      draftEditorDocument.value = null;
       presentation.value = material.presentation || null;
       viewState.value = material.presentation ? 'PREVIEW' : 'SELECT_TEMPLATE';
     } finally {
@@ -234,6 +257,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
   const discardDraftPreview = () => {
     generationCanceled.value = false;
     draftPreviewActive.value = false;
+    draftEditorDocument.value = null;
     // 恢复为已持久化的结果（如存在），否则回到模板选择
     syncFromMaterial(params.currentMaterial.value);
   };
@@ -260,6 +284,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
     cancelGenerate,
     generationCanceled,
     draftPreviewActive,
+    draftEditorDocument,
     discardDraftPreview,
     syncFromMaterial,
   };

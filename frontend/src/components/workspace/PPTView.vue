@@ -39,6 +39,7 @@ const {
   cancelGenerate,
   generationCanceled,
   draftPreviewActive,
+  draftEditorDocument,
   discardDraftPreview,
 } = usePptGeneration({
   currentMaterial: currentMaterialRef,
@@ -49,7 +50,11 @@ const {
 const hasOutline = computed(() => !!props.currentMaterial?.outlineContent);
 const hasExternalToolbar = computed(() => !!props.headerActionHost);
 const previewSlideCount = computed(() => {
-  if (draftPreviewActive.value) return presentation.value?.slides?.length || 0;
+  if (draftPreviewActive.value) {
+    const slides = draftEditorDocument.value?.slides;
+    if (Array.isArray(slides) && slides.length > 0) return slides.length;
+    return presentation.value?.slides?.length || 0;
+  }
   const editorSlides = props.currentMaterial?.editorDocument?.slides;
   if (Array.isArray(editorSlides) && editorSlides.length > 0) return editorSlides.length;
   return presentation.value?.slides?.length || 0;
@@ -274,7 +279,7 @@ const handleRegenerate = async () => {
           :loading="loading"
           :presentation="presentation"
           :selected-template="selectedTemplate"
-          :editor-document="draftPreviewActive ? null : (props.currentMaterial?.editorDocument ?? null)"
+          :editor-document="draftPreviewActive ? draftEditorDocument : (props.currentMaterial?.editorDocument ?? null)"
           :external-toolbar="hasExternalToolbar"
           @go-to-editor="goToEditor"
           @change-template="goToTemplateSelect"
