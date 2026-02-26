@@ -181,6 +181,10 @@ class LessonExportDocxRequest(BaseModel):
     language: str | None = None
     # 教案 docx 导出模板（与前端保持 camelCase）
     templateId: str | None = None
+    # 可选：导出文件持久化到 artifacts（与前端保持 camelCase）
+    userId: str | None = None
+    materialId: str | None = None
+    persist: bool | None = None
 
 
 def _normalize_lesson_template_id(value: str | None) -> str:
@@ -1157,6 +1161,159 @@ def _kb_build_export_filename(file_name: str, file_type: str, file_id: str) -> s
     if ext and ext not in {"unknown"}:
         return f"{base}.{ext}.md"
     return f"{base}.md"
+
+
+def _artifact_safe_filename(name: str) -> str:
+    """
+    artifacts 落盘用的文件名净化：
+    - 兼容 Windows/WSL 的 NTFS（例如 ':' 在文件名中不合法）
+    - 避免路径穿越
+    """
+    safe = _kb_safe_filename(name)
+    for ch in [":", "<", ">", '"', "|", "?", "*"]:
+        safe = safe.replace(ch, "_")
+    safe = safe.strip()
+    if safe in {"", ".", ".."}:
+        return ""
+    return safe
+
+
+def _artifact_safe_segment(value: str) -> str:
+    safe = _artifact_safe_filename(str(value or ""))
+    safe = safe.replace("..", "_").strip("._")
+    return safe or "unknown"
+
+
+def _get_artifact_root_dir() -> Path:
+    """
+    Artifacts 根目录：
+    - env: TEACHDO_ARTIFACT_DIR（默认 var/artifacts）
+    - 相对路径按 repo root 解析（复用 _find_repo_root）
+    """
+    configured = (os.environ.get("TEACHDO_ARTIFACT_DIR") or "").strip()
+    repo_root = _find_repo_root(Path(__file__).resolve())
+    root = (Path(configured) if configured else Path("var/artifacts"))
+    if not root.is_absolute():
+        root = repo_root / root
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _normalize_artifact_kind(kind: str) -> str | None:
+    k = (kind or "").strip().lower()
+    return k if k in {"pptx", "docx"} else None
+
+
+def _artifact_media_type(kind: str) -> str:
+    k = (kind or "").strip().lower()
+    if k == "pptx":
+        return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    if k == "docx":
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    return "application/octet-stream"
+
+
+def _get_artifact_material_dir(*, user_id: str, material_id: str) -> Path:
+    root = _get_artifact_root_dir()
+    u = _artifact_safe_segment(user_id)
+    m = _artifact_safe_segment(material_id)
+    path = root / u / m
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _artifact_index_path(material_dir: Path) -> Path:
+    return material_dir / "index.json"
+
+
+def _load_artifact_index(material_dir: Path) -> list[dict[str, Any]]:
+    path = _artifact_index_path(material_dir)
+    if not path.exists():
+        return []
+    try:
+        raw = path.read_text("utf-8")
+        obj = json.loads(raw)
+    except Exception:
+        return []
+
+    items: Any = None
+    if isinstance(obj, dict):
+        items = obj.get("artifacts")
+    elif isinstance(obj, list):
+        items = obj
+    if not isinstance(items, list):
+        return []
+    return [it for it in items if isinstance(it, dict)]
+
+
+def _write_artifact_index(material_dir: Path, items: list[dict[str, Any]]) -> None:
+    path = _artifact_index_path(material_dir)
+    tmp = path.with_suffix(".json.tmp")
+    payload = {"artifacts": items}
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), "utf-8")
+    os.replace(tmp, path)
+
+
+def _artifact_public_meta(item: dict[str, Any]) -> dict[str, Any]:
+    meta: dict[str, Any] = {
+        "artifact_id": str(item.get("artifact_id") or ""),
+        "kind": str(item.get("kind") or ""),
+        "file_name": str(item.get("file_name") or ""),
+    }
+    created_at = item.get("created_at")
+    if created_at is not None:
+        try:
+            meta["created_at"] = int(created_at)
+        except Exception:
+            pass
+    size = item.get("size")
+    if size is not None:
+        try:
+            meta["size"] = int(size)
+        except Exception:
+            pass
+    return meta
+
+
+def _save_artifact_bytes(
+    *,
+    user_id: str,
+    material_id: str,
+    kind: str,
+    file_bytes: bytes,
+    file_name: str,
+) -> dict[str, Any]:
+    normalized_kind = _normalize_artifact_kind(kind)
+    if not normalized_kind:
+        raise ValueError(f"非法 kind：{kind}")
+
+    material_dir = _get_artifact_material_dir(user_id=str(user_id), material_id=str(material_id))
+
+    artifact_id = uuid.uuid4().hex
+    safe_name = _artifact_safe_filename(file_name) or f"{normalized_kind}.{normalized_kind}"
+    if not safe_name.lower().endswith(f".{normalized_kind}"):
+        safe_name = safe_name + f".{normalized_kind}"
+
+    stored_name = f"{artifact_id}__{safe_name}"
+    stored_path = material_dir / stored_name
+    stored_path.write_bytes(file_bytes)
+
+    created_at = int(time.time() * 1000)
+    size = len(file_bytes) if isinstance(file_bytes, (bytes, bytearray)) else 0
+
+    items = _load_artifact_index(material_dir)
+    items.append(
+        {
+            "artifact_id": artifact_id,
+            "kind": normalized_kind,
+            "file_name": safe_name,
+            "stored_name": stored_name,
+            "created_at": created_at,
+            "size": size,
+        }
+    )
+    _write_artifact_index(material_dir, items)
+    return _artifact_public_meta(items[-1])
 
 
 def _get_personaldb_url() -> str | None:
@@ -2516,13 +2673,37 @@ async def lesson_export_docx(request: LessonExportDocxRequest):
 
     filename = _lesson_safe_export_filename(plan.title)
     encoded = quote(filename)
+
+    artifact_id: str | None = None
+    if bool(request.persist):
+        persist_user_id = str(request.userId or "").strip()
+        persist_material_id = str(request.materialId or "").strip()
+        if persist_user_id and persist_material_id:
+            try:
+                meta = _save_artifact_bytes(
+                    user_id=persist_user_id,
+                    material_id=persist_material_id,
+                    kind="docx",
+                    file_bytes=content,
+                    file_name=filename,
+                )
+                artifact_id = str(meta.get("artifact_id") or "").strip() or None
+            except Exception as exc:
+                logger.error("lesson_export_docx 持久化 artifacts 失败: %s", exc, exc_info=True)
+        else:
+            logger.info("lesson_export_docx persist=true 但缺少 userId/materialId，跳过持久化")
+
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{encoded}",
+        "Cache-Control": "no-store",
+    }
+    if artifact_id:
+        headers["X-TeachDo-Artifact-Id"] = artifact_id
+
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded}",
-            "Cache-Control": "no-store",
-        },
+        headers=headers,
     )
 
 
@@ -2806,6 +2987,130 @@ async def kb_export_file(user_id: str, file_id: str):
             "Cache-Control": "no-store",
         },
     )
+
+
+@app.get("/artifacts/{user_id}/{material_id}")
+async def list_artifacts(user_id: str, material_id: str):
+    """
+    列出指定课程的导出产物（PPTX/DOCX 等）。
+    """
+    material_dir = _get_artifact_material_dir(user_id=str(user_id), material_id=str(material_id))
+    items = _load_artifact_index(material_dir)
+
+    def _created_at(it: dict[str, Any]) -> int:
+        raw = it.get("created_at")
+        try:
+            return int(raw)
+        except Exception:
+            return 0
+
+    items_sorted = sorted(items, key=_created_at, reverse=True)
+    return _kb_ok([_artifact_public_meta(it) for it in items_sorted])
+
+
+@app.post("/artifacts/{user_id}/{material_id}")
+async def upload_artifact(
+    user_id: str,
+    material_id: str,
+    kind: str = Form(...),
+    file: UploadFile = File(...),
+):
+    """
+    上传一个导出产物文件（multipart/form-data）。
+    fields:
+    - kind: pptx | docx
+    - file: 二进制文件
+    """
+    normalized_kind = _normalize_artifact_kind(kind)
+    if not normalized_kind:
+        return _kb_error("ARTIFACT_KIND_INVALID", "kind 必须是 pptx 或 docx", status_code=400)
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        return _kb_error("ARTIFACT_FILE_EMPTY", "文件内容为空", status_code=400)
+
+    original_name = file.filename or f"{normalized_kind}.{normalized_kind}"
+    try:
+        meta = _save_artifact_bytes(
+            user_id=str(user_id),
+            material_id=str(material_id),
+            kind=normalized_kind,
+            file_bytes=file_bytes,
+            file_name=original_name,
+        )
+    except Exception as exc:
+        logger.error("upload_artifact 保存失败: %s", exc, exc_info=True)
+        return _kb_error("ARTIFACT_UPLOAD_FAILED", str(exc), status_code=500)
+
+    return _kb_ok(meta)
+
+
+@app.get("/artifacts/{user_id}/{material_id}/{artifact_id}")
+async def download_artifact(user_id: str, material_id: str, artifact_id: str):
+    """
+    下载一个导出产物文件（attachment）。
+    """
+    material_dir = _get_artifact_material_dir(user_id=str(user_id), material_id=str(material_id))
+    items = _load_artifact_index(material_dir)
+
+    target: dict[str, Any] | None = None
+    for it in items:
+        if str(it.get("artifact_id") or "") == str(artifact_id):
+            target = it
+            break
+    if not target:
+        raise HTTPException(status_code=404, detail="artifact 不存在")
+
+    stored_name = str(target.get("stored_name") or "").strip()
+    if not stored_name:
+        raise HTTPException(status_code=404, detail="artifact 索引损坏（缺少 stored_name）")
+    file_path = material_dir / stored_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="artifact 文件不存在")
+
+    file_name = str(target.get("file_name") or f"{artifact_id}").strip() or f"{artifact_id}"
+    encoded = quote(_kb_safe_filename(file_name))
+    media_type = _artifact_media_type(str(target.get("kind") or ""))
+    return FileResponse(
+        file_path,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded}",
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@app.delete("/artifacts/{user_id}/{material_id}/{artifact_id}")
+async def delete_artifact(user_id: str, material_id: str, artifact_id: str):
+    """
+    删除一个导出产物文件。
+    """
+    material_dir = _get_artifact_material_dir(user_id=str(user_id), material_id=str(material_id))
+    items = _load_artifact_index(material_dir)
+
+    kept: list[dict[str, Any]] = []
+    target: dict[str, Any] | None = None
+    for it in items:
+        if str(it.get("artifact_id") or "") == str(artifact_id) and target is None:
+            target = it
+            continue
+        kept.append(it)
+
+    if not target:
+        raise HTTPException(status_code=404, detail="artifact 不存在")
+
+    stored_name = str(target.get("stored_name") or "").strip()
+    if stored_name:
+        try:
+            (material_dir / stored_name).unlink()
+        except FileNotFoundError:
+            pass
+        except Exception as exc:
+            logger.info("delete_artifact 删除文件失败：%s", exc)
+
+    _write_artifact_index(material_dir, kept)
+    return _kb_ok({"artifact_id": str(artifact_id), "deleted": True})
 
 
 class KbVectorizeTextRequest(BaseModel):
