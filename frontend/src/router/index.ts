@@ -15,8 +15,8 @@ declare module 'vue-router' {
   }
 }
 
-const MATERIAL_TABS = new Set(['outline', 'lesson', 'ppt'] as const);
-type MaterialTab = 'outline' | 'lesson' | 'ppt';
+const MATERIAL_TABS = new Set(['outline', 'lesson', 'ppt', 'assistant'] as const);
+type MaterialTab = 'outline' | 'lesson' | 'ppt' | 'assistant';
 
 const normalizeParam = (value: unknown): string | null => {
   if (Array.isArray(value)) return value.length ? value[0] ?? null : null;
@@ -112,4 +112,3 @@ export const createAppRouter = (pinia: Pinia) => {
 
   return router;
 };
-

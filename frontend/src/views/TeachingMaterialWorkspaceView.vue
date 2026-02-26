@@ -15,6 +15,7 @@ import type { IconName } from '@/components/common/LucideIcon.vue';
 const OutlineView = defineAsyncComponent(() => import('@/components/workspace/OutlineView.vue'));
 const LessonPlanView = defineAsyncComponent(() => import('@/components/workspace/LessonPlanView.vue'));
 const PPTView = defineAsyncComponent(() => import('@/components/workspace/PPTView.vue'));
+const AssistantView = defineAsyncComponent(() => import('@/components/workspace/AssistantView.vue'));
 
 const router = useRouter();
 const route = useRoute();
@@ -44,7 +45,7 @@ const relatedKbFileIds = computed(() => {
 
 const relatedKbCount = computed(() => relatedKbFileIds.value.length);
 
-type MaterialTab = 'outline' | 'lesson' | 'ppt';
+type MaterialTab = 'outline' | 'lesson' | 'ppt' | 'assistant';
 
 const normalizeParam = (value: unknown): string | null => {
   if (Array.isArray(value)) return value.length ? value[0] ?? null : null;
@@ -53,7 +54,7 @@ const normalizeParam = (value: unknown): string | null => {
 
 const activeTab = computed<MaterialTab>(() => {
   const tabRaw = normalizeParam(route.params.tab)?.toLowerCase();
-  if (tabRaw === 'lesson' || tabRaw === 'ppt') return tabRaw;
+  if (tabRaw === 'lesson' || tabRaw === 'ppt' || tabRaw === 'assistant') return tabRaw;
   return 'outline';
 });
 
@@ -75,6 +76,7 @@ const tabConfig = computed(
       { id: 'outline', label: t('workspace.tab.outline'), icon: 'layout-list' },
       { id: 'lesson', label: t('workspace.tab.lesson'), icon: 'file-text' },
       { id: 'ppt', label: t('workspace.tab.ppt'), icon: 'presentation' },
+      { id: 'assistant', label: t('workspace.tab.assistant'), icon: 'bot' },
     ] satisfies { id: MaterialTab; label: string; icon: IconName }[],
 );
 
@@ -226,7 +228,7 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
             </div>
           </div>
 
-          <div v-else class="h-full p-4 md:p-5">
+          <div v-else-if="activeTab === 'ppt'" class="h-full p-4 md:p-5">
             <div class="h-full max-w-6xl mx-auto min-h-0">
               <PPTView
                 v-if="currentMaterial"
@@ -234,6 +236,12 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
                 :header-action-host="workspaceActionHost"
                 @update-material="persistMaterial"
               />
+            </div>
+          </div>
+
+          <div v-else class="h-full p-4 md:p-5">
+            <div class="h-full max-w-6xl mx-auto min-h-0">
+              <AssistantView v-if="currentMaterial" :current-material="currentMaterial" variant="page" />
             </div>
           </div>
         </div>
