@@ -18,10 +18,10 @@ def main_api_client():
 @pytest.fixture()
 def personaldb_stub() -> Dict[str, Any]:
     """
-    personaldb stub：仅提供 /healthz 与 /search，供 main_api 的助教 RAG 单测使用。
+    personaldb stub：提供 /healthz、/search、/files/{user_id}/{file_id}/content，供 main_api 的助教 KB 单测使用。
     """
     app = FastAPI()
-    state: Dict[str, Any] = {"search_payload": None}
+    state: Dict[str, Any] = {"search_payload": None, "content_calls": []}
 
     @app.get("/healthz")
     async def healthz():
@@ -32,7 +32,7 @@ def personaldb_stub() -> Dict[str, Any]:
         payload = await request.json()
         state["search_payload"] = payload
         return {
-            "documents": [["KB chunk 1", "KB chunk 2"]],
+            "documents": [["KB chunk 1"]],
             "metadatas": [
                 [
                     {
@@ -40,14 +40,21 @@ def personaldb_stub() -> Dict[str, Any]:
                         "file_name": "a.txt",
                         "folder_id": 0,
                     },
-                    {
-                        "file_id": "gen:test:fid1",
-                        "file_name": "b.md",
-                        "folder_id": 1,
-                    },
                 ]
             ],
-            "distances": [[0.1, 0.2]],
+            "distances": [[0.1]],
+        }
+
+    @app.get("/files/{user_id}/{file_id}/content")
+    async def file_content(user_id: str, file_id: str):
+        state["content_calls"].append({"user_id": user_id, "file_id": file_id})
+        return {
+            "user_id": user_id,
+            "file_id": file_id,
+            "file_name": "lesson.md",
+            "file_type": "md",
+            "file_size": 10,
+            "content": "FULL TEXT FROM gen: OUTPUT",
         }
 
     return {"app": app, "state": state}
@@ -115,11 +122,14 @@ def test_assistant_chat_enriches_with_kb_and_material(
 
     assert stub_state["search_payload"]["userId"] == "default_user"
     assert stub_state["search_payload"]["query"] == "请根据知识库解释三角形内角和定理"
-    assert stub_state["search_payload"]["fileIds"] == ["upload:test:fid0", "gen:test:fid1"]
+    assert stub_state["search_payload"]["fileIds"] == ["upload:test:fid0"]
+
+    assert stub_state["content_calls"] == [{"user_id": "default_user", "file_id": "gen:test:fid1"}]
 
     system_prompt = (seen["messages"][0] or {}).get("content", "")
     assert "当前教学资料" in system_prompt
     assert "三角形的基本性质" in system_prompt
-    assert "知识库检索片段" in system_prompt
+    assert "课程产出（全文，不经检索）" in system_prompt
+    assert "FULL TEXT FROM gen: OUTPUT" in system_prompt
+    assert "参考资料检索片段（RAG）" in system_prompt
     assert "KB chunk 1" in system_prompt
-

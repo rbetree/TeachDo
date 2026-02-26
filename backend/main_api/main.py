@@ -397,7 +397,7 @@ def _extract_first_json_object(text: str) -> dict[str, Any]:
     return obj
 
 
-def _build_lesson_system_prompt(*, req: LessonPlanRequest, kb_context: str) -> str:
+def _build_lesson_system_prompt(*, req: LessonPlanRequest, full_context: str, kb_context: str) -> str:
     """
     Lesson 生成 system prompt（用于 LLM 路径）。
     """
@@ -453,8 +453,14 @@ def _build_lesson_system_prompt(*, req: LessonPlanRequest, kb_context: str) -> s
     outline = (req.outlineContent or "").strip()
     context_bits.append(("Outline (Markdown):\n" if want_english else "课程大纲（Markdown）：\n") + outline)
 
+    if full_context and full_context.strip():
+        context_bits.append(
+            ("Course outputs (full text, not retrieved):\n" if want_english else "课程产出（全文，不经检索）：\n")
+            + full_context.strip()
+        )
+
     if kb_context and kb_context.strip():
-        context_bits.append(("KB snippets:\n" if want_english else "知识库检索片段：\n") + kb_context.strip())
+        context_bits.append(("Reference snippets (RAG):\n" if want_english else "参考资料检索片段（RAG）：\n") + kb_context.strip())
 
     return base + "\n\n" + "\n".join(context_bits).strip()
 
@@ -509,16 +515,17 @@ async def stream_lesson_plan_sse(req: LessonPlanRequest) -> AsyncGenerator[bytes
     resolved_kb_file_ids = _normalize_kb_file_ids(req.kb_file_ids)
     personaldb_url = _get_personaldb_url()
 
+    full_context = ""
     kb_context = ""
     if resolved_kb_file_ids and personaldb_url and await _is_personaldb_ready(personaldb_url):
         # query 选用 “标题 + 大纲” 的组合，尽量贴近教案生成语义
         query = f"{(req.title or '').strip()}\n{outline}".strip()
-        kb_context = await _search_personaldb_kb_context(
+        full_context, kb_context = await _build_personaldb_kb_contexts(
             personaldb_url,
             user_id=user_id,
             query=query,
             kb_file_ids=resolved_kb_file_ids,
-            topk=5,
+            rag_topk=5,
         )
 
     llm_settings: dict[str, str] | None = None
@@ -547,7 +554,7 @@ async def stream_lesson_plan_sse(req: LessonPlanRequest) -> AsyncGenerator[bytes
     tpl = _normalize_lesson_template_id(req.templateId)
     if tpl not in {"lesson_simple", "lesson_table", "lesson_jnu_form"}:
         tpl = "lesson_simple"
-    system_prompt = _build_lesson_system_prompt(req=req, kb_context=kb_context)
+    system_prompt = _build_lesson_system_prompt(req=req, full_context=full_context, kb_context=kb_context)
 
     last_flush = asyncio.get_event_loop().time()
 
@@ -954,15 +961,17 @@ async def aippt_outline_unified(
             except httpx.RequestError as exc:
                 raise HTTPException(status_code=500, detail=f"Error connecting to personaldb: {exc}")
 
+    full_context = ""
     kb_context = ""
     resolved_kb_file_ids = _normalize_kb_file_ids(kb_file_ids)
     if resolved_kb_file_ids:
         if personaldb_url and await _is_personaldb_ready(personaldb_url):
-            kb_context = await _search_personaldb_kb_context(
+            full_context, kb_context = await _build_personaldb_kb_contexts(
                 personaldb_url,
                 user_id=str(user_id),
                 query=content_text,
                 kb_file_ids=resolved_kb_file_ids,
+                rag_topk=5,
             )
         else:
             logger.info("personaldb 不可用，跳过 kb_file_ids 检索增强：%s", personaldb_url)
@@ -970,8 +979,10 @@ async def aippt_outline_unified(
     prompt_parts: list[str] = [content_text]
     if file_content:
         prompt_parts.append(f"参考文档内容（来自你上传的文件）：\n{file_content}")
+    if full_context:
+        prompt_parts.append(f"课程产出（全文，不经检索）：\n{full_context}")
     if kb_context:
-        prompt_parts.append(f"知识库检索结果（从你选择的知识库文件中检索，仅供参考）：\n{kb_context}")
+        prompt_parts.append(f"参考资料检索片段（RAG）：\n{kb_context}")
     prompt = "\n\n".join(prompt_parts)
 
     logger.info(f"统一大纲API*outline***=====>：language={language}, has_file={has_file}, has_content={has_content}")
@@ -1181,6 +1192,22 @@ def _normalize_kb_file_ids(kb_file_ids: list[str] | None) -> list[str]:
     return resolved
 
 
+def _split_kb_file_ids(kb_file_ids: list[str]) -> tuple[list[str], list[str]]:
+    """
+    按约定将 KB 文件拆分为两类：
+    - full_ids：课程产出（gen: 前缀）→ 全文注入（不经检索）
+    - rag_ids：参考资料（非 gen:）→ 仅用于 personaldb /search（RAG）
+    """
+    full_ids: list[str] = []
+    rag_ids: list[str] = []
+    for fid in kb_file_ids or []:
+        if str(fid).startswith("gen:"):
+            full_ids.append(str(fid))
+        else:
+            rag_ids.append(str(fid))
+    return full_ids, rag_ids
+
+
 def _format_personaldb_search_context(
     result: object,
     *,
@@ -1310,6 +1337,153 @@ async def _search_personaldb_kb_context(
     return _format_personaldb_search_context(result)
 
 
+async def _load_personaldb_full_text_context(
+    personaldb_url: str,
+    *,
+    user_id: str,
+    file_ids: list[str],
+    max_file_chars: int = 40_000,
+    max_total_chars: int = 120_000,
+) -> str:
+    """
+    从 personaldb 拉取指定 file_ids 的全文内容（不经检索），并拼接为可注入 prompt 的上下文。
+
+    约束（防止 prompt 过大）：
+    - 单文件最多 max_file_chars 字符
+    - 总计最多 max_total_chars 字符
+    - 超限截断时在上下文中标注“已截断”
+    """
+    if not file_ids:
+        return ""
+
+    def _build_prefix(index: int, title: str, meta_line: str, notes: list[str]) -> str:
+        lines = [f"[{index}] {title}"]
+        if meta_line:
+            lines.append(meta_line)
+        if notes:
+            lines.append("（" + "；".join([x for x in notes if x]) + "）")
+        return "\n".join(lines).rstrip() + "\n"
+
+    blocks: list[str] = []
+    total_chars = 0  # 仅统计返回字符串长度（含分隔空行）
+
+    async with httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(20.0)) as client:
+        for fid in file_ids:
+            if total_chars >= max_total_chars:
+                break
+
+            url = f"{personaldb_url}/files/{user_id}/{fid}/content"
+            try:
+                resp = await client.get(url)
+            except Exception as exc:
+                logger.info("personaldb /files/.../content 调用失败：%s", exc)
+                continue
+
+            if resp.status_code == 404:
+                continue
+            if resp.status_code >= 400:
+                logger.info("[personaldb %s] %s", resp.status_code, resp.text)
+                continue
+
+            try:
+                payload = resp.json()
+            except ValueError:
+                logger.info("personaldb /files/.../content 返回非 JSON：%s", resp.text)
+                continue
+
+            if not isinstance(payload, dict):
+                continue
+
+            content = payload.get("content")
+            if not isinstance(content, str):
+                continue
+            text = content.strip()
+            if not text:
+                continue
+
+            file_name = str(payload.get("file_name") or payload.get("fileName") or "").strip()
+            file_type = str(payload.get("file_type") or payload.get("fileType") or "").strip()
+
+            title = file_name or fid
+            notes: list[str] = []
+
+            if len(text) > max_file_chars:
+                text = text[:max_file_chars].rstrip() + "…"
+                notes.append(f"已按单文件上限截断（{max_file_chars} chars）")
+
+            meta_bits = [f"file_id={fid}"]
+            if file_type:
+                meta_bits.append(f"type={file_type}")
+            meta_line = " / ".join(meta_bits).strip()
+
+            index = len(blocks) + 1
+
+            # 预留分隔空行：除首块外，每块前面会有 "\n\n"
+            remaining_total = max_total_chars - total_chars
+            if blocks:
+                remaining_total -= 2
+            if remaining_total <= 0:
+                break
+
+            prefix = _build_prefix(index, title, meta_line, notes)
+            remaining_for_content = remaining_total - len(prefix)
+            if remaining_for_content <= 0:
+                break
+
+            if len(text) > remaining_for_content:
+                if "已按总长度上限截断" not in notes:
+                    notes.append("已按总长度上限截断")
+                prefix = _build_prefix(index, title, meta_line, notes)
+                remaining_for_content = remaining_total - len(prefix)
+                if remaining_for_content <= 0:
+                    break
+                if len(text) > remaining_for_content:
+                    # 至少留 1 个字符给省略号
+                    cut = max(0, remaining_for_content - 1)
+                    text = text[:cut].rstrip() + "…"
+
+            block = (prefix + text).strip()
+            if blocks:
+                total_chars += 2
+            blocks.append(block)
+            total_chars += len(block)
+
+    return "\n\n".join(blocks).strip()
+
+
+async def _build_personaldb_kb_contexts(
+    personaldb_url: str,
+    *,
+    user_id: str,
+    query: str,
+    kb_file_ids: list[str],
+    rag_topk: int = 5,
+) -> tuple[str, str]:
+    """
+    给定“用户当前选中的 kb_file_ids”，按约定构建两类上下文：
+    - full_context：gen: 全文注入（不经检索）
+    - rag_context：非 gen: 走 /search 的检索片段
+    """
+    full_ids, rag_ids = _split_kb_file_ids(kb_file_ids)
+    full_context = ""
+    rag_context = ""
+    if rag_ids:
+        rag_context = await _search_personaldb_kb_context(
+            personaldb_url,
+            user_id=str(user_id),
+            query=str(query),
+            kb_file_ids=rag_ids,
+            topk=int(rag_topk),
+        )
+    if full_ids:
+        full_context = await _load_personaldb_full_text_context(
+            personaldb_url,
+            user_id=str(user_id),
+            file_ids=full_ids,
+        )
+    return full_context, rag_context
+
+
 def _pick_last_user_message(messages: list[AssistantChatMessage]) -> str:
     """
     从历史消息中找到最后一条 user 消息，作为 RAG 检索 query。
@@ -1323,6 +1497,7 @@ def _pick_last_user_message(messages: list[AssistantChatMessage]) -> str:
 def _build_assistant_system_prompt(
     *,
     material: AssistantMaterialContext | None,
+    full_context: str,
     kb_context: str,
     language: str,
 ) -> str:
@@ -1341,7 +1516,8 @@ def _build_assistant_system_prompt(
             "Rules:\n"
             "- Be accurate and practical.\n"
             "- If the user question is ambiguous, ask 1-2 clarifying questions.\n"
-            "- When KB snippets are provided, use them as grounding; if insufficient, say so.\n"
+            "- When course outputs (full text) are provided, prioritize them as context.\n"
+            "- When KB snippets (RAG) are provided, use them as grounding; if insufficient, say so.\n"
             "- Use concise bullets/steps when helpful.\n"
         )
     else:
@@ -1351,7 +1527,8 @@ def _build_assistant_system_prompt(
             "规则：\n"
             "- 回答要准确、可操作。\n"
             "- 问题不清晰时，先问 1~2 个澄清问题。\n"
-            "- 若提供了知识库检索片段，应优先基于片段作答；片段不足时要明确说明。\n"
+            "- 若提供了课程产出全文（不经检索），应优先基于全文作答。\n"
+            "- 若提供了参考资料检索片段（RAG），应优先基于片段作答；片段不足时要明确说明。\n"
             "- 需要时用条目/步骤输出。\n"
         )
 
@@ -1369,11 +1546,17 @@ def _build_assistant_system_prompt(
         if material.objectives:
             context_bits.append(("Objectives: " if want_english else "教学目标：") + str(material.objectives).strip())
 
+    if full_context and full_context.strip():
+        if want_english:
+            context_bits.append("Course outputs (full text, not retrieved):\n" + full_context.strip())
+        else:
+            context_bits.append("课程产出（全文，不经检索）：\n" + full_context.strip())
+
     if kb_context and kb_context.strip():
         if want_english:
-            context_bits.append("KB snippets (for grounding):\n" + kb_context.strip())
+            context_bits.append("Reference snippets (RAG):\n" + kb_context.strip())
         else:
-            context_bits.append("知识库检索片段（用于事实依据/参考）：\n" + kb_context.strip())
+            context_bits.append("参考资料检索片段（RAG）：\n" + kb_context.strip())
 
     if not context_bits:
         return base
@@ -1571,23 +1754,65 @@ async def stream_content_response(
         # 显式结束信号（前端可据此收尾）
         yield b"data: [DONE]\n\n"
 
+
+_COURSE_OUTPUTS_MARKER = "<!-- teachdo:course-outputs-fulltext -->"
+
+
+def _inject_markdown_after_first_h1(markdown_content: str, injection_markdown: str) -> str:
+    """
+    将 injection_markdown 注入到 markdown_content 的首个 H1（# ）之后。
+    目的：避免 stream_content_response 内部对首个 `#` 的截取逻辑把注入内容裁掉。
+    """
+    src = str(markdown_content or "")
+    inj = (injection_markdown or "").strip()
+    if not inj:
+        return src
+    if inj in src:
+        return src
+
+    lines = src.splitlines()
+    for idx, line in enumerate(lines):
+        if line.startswith("# "):
+            injection_lines = ["", *inj.splitlines(), ""]
+            return "\n".join(lines[: idx + 1] + injection_lines + lines[idx + 1 :])
+    return inj + "\n\n" + src
+
+
+def _build_course_outputs_injection_markdown(full_context: str, *, language: str) -> str:
+    if not (full_context or "").strip():
+        return ""
+    lang = (language or "zh").strip().lower()
+    want_english = lang in {"en", "english"}
+    title = "## Course outputs (full text, not retrieved)" if want_english else "## 课程产出（全文，不经检索）"
+    return f"{_COURSE_OUTPUTS_MARKER}\n{title}\n\n{full_context.strip()}".strip()
+
+
 @app.post("/tools/aippt")
 async def aippt_content(request: AipptContentRequest):
+    personaldb_url = _get_personaldb_url()
+    personaldb_ready = bool(personaldb_url and await _is_personaldb_ready(personaldb_url))
+
     markdown_content = request.content
     # 兼容旧字段名：如果 user_id 为空就用 sessionId
-    user_id = getattr(request, "user_id", None) or getattr(request, "sessionId", None)
+    user_id = str(getattr(request, "user_id", None) or getattr(request, "sessionId", None) or "").strip() or "default_user"
 
-    generate_from_uploaded_file = bool(request.generateFromUploadedFile)
-    personaldb_url = _get_personaldb_url()
-    if generate_from_uploaded_file:
-        if not personaldb_url:
-            logger.info("PERSONAL_DB 未配置，强制禁用 generateFromUploadedFile")
-            generate_from_uploaded_file = False
-        else:
-            ready = await _is_personaldb_ready(personaldb_url)
-            if not ready:
-                logger.info("personaldb 不可用，强制禁用 generateFromUploadedFile: %s", personaldb_url)
-                generate_from_uploaded_file = False
+    resolved_kb_file_ids = _normalize_kb_file_ids(request.kb_file_ids)
+    full_ids, rag_ids = _split_kb_file_ids(resolved_kb_file_ids)
+
+    # gen: 产物全文注入（不依赖 generateFromUploadedFile 开关）
+    if full_ids and personaldb_ready and _COURSE_OUTPUTS_MARKER not in (markdown_content or ""):
+        full_context = await _load_personaldb_full_text_context(
+            personaldb_url,
+            user_id=user_id,
+            file_ids=full_ids,
+        )
+        injection = _build_course_outputs_injection_markdown(full_context, language=request.language)
+        if injection:
+            markdown_content = _inject_markdown_after_first_h1(markdown_content, injection)
+
+    generate_from_uploaded_file = bool(request.generateFromUploadedFile) and personaldb_ready
+    if bool(request.generateFromUploadedFile) and not generate_from_uploaded_file:
+        logger.info("personaldb 不可用或未配置，强制禁用 generateFromUploadedFile: %s", personaldb_url)
 
     async def event_generator():
         async for chunk in stream_content_response(
@@ -1597,7 +1822,7 @@ async def aippt_content(request: AipptContentRequest):
             generateFromWebSearch=request.generateFromWebSearch,
             user_id=user_id,
             kb_folder_ids=request.kb_folder_ids if generate_from_uploaded_file else None,
-            kb_file_ids=request.kb_file_ids if generate_from_uploaded_file else None,
+            kb_file_ids=rag_ids if generate_from_uploaded_file else None,
         ):
             yield chunk
 
@@ -2318,17 +2543,20 @@ async def assistant_chat(request: AssistantChatRequest):
 
     personaldb_url = _get_personaldb_url()
     resolved_kb_file_ids = _normalize_kb_file_ids(request.kb_file_ids)
+    full_context = ""
     kb_context = ""
     if resolved_kb_file_ids and personaldb_url and await _is_personaldb_ready(personaldb_url):
-        kb_context = await _search_personaldb_kb_context(
+        full_context, kb_context = await _build_personaldb_kb_contexts(
             personaldb_url,
             user_id=str(request.user_id or "default_user"),
             query=last_user_message,
             kb_file_ids=resolved_kb_file_ids,
+            rag_topk=5,
         )
 
     system_prompt = _build_assistant_system_prompt(
         material=request.material,
+        full_context=full_context,
         kb_context=kb_context,
         language=request.language,
     )

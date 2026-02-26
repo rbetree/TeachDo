@@ -18,10 +18,10 @@ def main_api_client():
 @pytest.fixture()
 def personaldb_stub() -> Dict[str, Any]:
     """
-    personaldb stub：仅提供 /healthz 与 /search，供 main_api 的大纲 KB 检索增强单测使用。
+    personaldb stub：提供 /healthz、/search、/files/{user_id}/{file_id}/content，供 main_api 的大纲 KB 增强单测使用。
     """
     app = FastAPI()
-    state: Dict[str, Any] = {"search_payload": None}
+    state: Dict[str, Any] = {"search_payload": None, "content_calls": []}
 
     @app.get("/healthz")
     async def healthz():
@@ -32,7 +32,7 @@ def personaldb_stub() -> Dict[str, Any]:
         payload = await request.json()
         state["search_payload"] = payload
         return {
-            "documents": [["KB chunk 1", "KB chunk 2"]],
+            "documents": [["KB chunk 1"]],
             "metadatas": [
                 [
                     {
@@ -40,14 +40,21 @@ def personaldb_stub() -> Dict[str, Any]:
                         "file_name": "a.txt",
                         "folder_id": 0,
                     },
-                    {
-                        "file_id": "gen:test:fid1",
-                        "file_name": "b.md",
-                        "folder_id": 1,
-                    },
                 ]
             ],
-            "distances": [[0.1, 0.2]],
+            "distances": [[0.1]],
+        }
+
+    @app.get("/files/{user_id}/{file_id}/content")
+    async def file_content(user_id: str, file_id: str):
+        state["content_calls"].append({"user_id": user_id, "file_id": file_id})
+        return {
+            "user_id": user_id,
+            "file_id": file_id,
+            "file_name": "outline.md",
+            "file_type": "md",
+            "file_size": 10,
+            "content": "FULL TEXT FROM gen: OUTPUT",
         }
 
     return {"app": app, "state": state}
@@ -98,11 +105,15 @@ def test_outline_unified_enriches_prompt_with_kb_search_results(
 
     assert stub_state["search_payload"]["userId"] == "default_user"
     assert stub_state["search_payload"]["query"] == "主题：细胞结构与功能"
-    assert stub_state["search_payload"]["fileIds"] == ["upload:test:fid0", "gen:test:fid1"]
+    assert stub_state["search_payload"]["fileIds"] == ["upload:test:fid0"]
+
+    assert stub_state["content_calls"] == [{"user_id": "default_user", "file_id": "gen:test:fid1"}]
 
     prompt = seen["prompt"]
     assert "主题：细胞结构与功能" in prompt
-    assert "知识库检索结果" in prompt
+    assert "课程产出（全文，不经检索）" in prompt
+    assert "FULL TEXT FROM gen: OUTPUT" in prompt
+    assert "参考资料检索片段（RAG）" in prompt
     assert "KB chunk 1" in prompt
     assert "file_id=upload:test:fid0" in prompt
 
@@ -133,4 +144,5 @@ def test_outline_unified_skips_kb_when_personaldb_missing(main_api_client, monke
 
     prompt = seen["prompt"]
     assert "主题：电动汽车发展" in prompt
-    assert "知识库检索结果" not in prompt
+    assert "参考资料检索片段（RAG）" not in prompt
+    assert "课程产出（全文，不经检索）" not in prompt

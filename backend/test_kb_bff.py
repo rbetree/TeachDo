@@ -374,4 +374,5 @@ def test_tools_aippt_keeps_kb_when_personaldb_ready(main_api_client, monkeypatch
 
     assert seen["generateFromUploadedFile"] is True
     assert seen["kb_folder_ids"] == [0, 1]
-    assert seen["kb_file_ids"] == ["upload:test:fid0", "gen:test:slides"]
+    # gen:* 属于“课程产出全文注入”，不应走 KB 检索（metadata 里仅保留 upload:*）
+    assert seen["kb_file_ids"] == ["upload:test:fid0"]

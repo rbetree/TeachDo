@@ -18,10 +18,10 @@ def main_api_client():
 @pytest.fixture()
 def personaldb_stub() -> Dict[str, Any]:
     """
-    personaldb stub：仅提供 /healthz 与 /search，供 main_api 的 Lesson KB 检索增强单测使用。
+    personaldb stub：提供 /healthz、/search、/files/{user_id}/{file_id}/content，供 main_api 的 Lesson KB 增强单测使用。
     """
     app = FastAPI()
-    state: Dict[str, Any] = {"search_payload": None}
+    state: Dict[str, Any] = {"search_payload": None, "content_calls": []}
 
     @app.get("/healthz")
     async def healthz():
@@ -45,10 +45,108 @@ def personaldb_stub() -> Dict[str, Any]:
             "distances": [[0.1]],
         }
 
+    @app.get("/files/{user_id}/{file_id}/content")
+    async def file_content(user_id: str, file_id: str):
+        state["content_calls"].append({"user_id": user_id, "file_id": file_id})
+        return {
+            "user_id": user_id,
+            "file_id": file_id,
+            "file_name": "lesson.md",
+            "file_type": "md",
+            "file_size": 10,
+            "content": "FULL TEXT FROM gen: OUTPUT",
+        }
+
     return {"app": app, "state": state}
 
 
-def test_lesson_plan_stream_returns_sections_and_done_without_llm_config(main_api_client):
+def test_lesson_plan_llm_prompt_includes_course_outputs_and_search_only_uses_rag_ids(
+    main_api_client, personaldb_stub, monkeypatch
+):
+    monkeypatch.setenv("PERSONAL_DB", "http://personaldb.test")
+    monkeypatch.setenv("OUTLINE_TYPE", "openai")
+    monkeypatch.setenv("OUTLINE_MODEL", "mock-model")
+    monkeypatch.setenv("OUTLINE_API_KEY", "sk-test")
+    monkeypatch.setenv("OUTLINE_BASE_URL", "http://llm.test/v1")
+
+    import backend.main_api.main as main_api
+
+    stub_app = personaldb_stub["app"]
+    stub_state = personaldb_stub["state"]
+
+    real_async_client = httpx.AsyncClient
+
+    def _async_client_factory(*_args, **kwargs):
+        timeout = kwargs.get("timeout")
+        return real_async_client(
+            transport=httpx.ASGITransport(app=stub_app),
+            base_url="http://personaldb.test",
+            timeout=timeout,
+            trust_env=False,
+        )
+
+    monkeypatch.setattr(main_api.httpx, "AsyncClient", _async_client_factory)
+
+    seen: Dict[str, Any] = {"system_prompts": []}
+
+    async def _fake_iter_assistant_text_chunks(*, model, api_key, base_url, messages, temperature=0.6):
+        # 每个 section 都会调用一次，这里记录 system prompt 用于断言
+        seen["system_prompts"].append((messages[0] or {}).get("content", ""))
+        user_prompt = (messages[-1] or {}).get("content", "")
+        if "targetAudience" in user_prompt:
+            yield '{"targetAudience":"中学学生","duration":"45分钟"}'
+        elif '"objectives"' in user_prompt:
+            yield '{"objectives":["目标1","目标2"]}'
+        elif '"materials"' in user_prompt:
+            yield '{"materials":["课件/PPT","白板","教材：示例教材"]}'
+        elif '"procedure"' in user_prompt:
+            yield '{"procedure":[{"step":"导入","duration":"5分钟","activity":"复习并引入"},{"step":"讲解","duration":"15分钟","activity":"讲解核心概念"}]}'
+        elif '"homework"' in user_prompt:
+            yield '{"homework":"完成课后练习 1~3 题。"}'
+        else:
+            yield "{}"
+
+    monkeypatch.setattr(main_api, "iter_assistant_text_chunks", _fake_iter_assistant_text_chunks)
+
+    payload = {
+        "title": "细胞结构与功能",
+        "outlineContent": "# 细胞\n- 细胞膜\n- 细胞核\n",
+        "language": "zh",
+        "user_id": "default_user",
+        "kb_file_ids": ["upload:test:fid0", "gen:test:fid1"],
+    }
+
+    with main_api_client.stream("POST", "/tools/lesson_plan", json=payload) as resp:
+        assert resp.status_code == 200
+        body = b"".join(resp.iter_bytes()).decode("utf-8", errors="ignore")
+
+    assert "[DONE]" in body
+
+    assert stub_state["search_payload"]["userId"] == "default_user"
+    assert stub_state["search_payload"]["fileIds"] == ["upload:test:fid0"]
+    assert stub_state["content_calls"] == [{"user_id": "default_user", "file_id": "gen:test:fid1"}]
+
+    system_prompt = "\n\n".join([p for p in seen["system_prompts"] if p]).strip()
+    assert "课程产出（全文，不经检索）" in system_prompt
+    assert "FULL TEXT FROM gen: OUTPUT" in system_prompt
+    assert "参考资料检索片段（RAG）" in system_prompt
+    assert "KB chunk 1" in system_prompt
+
+
+def test_lesson_plan_stream_returns_sections_and_done_without_llm_config(main_api_client, monkeypatch):
+    # 该用例验证“无 LLM 配置时”的兜底输出，避免被本机 .env 或其他用例的模型配置干扰
+    for k in [
+        "LESSON_TYPE",
+        "LESSON_MODEL",
+        "LESSON_API_KEY",
+        "LESSON_BASE_URL",
+        "OUTLINE_TYPE",
+        "OUTLINE_MODEL",
+        "OUTLINE_API_KEY",
+        "OUTLINE_BASE_URL",
+    ]:
+        monkeypatch.delenv(k, raising=False)
+
     payload = {
         "title": "三角形的基本性质",
         "subject": "数学",
