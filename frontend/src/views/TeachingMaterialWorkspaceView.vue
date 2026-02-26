@@ -3,7 +3,8 @@ import { computed, defineAsyncComponent, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import LucideIcon from '@/components/common/LucideIcon.vue';
-import WorkspaceRightPanel from '@/components/workspace/WorkspaceRightPanel.vue';
+import WorkspaceLeftPanel from '@/components/workspace/WorkspaceLeftPanel.vue';
+import WorkspaceOutputPanel from '@/components/workspace/WorkspaceOutputPanel.vue';
 import TeachingMaterialDeleteDialog from '@/components/workspace/TeachingMaterialDeleteDialog.vue';
 import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 import { aiService } from '@/services/aiService';
@@ -141,7 +142,7 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
     v-if="currentMaterial"
     class="flex h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans text-slate-900 dark:text-slate-100"
   >
-    <WorkspaceRightPanel :current-material="currentMaterial" />
+    <WorkspaceLeftPanel :current-material="currentMaterial" />
 
     <main class="flex-1 flex flex-col relative bg-slate-50 dark:bg-slate-950 min-w-0">
       <div class="flex-1 flex flex-col relative min-h-0">
@@ -238,6 +239,8 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
         </div>
       </div>
     </main>
+
+    <WorkspaceOutputPanel :current-material="currentMaterial" />
   </section>
 
   <section v-else class="text-center py-20 space-y-4 text-slate-500 dark:text-slate-400">

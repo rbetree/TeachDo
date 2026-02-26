@@ -9,10 +9,12 @@ import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 import { getKbSource, getKbSourceUi } from '@/utils/kbSource';
 
 type KnowledgeBaseViewVariant = 'page' | 'panel';
+type KnowledgeBaseSourceFilter = 'all' | 'uploaded';
 
 interface Props {
   variant?: KnowledgeBaseViewVariant;
   currentMaterial?: TeachingMaterial | null;
+  sourceFilter?: KnowledgeBaseSourceFilter;
 }
 
 const props = defineProps<Props>();
@@ -20,6 +22,7 @@ const { t } = useI18n();
 const store = useAppStore();
 
 const isPanel = computed(() => props.variant === 'panel');
+const sourceFilter = computed<KnowledgeBaseSourceFilter>(() => props.sourceFilter ?? 'all');
 const activeMaterial = computed(() => props.currentMaterial ?? store.currentMaterial);
 
 const isDragging = ref(false);
@@ -29,7 +32,13 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 const syncing = ref(false);
 const exportingFileId = ref<string | null>(null);
 
-const files = computed(() => store.kbFiles || []);
+const files = computed(() => {
+  const all = store.kbFiles || [];
+  if (sourceFilter.value === 'uploaded') {
+    return all.filter((f) => (typeof f.folderId === 'number' ? f.folderId : 0) === 0);
+  }
+  return all;
+});
 
 const filteredFiles = computed(() => {
   const query = searchQuery.value.toLowerCase();
@@ -50,7 +59,15 @@ const normalizeStringArray = (raw: unknown): string[] => {
   return result;
 };
 
-const selectedKbFileIdSet = computed(() => new Set(normalizeStringArray(activeMaterial.value?.kbFileIds)));
+const isGenFileId = (fileId: string) => (fileId || '').startsWith('gen:');
+
+const selectedKbFileIdSet = computed(() => {
+  const raw = normalizeStringArray(activeMaterial.value?.kbFileIds);
+  if (sourceFilter.value === 'uploaded') {
+    return new Set(raw.filter((id) => !isGenFileId(id)));
+  }
+  return new Set(raw);
+});
 const selectedKbFileCount = computed(() => selectedKbFileIdSet.value.size);
 
 const isKbFileSelected = (fileId: string) => selectedKbFileIdSet.value.has(fileId);
@@ -73,6 +90,14 @@ const toggleKbFileSelected = (fileId: string) => {
 };
 
 const clearSelectedKbFiles = () => {
+  const material = activeMaterial.value;
+  if (!material) return;
+  const current = normalizeStringArray(material.kbFileIds);
+  if (sourceFilter.value === 'uploaded') {
+    // 仅清空“参考资料”（非 gen:），避免影响右侧产物的全文注入选择
+    persistKbFileIds(current.filter((id) => isGenFileId(id)));
+    return;
+  }
   persistKbFileIds([]);
 };
 
@@ -385,9 +410,16 @@ onBeforeUnmount(() => {
             <LucideIcon name="database" :size="18" />
           </div>
           <div class="min-w-0">
-            <div class="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">{{ t('kb.title') }}</div>
+            <div class="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">
+              {{ sourceFilter === 'uploaded' ? t('workspace.references.title') : t('kb.title') }}
+            </div>
             <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              {{ t('kb.global') }} · {{ t('kb.stats.total') }} {{ files.length }}
+              <template v-if="sourceFilter === 'uploaded'">
+                {{ t('workspace.references.subtitle') }} · {{ t('kb.stats.total') }} {{ files.length }}
+              </template>
+              <template v-else>
+                {{ t('kb.global') }} · {{ t('kb.stats.total') }} {{ files.length }}
+              </template>
             </div>
           </div>
         </div>
