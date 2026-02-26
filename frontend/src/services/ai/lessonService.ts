@@ -1,5 +1,5 @@
-import type { LessonPlan, LessonStyle, TeachingMaterial } from '#root/types';
-import { ApiError, ensureBackendAvailable, requestRaw } from '@/services/apiClient';
+import type { LessonDocxTemplate, LessonPlan, LessonStyle, TeachingMaterial } from '#root/types';
+import { ApiError, checkBackend, ensureBackendAvailable, requestJson, requestRaw } from '@/services/apiClient';
 import { SseParser, stripJsonCodeFence } from '@/utils/sse';
 import { KB_USER_ID } from '@/stores/appStore';
 
@@ -33,12 +33,49 @@ function parseContentDispositionFilename(value: string | null): string | null {
   return null;
 }
 
+// Fallback Mock Templates（后端不可用时兜底）
+export const MOCK_LESSON_TEMPLATES: LessonDocxTemplate[] = [
+  { id: 'lesson_simple', name: '简洁版', thumbnailColor: 'bg-slate-600', styleDescription: '标题 + 分节列表' },
+  { id: 'lesson_table', name: '表格版', thumbnailColor: 'bg-indigo-600', styleDescription: '流程表格布局' },
+  { id: 'lesson_jnu_form', name: '教案表单（字段）', thumbnailColor: 'bg-emerald-600', styleDescription: '授课题目/类型/教学内容/作业等' },
+];
+
+/**
+ * GET /lesson/templates
+ * - 后端不可用或请求失败时，返回 mock 列表（不抛错）
+ */
+export async function getLessonTemplates(): Promise<LessonDocxTemplate[]> {
+  const available = await checkBackend();
+  if (!available) return MOCK_LESSON_TEMPLATES;
+
+  try {
+    const wrapper = await requestJson<any>('/lesson/templates', { method: 'GET' }, { timeoutMs: 8000 });
+    const list = wrapper?.data || [];
+    return list.map((t: any) => ({
+      id: t.id || t.name,
+      name: t.name || t.id,
+      thumbnailColor:
+        (t.id === 'lesson_simple' && 'bg-slate-600') ||
+        (t.id === 'lesson_table' && 'bg-indigo-600') ||
+        (t.id === 'lesson_jnu_form' && 'bg-emerald-600') ||
+        'bg-slate-200',
+      styleDescription: t.description || t.name || t.id,
+      coverUrl: typeof t.cover === 'string' ? t.cover : undefined,
+      rawTemplate: t,
+    }));
+  } catch (e) {
+    console.warn('Failed to fetch lesson templates from backend, using mock.', e);
+    return MOCK_LESSON_TEMPLATES;
+  }
+}
+
 /**
  * POST /tools/lesson_plan (SSE, JSON events)
  */
 export async function streamLessonPlan(input: {
   material: TeachingMaterial;
   language?: string;
+  templateId?: string;
   onEvent?: (event: LessonPlanStreamEvent) => void;
   signal?: AbortSignal;
 }): Promise<LessonPlan> {
@@ -64,6 +101,7 @@ export async function streamLessonPlan(input: {
     sessionId: material.id,
     user_id: KB_USER_ID,
     kb_file_ids: Array.from(new Set((material.kbFileIds ?? []).map((id) => id.trim()).filter(Boolean))),
+    templateId: (input.templateId || material.selectedLessonTemplateId || '').trim() || undefined,
   };
 
   const response = await requestRaw(
@@ -145,6 +183,7 @@ export async function streamLessonPlan(input: {
 export async function exportLessonDocx(input: {
   lessonPlan: LessonPlan;
   style: LessonStyle;
+  templateId?: string;
   language?: string;
   signal?: AbortSignal;
 }): Promise<{ blob: Blob; filename: string | null }> {
@@ -162,6 +201,7 @@ export async function exportLessonDocx(input: {
         lessonPlan: input.lessonPlan,
         style: input.style,
         language: input.language ?? 'zh',
+        templateId: input.templateId,
       }),
     },
     { timeoutMs: 30_000, signal: input.signal },

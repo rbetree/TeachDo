@@ -33,6 +33,7 @@ interface PersistedMaterialLiteV1 {
   createdAt: string;
   kbFileIds: string[];
   selectedTemplateId?: string;
+  selectedLessonTemplateId?: string;
 }
 
 interface PersistedAppStoreLiteV1 {
@@ -95,6 +96,8 @@ function reviveMaterialsLiteV1(raw: unknown): TeachingMaterial[] {
     createdAt: material?.createdAt ? new Date(material.createdAt) : new Date(),
     kbFileIds: normalizeStringArray(material?.kbFileIds),
     selectedTemplateId: typeof (material as any)?.selectedTemplateId === 'string' ? (material as any).selectedTemplateId : undefined,
+    selectedLessonTemplateId:
+      typeof (material as any)?.selectedLessonTemplateId === 'string' ? (material as any).selectedLessonTemplateId : undefined,
     // 大对象会在 setupAppStore 中异步从 IndexedDB 回填
     outlineContent: '',
     lessonPlan: undefined,
@@ -119,6 +122,7 @@ function toLiteStateV1(state: AppStoreState): PersistedAppStoreLiteV1 {
       createdAt: (material.createdAt instanceof Date ? material.createdAt : new Date(material.createdAt)).toISOString(),
       kbFileIds: Array.isArray(material.kbFileIds) ? material.kbFileIds : [],
       selectedTemplateId: typeof material.selectedTemplateId === 'string' ? material.selectedTemplateId : undefined,
+      selectedLessonTemplateId: typeof material.selectedLessonTemplateId === 'string' ? material.selectedLessonTemplateId : undefined,
     })),
   };
 }

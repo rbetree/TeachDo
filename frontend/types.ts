@@ -81,6 +81,15 @@ export interface PPTTemplate {
   rawTemplate?: any;
 }
 
+export interface LessonDocxTemplate {
+  id: string;
+  name: string;
+  thumbnailColor: string;
+  styleDescription: string;
+  coverUrl?: string;
+  rawTemplate?: any;
+}
+
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
@@ -123,5 +132,6 @@ export interface TeachingMaterial {
   lessonStyle?: LessonStyle;
   presentation?: Presentation;
   selectedTemplateId?: string;
+  selectedLessonTemplateId?: string;
   editorDocument?: EditorDocument;
 }

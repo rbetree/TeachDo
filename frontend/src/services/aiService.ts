@@ -2,7 +2,7 @@ import { getTemplateFileData, getTemplates, streamAipptSlides, MOCK_TEMPLATES } 
 import { generateOutline } from '@/services/ai/outlineService';
 import { kbDeleteFile, kbExportFile, kbListFiles, kbUpload, vectorizeTextToKb } from '@/services/ai/kbService';
 import { streamAssistantReply } from '@/services/ai/assistantService';
-import { exportLessonDocx, streamLessonPlan } from '@/services/ai/lessonService';
+import { exportLessonDocx, getLessonTemplates, streamLessonPlan } from '@/services/ai/lessonService';
 
 /**
  * AI Service Layer - TeachDo Integration
@@ -23,6 +23,7 @@ export const aiService = {
   // Lesson
   streamLessonPlan,
   exportLessonDocx,
+  getLessonTemplates,
 
   // KB
   kbUpload,
