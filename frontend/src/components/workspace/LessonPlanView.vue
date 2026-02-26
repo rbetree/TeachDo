@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import type { LessonPlan, LessonStyle, TeachingMaterial } from '#root/types';
+import type { LessonDocxTemplate, LessonPlan, LessonStyle, TeachingMaterial } from '#root/types';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import WorkspaceNeedOutlineState from '@/components/workspace/WorkspaceNeedOutlineState.vue';
 import LessonStyleDialog from '@/components/workspace/lesson/LessonStyleDialog.vue';
+import LessonTemplateSelector from '@/components/workspace/lesson/LessonTemplateSelector.vue';
 import { aiService } from '@/services/aiService';
 import { ApiError } from '@/services/apiClient';
+
+type LessonViewState = 'SELECT_TEMPLATE' | 'PREVIEW';
 
 interface Props {
   currentMaterial: TeachingMaterial;
@@ -68,17 +71,79 @@ const style = ref<LessonStyle>(normalizeLessonStyle(null));
 const styleDialogOpen = ref(false);
 const styleButtonRef = ref<HTMLButtonElement | null>(null);
 
+const templates = ref<LessonDocxTemplate[]>([]);
+const templatesLoading = ref(false);
+const selectedTemplateId = ref<string>('lesson_simple');
+const viewState = ref<LessonViewState>('SELECT_TEMPLATE');
+
 const hasExternalToolbar = computed(() => !!props.headerActionHost);
 const hasOutline = computed(() => !!props.currentMaterial?.outlineContent?.trim());
+const hasPlan = computed(() => !!plan.value);
 
 watch(
-  () => props.currentMaterial,
-  (material) => {
-    plan.value = material?.lessonPlan ?? null;
-    style.value = normalizeLessonStyle(material?.lessonStyle ?? null);
+  () => props.currentMaterial?.id,
+  () => {
+    // 切换教学资料时：停止生成，避免串流写入到新 material
+    controllerRef.value?.abort();
+    controllerRef.value = null;
+    generating.value = false;
+    exporting.value = false;
+    copied.value = false;
+
+    viewState.value = props.currentMaterial?.lessonPlan ? 'PREVIEW' : 'SELECT_TEMPLATE';
   },
   { immediate: true },
 );
+
+watch(
+  () => props.currentMaterial?.lessonPlan,
+  (value) => {
+    plan.value = value ?? null;
+  },
+  { immediate: true },
+);
+
+watch(
+  () => props.currentMaterial?.lessonStyle,
+  (value) => {
+    style.value = normalizeLessonStyle(value ?? null);
+  },
+  { immediate: true },
+);
+
+watch(
+  () => props.currentMaterial?.selectedLessonTemplateId,
+  (value) => {
+    selectedTemplateId.value = (value || 'lesson_simple').trim() || 'lesson_simple';
+  },
+  { immediate: true },
+);
+
+const normalizeSelectedTemplate = () => {
+  const id = (selectedTemplateId.value || '').trim() || 'lesson_simple';
+  if (!templates.value.length) {
+    selectedTemplateId.value = id;
+    return;
+  }
+  const exists = templates.value.some((t) => t.id === id);
+  if (!exists) {
+    selectedTemplateId.value = templates.value[0]!.id;
+  }
+};
+
+onMounted(async () => {
+  templatesLoading.value = true;
+  try {
+    templates.value = await aiService.getLessonTemplates();
+  } catch (e) {
+    // getLessonTemplates 内部已做兜底，这里再兜底一次避免 UI 崩溃
+    console.warn('Failed to load lesson templates.', e);
+    templates.value = [];
+  } finally {
+    templatesLoading.value = false;
+    normalizeSelectedTemplate();
+  }
+});
 
 const ptToPx = (pt: number) => Math.round(((pt * 4) / 3) * 10) / 10;
 const cmToPx = (cm: number) => Math.round(((cm * 96) / 2.54) * 10) / 10;
@@ -111,6 +176,151 @@ const onStyleUpdate = (value: LessonStyle) => {
 
 const openStyleDialog = () => {
   styleDialogOpen.value = true;
+};
+
+const onTemplateUpdate = (id: string) => {
+  selectedTemplateId.value = id;
+};
+
+const selectedTemplateName = computed(() => templates.value.find((t) => t.id === selectedTemplateId.value)?.name || '');
+
+const wantEnglish = computed(() => String(locale.value || '').toLowerCase().startsWith('en'));
+const dashPlaceholder = computed(() => (wantEnglish.value ? 'N/A' : '—'));
+
+const formLabels = computed(() => {
+  if (wantEnglish.value) {
+    return {
+      topic: 'Teaching Topic (chapter/theme):',
+      lessonType: 'Lesson Type',
+      lessonTime: 'Lesson Time',
+      datePlaceholder: 'YYYY  MM  DD',
+      periodPlaceholder: 'Week __  Day __  Period __',
+      content: 'Teaching Content (basics / key / difficult points):',
+      methods: 'Teaching Tools and Methods:',
+      homework: 'Questions / Discussion / Homework:',
+      references: 'References (books, papers, etc.):',
+      basics: 'Basics:',
+      key: 'Key Points:',
+      diff: 'Difficult Points:',
+      tools: 'Tools:',
+      method: 'Methods:',
+    };
+  }
+  return {
+    topic: '授课题目（教学章节或主题）：',
+    lessonType: '授课类型',
+    lessonTime: '授课时间',
+    datePlaceholder: '年   月   日',
+    periodPlaceholder: '第   周星期     第   节',
+    content: '教学内容（包括基本内容、重点、难点三部分）：',
+    methods: '教学手段与方法：',
+    homework: '思考题、讨论题或作业：',
+    references: '参考资料（包括辅助教材、参考书、文献等）：',
+    basics: '基本内容：',
+    key: '重点：',
+    diff: '难点：',
+    tools: '教学手段：',
+    method: '教学方法：',
+  };
+});
+
+const objectiveSplit = computed(() => {
+  const list = Array.isArray(plan.value?.objectives) ? plan.value!.objectives : [];
+  const cleaned = list.map((x) => String(x || '').trim()).filter(Boolean);
+  if (!cleaned.length) {
+    return { key: [dashPlaceholder.value], difficult: dashPlaceholder.value };
+  }
+
+  const last = cleaned[cleaned.length - 1] || '';
+  const isDifficulty = wantEnglish.value ? /^difficulty\s*[:：]/i.test(last) : /^难点\s*[:：]/.test(last);
+  if (isDifficulty) {
+    const key = cleaned.slice(0, -1);
+    const difficult = wantEnglish.value
+      ? last.replace(/^difficulty\s*[:：]\s*/i, '').trim()
+      : last.replace(/^难点\s*[:：]\s*/, '').trim();
+    return { key: key.length ? key : [dashPlaceholder.value], difficult: difficult || dashPlaceholder.value };
+  }
+
+  if (cleaned.length >= 2) {
+    return { key: cleaned.slice(0, -1), difficult: last };
+  }
+  return { key: cleaned, difficult: dashPlaceholder.value };
+});
+
+const basicContentLines = computed(() => {
+  const items = Array.isArray(plan.value?.procedure) ? plan.value!.procedure : [];
+  if (!items.length) return [dashPlaceholder.value];
+
+  return items
+    .map((item, idx) => {
+      const step = String((item as any)?.step || '').trim();
+      const duration = String((item as any)?.duration || '').trim();
+      const activity = String((item as any)?.activity || '').trim();
+      const prefix = `${idx + 1}. ${step || (wantEnglish.value ? 'Step' : '步骤')}`;
+      const durPart = duration ? (wantEnglish.value ? ` (${duration})` : `（${duration}）`) : '';
+      const actPart = activity ? (wantEnglish.value ? ` ${activity}` : `${activity}`) : '';
+      return `${prefix}${durPart}${actPart}`.trim();
+    })
+    .filter(Boolean);
+});
+
+const toolsText = computed(() => {
+  const items = Array.isArray(plan.value?.materials) ? plan.value!.materials : [];
+  const cleaned = items.map((x) => String(x || '').trim()).filter(Boolean);
+  if (!cleaned.length) return dashPlaceholder.value;
+  return wantEnglish.value ? cleaned.join(', ') : cleaned.join('、');
+});
+
+const inferredMethodsText = computed(() => {
+  const items = Array.isArray(plan.value?.procedure) ? plan.value!.procedure : [];
+  const haystack = items
+    .map((p: any) => `${String(p?.step || '')} ${String(p?.activity || '')}`.trim())
+    .join(' ')
+    .toLowerCase();
+
+  const methods: string[] = [];
+  if (wantEnglish.value) {
+    methods.push('Lecture');
+    if (haystack.includes('discussion') || haystack.includes('讨论')) methods.push('Discussion');
+    if (haystack.includes('demo') || haystack.includes('demonstr') || haystack.includes('示范')) methods.push('Demonstration');
+    if (haystack.includes('exercise') || haystack.includes('practice') || haystack.includes('练习') || haystack.includes('训练')) methods.push('Practice');
+    if (haystack.includes('group') || haystack.includes('合作') || haystack.includes('小组')) methods.push('Group work');
+    if (haystack.includes('q&a') || haystack.includes('question') || haystack.includes('提问') || haystack.includes('问答')) methods.push('Q&A');
+  } else {
+    methods.push('讲授');
+    if (haystack.includes('讨论')) methods.push('讨论');
+    if (haystack.includes('示范')) methods.push('示范');
+    if (haystack.includes('练习') || haystack.includes('训练')) methods.push('练习');
+    if (haystack.includes('合作') || haystack.includes('小组')) methods.push('小组合作');
+    if (haystack.includes('提问') || haystack.includes('问答')) methods.push('提问');
+  }
+
+  const uniq: string[] = [];
+  for (const m of methods) {
+    if (!uniq.includes(m)) uniq.push(m);
+  }
+  return uniq.length ? (wantEnglish.value ? uniq.join(', ') : uniq.join('、')) : dashPlaceholder.value;
+});
+
+const referenceLines = computed(() => {
+  const items = Array.isArray(plan.value?.materials) ? plan.value!.materials : [];
+  const cleaned = items.map((x) => String(x || '').trim()).filter(Boolean);
+  if (!cleaned.length) return [dashPlaceholder.value];
+
+  const keywords = wantEnglish.value
+    ? ['reference', 'paper', 'book', 'isbn', 'textbook', 'literature']
+    : ['教材', '课本', '参考', '文献', '论文', '书', 'ISBN'];
+  const refs = cleaned.filter((m) => keywords.some((k) => m.toLowerCase().includes(k.toLowerCase())));
+  if (!refs.length) return [dashPlaceholder.value];
+  return refs.map((r) => (r.startsWith('-') ? r : `- ${r}`));
+});
+
+const goToTemplateSelect = () => {
+  viewState.value = 'SELECT_TEMPLATE';
+};
+
+const onTemplatePrimary = () => {
+  void generateLesson();
 };
 
 const copyToClipboard = async () => {
@@ -158,6 +368,7 @@ const exportDocx = async () => {
     const { blob, filename } = await aiService.exportLessonDocx({
       lessonPlan: plan.value,
       style: style.value,
+      templateId: selectedTemplateId.value,
       language: locale.value,
     });
     const safeName = (filename || `${plan.value.title || 'lesson_plan'}.docx`).replace(/\s+/g, '_');
@@ -199,10 +410,13 @@ const generateLesson = async () => {
   if (generating.value) return;
   if (!hasOutline.value) return;
 
+  const prevPlan = plan.value;
+  const prevTemplateId = ((props.currentMaterial?.selectedLessonTemplateId || 'lesson_simple') as string).trim() || 'lesson_simple';
   controllerRef.value?.abort();
   const controller = new AbortController();
   controllerRef.value = controller;
   generating.value = true;
+  viewState.value = 'PREVIEW';
 
   // 生成开始时，先放一个可渲染的草稿，便于预览承载“流式填充”
   plan.value = {
@@ -212,12 +426,12 @@ const generateLesson = async () => {
     procedure: [],
     homework: '',
   };
-  emit('updateMaterial', { lessonPlan: plan.value, lessonStyle: style.value });
 
   try {
     const final = await aiService.streamLessonPlan({
       material: props.currentMaterial,
       language: locale.value,
+      templateId: selectedTemplateId.value,
       signal: controller.signal,
       onEvent: (evt) => {
         if (evt.type === 'section') {
@@ -229,18 +443,14 @@ const generateLesson = async () => {
           if (evt.section === 'homework') next = { ...draft, homework: evt.data };
           if (next) {
             plan.value = next;
-            emit('updateMaterial', { lessonPlan: next });
           }
         }
-        if (evt.type === 'final') {
-          plan.value = evt.data;
-          emit('updateMaterial', { lessonPlan: evt.data });
-        }
+        if (evt.type === 'final') plan.value = evt.data;
       },
     });
 
     plan.value = final;
-    emit('updateMaterial', { lessonPlan: final });
+    emit('updateMaterial', { lessonPlan: final, selectedLessonTemplateId: selectedTemplateId.value, lessonStyle: style.value });
     toast.success(t('lesson.toast.success'));
   } catch (e) {
     if (e instanceof ApiError && e.kind === 'abort') {
@@ -248,6 +458,10 @@ const generateLesson = async () => {
       return;
     }
     toast.error(t('lesson.toast.error'));
+    // 生成失败：回滚到之前的版本，避免留下半成品
+    plan.value = prevPlan ?? null;
+    selectedTemplateId.value = prevTemplateId;
+    if (!prevPlan) viewState.value = 'SELECT_TEMPLATE';
   } finally {
     generating.value = false;
     controllerRef.value = null;
@@ -275,44 +489,28 @@ const goToOutline = () => {
     <Teleport :to="props.headerActionHost || 'body'" :disabled="!hasExternalToolbar">
       <div
         class="flex items-center justify-between gap-2"
-        :class="
-          hasExternalToolbar
-            ? 'w-full h-full'
-            : 'bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm min-h-[44px]'
-        "
+        :class="hasExternalToolbar
+          ? 'w-full h-full'
+          : 'bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm min-h-[44px]'"
       >
         <div class="flex items-center gap-2 min-w-0 overflow-x-auto no-scrollbar">
           <div class="toolbar-cluster shrink-0">
             <span class="toolbar-item text-slate-600 dark:text-slate-300">
-              <LucideIcon name="file-text" class="w-4 h-4" />
-              <span>{{ t('workspace.tab.lesson') }}</span>
+              <LucideIcon :name="viewState === 'SELECT_TEMPLATE' ? 'layout-grid' : 'file-text'" class="w-4 h-4" />
+              <span>{{ viewState === 'SELECT_TEMPLATE' ? t('lesson.choose_template') : t('lesson.preview_title') }}</span>
             </span>
           </div>
+          <span
+            v-if="viewState !== 'SELECT_TEMPLATE' && selectedTemplateName"
+            class="toolbar-item text-slate-500 dark:text-slate-400"
+          >
+            {{ selectedTemplateName }}
+          </span>
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
           <button
-            ref="styleButtonRef"
-            type="button"
-            class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
-            :disabled="generating || exporting"
-            @click="openStyleDialog"
-          >
-            <LucideIcon name="settings-2" class="w-4 h-4" /> {{ t('lesson.style.button') }}
-          </button>
-
-          <button
-            v-if="!generating"
-            type="button"
-            class="toolbar-item bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
-            :disabled="exporting"
-            @click="generateLesson"
-          >
-            <LucideIcon :name="plan ? 'refresh-cw' : 'sparkles'" class="w-4 h-4" />
-            {{ plan ? t('lesson.update') : t('lesson.generate') }}
-          </button>
-          <button
-            v-else
+            v-if="generating"
             type="button"
             class="toolbar-item bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800/40 hover:bg-red-100 dark:hover:bg-red-900/30"
             @click="cancelGenerate"
@@ -321,26 +519,73 @@ const goToOutline = () => {
             <span>{{ t('common.cancel') }}</span>
           </button>
 
-          <button
-            v-if="plan"
-            type="button"
-            class="toolbar-item text-slate-500 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 disabled:opacity-50"
-            :disabled="generating"
-            @click="copyToClipboard"
-          >
-            {{ copied ? t('lesson.copied') : t('lesson.copy') }}
-          </button>
+          <template v-else>
+	            <button
+	              ref="styleButtonRef"
+	              type="button"
+              class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+              :disabled="exporting"
+              @click="openStyleDialog"
+            >
+              <LucideIcon name="settings-2" class="w-4 h-4" /> {{ t('lesson.style.button') }}
+	            </button>
 
-          <button
-            v-if="plan"
-            type="button"
-            class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
-            :disabled="generating || exporting"
-            @click="exportDocx"
-          >
-            <LucideIcon :name="exporting ? 'loader-2' : 'download'" class="w-4 h-4" :class="exporting ? 'animate-spin' : ''" />
-            {{ t('lesson.download') }}
-          </button>
+	            <template v-if="viewState === 'SELECT_TEMPLATE'">
+	              <button
+	                type="button"
+	                class="toolbar-item bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
+	                :disabled="exporting || templatesLoading"
+	                @click="generateLesson"
+	              >
+	                <LucideIcon
+	                  :name="templatesLoading ? 'loader-2' : (plan ? 'refresh-cw' : 'sparkles')"
+	                  class="w-4 h-4"
+	                  :class="templatesLoading ? 'animate-spin' : ''"
+	                />
+	                <span>{{ templatesLoading ? t('common.loading') : (plan ? t('lesson.update') : t('lesson.generate')) }}</span>
+	              </button>
+	            </template>
+
+            <template v-else>
+              <button
+                type="button"
+                class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-60"
+                :disabled="exporting"
+                @click="goToTemplateSelect"
+              >
+                {{ t('lesson.change_template') }}
+              </button>
+              <button
+                type="button"
+                class="toolbar-item bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                :disabled="exporting"
+                @click="generateLesson"
+              >
+                <LucideIcon :name="plan ? 'refresh-cw' : 'sparkles'" class="w-4 h-4" />
+                {{ plan ? t('lesson.update') : t('lesson.generate') }}
+              </button>
+
+              <button
+                v-if="plan"
+                type="button"
+                class="toolbar-item text-slate-500 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 disabled:opacity-50"
+                @click="copyToClipboard"
+              >
+                {{ copied ? t('lesson.copied') : t('lesson.copy') }}
+              </button>
+
+              <button
+                v-if="plan"
+                type="button"
+                class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                :disabled="exporting"
+                @click="exportDocx"
+              >
+                <LucideIcon :name="exporting ? 'loader-2' : 'download'" class="w-4 h-4" :class="exporting ? 'animate-spin' : ''" />
+                {{ t('lesson.download') }}
+              </button>
+            </template>
+          </template>
         </div>
       </div>
     </Teleport>
@@ -355,91 +600,252 @@ const goToOutline = () => {
     />
 
     <div :class="['workspace-card flex-1 min-h-0 flex flex-col', hasExternalToolbar ? 'mt-4' : '']">
-      <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 md:p-6">
-        <div class="max-w-4xl mx-auto w-full">
-          <div
-            v-if="!plan"
-            class="w-full min-h-[420px] flex items-center justify-center text-slate-300"
-          >
-            <div class="text-center">
-              <div
-                class="w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-center mx-auto mb-4 opacity-60"
-              >
-                <LucideIcon name="file-text" :size="28" />
-              </div>
-              <p class="font-bold text-slate-500 dark:text-slate-400">{{ t('lesson.ready') }}</p>
-              <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ t('lesson.subtitle') }}</p>
-            </div>
-          </div>
+      <div class="flex-1 min-h-0 p-4 md:p-6 flex flex-col">
+	        <LessonTemplateSelector
+	          v-if="viewState === 'SELECT_TEMPLATE'"
+	          class="flex-1 min-h-0"
+	          :templates="templates"
+	          :loading="templatesLoading || exporting"
+	          :external-toolbar="hasExternalToolbar"
+	          :has-plan="hasPlan"
+	          :selected-template-id="selectedTemplateId"
+	          @update:selected-template-id="onTemplateUpdate"
+	          @primary="onTemplatePrimary"
+	        />
 
-          <div v-else class="animate-fade-in-up">
-            <div class="flex items-center justify-between gap-3 mb-3 text-xs text-slate-500 dark:text-slate-400">
-              <div class="truncate">
-                <span class="font-bold">{{ style.fontZh }}</span>
-                <span> · {{ style.bodySizePt }}pt · {{ t('lesson.style.line_spacing') }} {{ style.lineSpacing }}</span>
-              </div>
-              <div v-if="generating" class="flex items-center gap-2 text-xs font-bold text-indigo-700 dark:text-indigo-200">
-                <LucideIcon name="loader-2" class="w-4 h-4 animate-spin" />
-                <span>{{ t('common.loading') }}</span>
-              </div>
-            </div>
-
-            <div class="overflow-x-auto">
-              <div class="mx-auto max-w-[920px]" :style="paperStyle">
-                <h1 class="font-black text-slate-900 dark:text-white mb-4 leading-tight" :style="titleTextStyle">
-                  {{ plan.title }}
-                </h1>
-
-                <div class="flex flex-wrap gap-x-6 gap-y-2 text-slate-600 dark:text-slate-300 mb-6">
-                  <div>
-                    <span class="font-bold">{{ t('lesson.labels.audience') }}：</span>
-                    {{ plan.targetAudience || '—' }}
-                  </div>
-                  <div>
-                    <span class="font-bold">{{ t('lesson.labels.duration') }}：</span>
-                    {{ plan.duration || '—' }}
-                  </div>
+        <div v-else class="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+          <div class="max-w-4xl mx-auto w-full">
+            <div v-if="!plan" class="w-full min-h-[420px] flex items-center justify-center text-slate-300">
+              <div class="text-center">
+                <div
+                  class="w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-center mx-auto mb-4 opacity-60"
+                >
+                  <LucideIcon name="file-text" :size="28" />
                 </div>
+                <p class="font-bold text-slate-500 dark:text-slate-400">{{ t('lesson.ready') }}</p>
+                <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ t('lesson.subtitle') }}</p>
+              </div>
+            </div>
 
-                <section class="mb-6">
-                  <h2 class="font-black text-slate-900 dark:text-white mb-2" :style="h1TextStyle">
-                    {{ t('lesson.section.objectives') }}
-                  </h2>
-                  <ul class="list-disc pl-5 space-y-1 text-slate-800 dark:text-slate-200">
-                    <li v-for="(o, i) in plan.objectives" :key="i">{{ o }}</li>
-                  </ul>
-                </section>
+            <div v-else class="animate-fade-in-up">
+              <div class="flex items-center justify-between gap-3 mb-3 text-xs text-slate-500 dark:text-slate-400">
+                <div class="truncate">
+                  <span class="font-bold">{{ style.fontZh }}</span>
+                  <span> · {{ style.bodySizePt }}pt · {{ t('lesson.style.line_spacing') }} {{ style.lineSpacing }}</span>
+                </div>
+                <div v-if="generating" class="flex items-center gap-2 text-xs font-bold text-indigo-700 dark:text-indigo-200">
+                  <LucideIcon name="loader-2" class="w-4 h-4 animate-spin" />
+                  <span>{{ t('common.loading') }}</span>
+                </div>
+              </div>
 
-                <section class="mb-6">
-                  <h2 class="font-black text-slate-900 dark:text-white mb-2" :style="h1TextStyle">
-                    {{ t('lesson.section.materials') }}
-                  </h2>
-                  <ul class="list-disc pl-5 space-y-1 text-slate-800 dark:text-slate-200">
-                    <li v-for="(m, i) in plan.materials" :key="i">{{ m }}</li>
-                  </ul>
-                </section>
+              <div class="overflow-x-auto">
+                <div class="mx-auto max-w-[920px]" :style="paperStyle">
+                  <template v-if="selectedTemplateId === 'lesson_jnu_form'">
+                    <table class="w-full border-collapse text-slate-800 dark:text-slate-200">
+                      <tbody>
+                        <tr>
+                          <td rowspan="3" class="border border-slate-200 dark:border-slate-800 align-top p-3">
+                            <div class="font-black">{{ formLabels.topic }}</div>
+                            <div class="mt-2 whitespace-pre-wrap">{{ plan.title }}</div>
+                          </td>
+                          <td class="border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/30 text-center font-black p-3">
+                            {{ formLabels.lessonType }}
+                          </td>
+                          <td class="border border-slate-200 dark:border-slate-800 align-top p-3">
+                            {{ dashPlaceholder }}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td
+                            rowspan="2"
+                            class="border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/30 text-center font-black p-3"
+                          >
+                            {{ formLabels.lessonTime }}
+                          </td>
+                          <td class="border border-slate-200 dark:border-slate-800 align-top p-3">
+                            {{ formLabels.datePlaceholder }}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="border border-slate-200 dark:border-slate-800 align-top p-3">
+                            {{ formLabels.periodPlaceholder }}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colspan="3" class="border border-slate-200 dark:border-slate-800 align-top p-3">
+                            <div class="font-black">{{ formLabels.content }}</div>
+                            <div class="mt-2 space-y-3">
+                              <section>
+                                <div class="font-black">{{ formLabels.basics }}</div>
+                                <ul class="list-disc pl-5 space-y-1 text-slate-800 dark:text-slate-200">
+                                  <li v-for="(line, i) in basicContentLines" :key="i">{{ line }}</li>
+                                </ul>
+                              </section>
+                              <section>
+                                <div class="font-black">{{ formLabels.key }}</div>
+                                <ul class="list-disc pl-5 space-y-1 text-slate-800 dark:text-slate-200">
+                                  <li v-for="(line, i) in objectiveSplit.key" :key="i">{{ line }}</li>
+                                </ul>
+                              </section>
+                              <section>
+                                <div class="font-black">{{ formLabels.diff }}</div>
+                                <div class="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{{ objectiveSplit.difficult }}</div>
+                              </section>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colspan="3" class="border border-slate-200 dark:border-slate-800 align-top p-3">
+                            <div class="font-black">{{ formLabels.methods }}</div>
+                            <div class="mt-2 space-y-1">
+                              <div><span class="font-black">{{ formLabels.tools }}</span> {{ toolsText }}</div>
+                              <div><span class="font-black">{{ formLabels.method }}</span> {{ inferredMethodsText }}</div>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colspan="3" class="border border-slate-200 dark:border-slate-800 align-top p-3">
+                            <div class="font-black">{{ formLabels.homework }}</div>
+                            <div class="mt-2 whitespace-pre-wrap text-slate-800 dark:text-slate-200">{{ plan.homework || dashPlaceholder }}</div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colspan="3" class="border border-slate-200 dark:border-slate-800 align-top p-3">
+                            <div class="font-black">{{ formLabels.references }}</div>
+                            <ul class="mt-2 space-y-1 text-slate-800 dark:text-slate-200">
+                              <li v-for="(line, i) in referenceLines" :key="i" class="whitespace-pre-wrap">{{ line }}</li>
+                            </ul>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </template>
 
-                <section class="mb-6">
-                  <h2 class="font-black text-slate-900 dark:text-white mb-3" :style="h1TextStyle">
-                    {{ t('lesson.section.procedure') }}
-                  </h2>
-                  <ol class="list-decimal pl-5 space-y-3 text-slate-800 dark:text-slate-200">
-                    <li v-for="(p, i) in plan.procedure" :key="i">
-                      <div class="font-black">
-                        {{ p.step }}
-                        <span class="font-bold text-slate-500 dark:text-slate-400">（{{ p.duration }}）</span>
+                  <template v-else-if="selectedTemplateId === 'lesson_table'">
+                    <h1 class="font-black text-slate-900 dark:text-white mb-4 leading-tight" :style="titleTextStyle">
+                      {{ plan.title }}
+                    </h1>
+
+                    <table class="w-full border-collapse mb-6 text-slate-800 dark:text-slate-200">
+                      <tbody>
+                        <tr>
+                          <td class="border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/30 font-black text-center p-2">
+                            {{ t('lesson.labels.audience') }}
+                          </td>
+                          <td class="border border-slate-200 dark:border-slate-800 p-2">
+                            {{ plan.targetAudience || dashPlaceholder }}
+                          </td>
+                          <td class="border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/30 font-black text-center p-2">
+                            {{ t('lesson.labels.duration') }}
+                          </td>
+                          <td class="border border-slate-200 dark:border-slate-800 p-2">
+                            {{ plan.duration || dashPlaceholder }}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <section class="mb-6">
+                      <h2 class="font-black text-slate-900 dark:text-white mb-2" :style="h1TextStyle">{{ t('lesson.section.procedure') }}</h2>
+                      <table class="w-full border-collapse text-slate-800 dark:text-slate-200">
+                        <thead>
+                          <tr>
+                            <th class="border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/30 text-left p-2 font-black">
+                              {{ wantEnglish ? 'Step' : '环节' }}
+                            </th>
+                            <th class="border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/30 text-left p-2 font-black">
+                              {{ wantEnglish ? 'Duration' : '时长' }}
+                            </th>
+                            <th class="border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/30 text-left p-2 font-black">
+                              {{ wantEnglish ? 'Activity' : '活动' }}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(p, i) in plan.procedure" :key="i">
+                            <td class="border border-slate-200 dark:border-slate-800 align-top p-2 font-black">{{ p.step }}</td>
+                            <td class="border border-slate-200 dark:border-slate-800 align-top p-2">{{ p.duration }}</td>
+                            <td class="border border-slate-200 dark:border-slate-800 align-top p-2 whitespace-pre-wrap">{{ p.activity }}</td>
+                          </tr>
+                          <tr v-if="!plan.procedure.length">
+                            <td class="border border-slate-200 dark:border-slate-800 p-2" colspan="3">{{ dashPlaceholder }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </section>
+
+                    <section class="mb-6">
+                      <h2 class="font-black text-slate-900 dark:text-white mb-2" :style="h1TextStyle">{{ t('lesson.section.objectives') }}</h2>
+                      <ul class="list-disc pl-5 space-y-1 text-slate-800 dark:text-slate-200">
+                        <li v-for="(o, i) in plan.objectives" :key="i">{{ o }}</li>
+                        <li v-if="!plan.objectives.length">{{ dashPlaceholder }}</li>
+                      </ul>
+                    </section>
+
+                    <section class="mb-6">
+                      <h2 class="font-black text-slate-900 dark:text-white mb-2" :style="h1TextStyle">{{ t('lesson.section.materials') }}</h2>
+                      <ul class="list-disc pl-5 space-y-1 text-slate-800 dark:text-slate-200">
+                        <li v-for="(m, i) in plan.materials" :key="i">{{ m }}</li>
+                        <li v-if="!plan.materials.length">{{ dashPlaceholder }}</li>
+                      </ul>
+                    </section>
+
+                    <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/30 p-4">
+                      <h2 class="font-black text-slate-900 dark:text-white mb-2" :style="h1TextStyle">{{ t('lesson.section.homework') }}</h2>
+                      <p class="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{{ plan.homework || dashPlaceholder }}</p>
+                    </section>
+                  </template>
+
+                  <template v-else>
+                    <h1 class="font-black text-slate-900 dark:text-white mb-4 leading-tight" :style="titleTextStyle">
+                      {{ plan.title }}
+                    </h1>
+
+                    <div class="flex flex-wrap gap-x-6 gap-y-2 text-slate-600 dark:text-slate-300 mb-6">
+                      <div>
+                        <span class="font-bold">{{ t('lesson.labels.audience') }}：</span>
+                        {{ plan.targetAudience || dashPlaceholder }}
                       </div>
-                      <div class="text-slate-700 dark:text-slate-300 mt-0.5">{{ p.activity }}</div>
-                    </li>
-                  </ol>
-                </section>
+                      <div>
+                        <span class="font-bold">{{ t('lesson.labels.duration') }}：</span>
+                        {{ plan.duration || dashPlaceholder }}
+                      </div>
+                    </div>
 
-                <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/30 p-4">
-                  <h2 class="font-black text-slate-900 dark:text-white mb-2" :style="h1TextStyle">
-                    {{ t('lesson.section.homework') }}
-                  </h2>
-                  <p class="text-slate-800 dark:text-slate-200">{{ plan.homework }}</p>
-                </section>
+                    <section class="mb-6">
+                      <h2 class="font-black text-slate-900 dark:text-white mb-2" :style="h1TextStyle">{{ t('lesson.section.objectives') }}</h2>
+                      <ul class="list-disc pl-5 space-y-1 text-slate-800 dark:text-slate-200">
+                        <li v-for="(o, i) in plan.objectives" :key="i">{{ o }}</li>
+                      </ul>
+                    </section>
+
+                    <section class="mb-6">
+                      <h2 class="font-black text-slate-900 dark:text-white mb-2" :style="h1TextStyle">{{ t('lesson.section.materials') }}</h2>
+                      <ul class="list-disc pl-5 space-y-1 text-slate-800 dark:text-slate-200">
+                        <li v-for="(m, i) in plan.materials" :key="i">{{ m }}</li>
+                      </ul>
+                    </section>
+
+                    <section class="mb-6">
+                      <h2 class="font-black text-slate-900 dark:text-white mb-3" :style="h1TextStyle">{{ t('lesson.section.procedure') }}</h2>
+                      <ol class="list-decimal pl-5 space-y-3 text-slate-800 dark:text-slate-200">
+                        <li v-for="(p, i) in plan.procedure" :key="i">
+                          <div class="font-black">
+                            {{ p.step }}
+                            <span class="font-bold text-slate-500 dark:text-slate-400">（{{ p.duration }}）</span>
+                          </div>
+                          <div class="text-slate-700 dark:text-slate-300 mt-0.5 whitespace-pre-wrap">{{ p.activity }}</div>
+                        </li>
+                      </ol>
+                    </section>
+
+                    <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/30 p-4">
+                      <h2 class="font-black text-slate-900 dark:text-white mb-2" :style="h1TextStyle">{{ t('lesson.section.homework') }}</h2>
+                      <p class="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{{ plan.homework }}</p>
+                    </section>
+                  </template>
+                </div>
               </div>
             </div>
           </div>
