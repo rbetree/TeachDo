@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import type { TeachingMaterial } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
+import OutputFilesView from '@/components/workspace/OutputFilesView.vue';
 
 interface Props {
   currentMaterial: TeachingMaterial | null;
@@ -83,12 +84,9 @@ onMounted(() => {
     </div>
 
     <div v-if="!collapsed" class="flex-1 min-h-0 overflow-auto p-4">
-      <div v-if="!props.currentMaterial" class="text-xs text-slate-500 dark:text-slate-400">
+      <OutputFilesView v-if="props.currentMaterial" :current-material="props.currentMaterial" />
+      <div v-else class="text-xs text-slate-500 dark:text-slate-400">
         {{ t('workspace.no_course') }}
-      </div>
-      <div v-else class="h-full flex flex-col items-center justify-center text-center gap-2 text-slate-500 dark:text-slate-400">
-        <div class="text-sm font-bold text-slate-600 dark:text-slate-200">{{ t('workspace.outputs.empty_title') }}</div>
-        <div class="text-xs leading-relaxed max-w-[22rem]">{{ t('workspace.outputs.empty_desc') }}</div>
       </div>
     </div>
   </aside>

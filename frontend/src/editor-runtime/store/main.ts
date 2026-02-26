@@ -44,6 +44,9 @@ export interface MainState {
   generateFromUploadedFile: boolean
   generateFromWebSearch: boolean
   uploadedFile: File | null
+  // TeachDo 上下文：用于导出后自动入库（artifacts）
+  teachdoMaterialId: string | null
+  teachdoUserId: string | null
 }
 
 const nanoid = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
@@ -87,6 +90,8 @@ export const useMainStore = defineStore('main', {
     generateFromUploadedFile: false, // 是否是依据上传的文件生成PPT
     generateFromWebSearch: false, // 是否是依据网络搜索生成PPT
     uploadedFile: null,
+    teachdoMaterialId: null,
+    teachdoUserId: null,
   }),
 
   getters: {
@@ -243,6 +248,14 @@ export const useMainStore = defineStore('main', {
 
     setUploadedFile(file: File | null) {
       this.uploadedFile = file
+    },
+
+    setTeachdoMaterialId(materialId: string | null) {
+      this.teachdoMaterialId = materialId
+    },
+
+    setTeachdoUserId(userId: string | null) {
+      this.teachdoUserId = userId
     },
   },
 })

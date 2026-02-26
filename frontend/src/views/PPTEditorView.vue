@@ -95,6 +95,8 @@ const initEditorForMaterial = async () => {
 
   // 编辑器的 sessionId 与全局 KB userId 保持一致
   editorMainStore.sessionId = KB_USER_ID;
+  editorMainStore.setTeachdoMaterialId(material.id);
+  editorMainStore.setTeachdoUserId(KB_USER_ID);
 
   await snapshotStore.initSnapshotDatabase();
 };

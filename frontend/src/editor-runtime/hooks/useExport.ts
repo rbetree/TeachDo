@@ -5,7 +5,7 @@ import { saveAs } from 'file-saver'
 import pptxgen from 'pptxgenjs'
 import tinycolor from 'tinycolor2'
 import { toPng, toJpeg } from 'html-to-image'
-import { useSlidesStore } from '@editor/store'
+import { useMainStore, useSlidesStore } from '@editor/store'
 import type { PPTElementOutline, PPTElementShadow, PPTElementLink, Slide } from '@editor/types/slides'
 import { getElementRange, getLineElementPath, getTableSubThemeColor } from '@editor/utils/element'
 import { type AST, toAST } from '@editor/utils/htmlParser'
@@ -13,6 +13,7 @@ import { type SvgPoints, toPoints } from '@editor/utils/svgPathParser'
 import { encrypt } from '@editor/utils/crypto'
 import { svg2Base64 } from '@editor/utils/svg2Base64'
 import message from '@editor/utils/message'
+import { uploadArtifact } from '@/services/ai/artifactService'
 
 interface ExportImageConfig {
   quality: number
@@ -26,6 +27,7 @@ const PROXY_ENDPOINT = '/api/proxy'
 
 
 export default () => {
+  const mainStore = useMainStore()
   const slidesStore = useSlidesStore()
   const { slides, theme, viewportRatio, title, viewportSize } = storeToRefs(slidesStore)
 
@@ -960,11 +962,48 @@ export default () => {
       }
     }
 
-    setTimeout(() => {
-      pptx.writeFile({ fileName: `${title.value}.pptx` }).then(() => exporting.value = false).catch(() => {
-        exporting.value = false
+	    setTimeout(async () => {
+	      try {
+	        const mime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+	        const raw: unknown = await (pptx as any).write({ outputType: 'blob' })
+	        let blob: Blob
+	        if (raw instanceof Blob) blob = raw
+	        else if (raw instanceof ArrayBuffer) blob = new Blob([raw], { type: mime })
+	        else if (raw instanceof Uint8Array) {
+	          // 兼容 TS lib 对 SharedArrayBuffer 的限制：复制到 ArrayBuffer 再构造 Blob
+	          const copy = new Uint8Array(raw.byteLength)
+	          copy.set(raw)
+	          blob = new Blob([copy.buffer], { type: mime })
+	        }
+	        else blob = new Blob([String(raw)], { type: mime })
+
+        const fileName = `${title.value || 'TeachDo'}.pptx`
+        saveAs(blob, fileName)
+
+        const teachdoUserId = (mainStore.teachdoUserId || '').trim()
+        const teachdoMaterialId = (mainStore.teachdoMaterialId || '').trim()
+	        if (teachdoUserId && teachdoMaterialId) {
+	          const file = new File([blob], fileName, { type: mime })
+	          uploadArtifact({ userId: teachdoUserId, materialId: teachdoMaterialId, kind: 'pptx', file })
+	            .then(() => {
+	              message.success('已保存到课程产出')
+	              if (typeof window !== 'undefined') {
+	                window.dispatchEvent(new CustomEvent('teachdo:artifacts-updated', { detail: { materialId: teachdoMaterialId } }))
+	              }
+	            })
+	            .catch((e) => {
+	              console.warn('PPTX 入库失败（已忽略）', e)
+	              message.warning('已下载，但保存到课程产出失败')
+	            })
+	        }
+      }
+      catch (e) {
+        console.error(e)
         message.error('导出失败')
-      })
+      }
+      finally {
+        exporting.value = false
+      }
     }, 200)
   }
 

@@ -3,6 +3,7 @@ import { generateOutline } from '@/services/ai/outlineService';
 import { kbDeleteFile, kbExportFile, kbListFiles, kbUpload, vectorizeTextToKb } from '@/services/ai/kbService';
 import { streamAssistantReply } from '@/services/ai/assistantService';
 import { exportLessonDocx, getLessonTemplates, streamLessonPlan } from '@/services/ai/lessonService';
+import { deleteArtifact, downloadArtifact, listArtifacts, uploadArtifact } from '@/services/ai/artifactService';
 
 /**
  * AI Service Layer - TeachDo Integration
@@ -34,6 +35,12 @@ export const aiService = {
 
   // Assistant
   streamAssistantReply,
+
+  // Artifacts
+  listArtifacts,
+  uploadArtifact,
+  downloadArtifact,
+  deleteArtifact,
 };
 
 // 外部仍可按需引用 mock 模板（调试/兜底用）

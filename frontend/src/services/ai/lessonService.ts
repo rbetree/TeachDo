@@ -185,8 +185,11 @@ export async function exportLessonDocx(input: {
   style: LessonStyle;
   templateId?: string;
   language?: string;
+  persist?: boolean;
+  userId?: string;
+  materialId?: string;
   signal?: AbortSignal;
-}): Promise<{ blob: Blob; filename: string | null }> {
+}): Promise<{ blob: Blob; filename: string | null; artifactId: string | null }> {
   if (input.signal?.aborted) {
     throw new ApiError('abort', 'Request aborted.');
   }
@@ -202,6 +205,9 @@ export async function exportLessonDocx(input: {
         style: input.style,
         language: input.language ?? 'zh',
         templateId: input.templateId,
+        ...(typeof input.persist === 'boolean' ? { persist: input.persist } : {}),
+        ...(input.userId ? { userId: input.userId } : {}),
+        ...(input.materialId ? { materialId: input.materialId } : {}),
       }),
     },
     { timeoutMs: 30_000, signal: input.signal },
@@ -209,5 +215,6 @@ export async function exportLessonDocx(input: {
 
   const blob = await res.blob();
   const filename = parseContentDispositionFilename(res.headers.get('content-disposition'));
-  return { blob, filename };
+  const artifactId = (res.headers.get('x-teachdo-artifact-id') || '').trim() || null;
+  return { blob, filename, artifactId };
 }

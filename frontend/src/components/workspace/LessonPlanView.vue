@@ -9,6 +9,7 @@ import LessonStyleDialog from '@/components/workspace/lesson/LessonStyleDialog.v
 import LessonTemplateSelector from '@/components/workspace/lesson/LessonTemplateSelector.vue';
 import { aiService } from '@/services/aiService';
 import { ApiError } from '@/services/apiClient';
+import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 
 type LessonViewState = 'SELECT_TEMPLATE' | 'PREVIEW';
 
@@ -25,6 +26,7 @@ interface Emits {
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const { t, locale } = useI18n();
+const store = useAppStore();
 
 const DEFAULT_LESSON_STYLE: LessonStyle = {
   fontZh: '微软雅黑',
@@ -360,20 +362,85 @@ const downloadBlob = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+const buildLessonMarkdown = (input: { plan: LessonPlan; templateId: string; language: string }): string => {
+  const wantEnglish = (input.language || 'zh').trim().toLowerCase() === 'en';
+  const title = (input.plan.title || props.currentMaterial?.title || (wantEnglish ? 'Lesson Plan' : '教案')).trim();
+
+  const lines: string[] = [`# ${title}`];
+  lines.push(wantEnglish ? `- Audience: ${input.plan.targetAudience}` : `- 受众：${input.plan.targetAudience}`);
+  lines.push(wantEnglish ? `- Duration: ${input.plan.duration}` : `- 时长：${input.plan.duration}`);
+
+  lines.push('');
+  lines.push(wantEnglish ? '## Objectives' : '## 教学目标');
+  for (const item of input.plan.objectives || []) {
+    const text = String(item || '').trim();
+    if (!text) continue;
+    lines.push(`- ${text}`);
+  }
+
+  lines.push('');
+  lines.push(wantEnglish ? '## Materials' : '## 教学材料');
+  for (const item of input.plan.materials || []) {
+    const text = String(item || '').trim();
+    if (!text) continue;
+    lines.push(`- ${text}`);
+  }
+
+  lines.push('');
+  lines.push(wantEnglish ? '## Procedure' : '## 教学流程');
+
+  const tpl = (input.templateId || '').trim() || 'lesson_simple';
+  const procedure = input.plan.procedure || [];
+  if (tpl === 'lesson_table') {
+    lines.push(wantEnglish ? '| Step | Duration | Activity |' : '| 环节 | 时长 | 活动 |');
+    lines.push('| --- | --- | --- |');
+    for (const step of procedure) {
+      const s = String(step?.step || '').trim();
+      const d = String(step?.duration || '').trim();
+      const a = String(step?.activity || '').trim();
+      if (!s && !a) continue;
+      lines.push(`| ${s || '-'} | ${d || '-'} | ${a || '-'} |`);
+    }
+  } else {
+    for (const step of procedure) {
+      const s = String(step?.step || '').trim();
+      const d = String(step?.duration || '').trim();
+      const a = String(step?.activity || '').trim();
+      if (!s && !a) continue;
+      lines.push(`- **${s || (wantEnglish ? 'Step' : '步骤')}**${d ? `（${d}）` : ''}：${a}`);
+    }
+  }
+
+  lines.push('');
+  lines.push(wantEnglish ? '## Homework' : '## 课后作业');
+  if (String(input.plan.homework || '').trim()) {
+    lines.push(String(input.plan.homework || '').trim());
+  }
+
+  return lines.join('\n');
+};
+
 const exportDocx = async () => {
   if (!plan.value) return;
   if (exporting.value) return;
   exporting.value = true;
   try {
-    const { blob, filename } = await aiService.exportLessonDocx({
+    const materialId = props.currentMaterial?.id;
+    const { blob, filename, artifactId } = await aiService.exportLessonDocx({
       lessonPlan: plan.value,
       style: style.value,
       templateId: selectedTemplateId.value,
       language: locale.value,
+      persist: Boolean(materialId),
+      userId: KB_USER_ID,
+      materialId,
     });
     const safeName = (filename || `${plan.value.title || 'lesson_plan'}.docx`).replace(/\s+/g, '_');
     downloadBlob(blob, safeName);
-    toast.success(t('lesson.toast.downloaded'));
+    toast.success(artifactId ? `${t('lesson.toast.downloaded')} ${t('lesson.toast.saved_to_outputs')}` : t('lesson.toast.downloaded'));
+    if (artifactId && materialId && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('teachdo:artifacts-updated', { detail: { materialId } }));
+    }
   } catch (e) {
     if (e instanceof ApiError) {
       if (e.kind === 'abort') return;
@@ -452,6 +519,44 @@ const generateLesson = async () => {
     plan.value = final;
     emit('updateMaterial', { lessonPlan: final, selectedLessonTemplateId: selectedTemplateId.value, lessonStyle: style.value });
     toast.success(t('lesson.toast.success'));
+
+    // 教案 Markdown 产物入库：用于右侧“课程产出”勾选全文注入（失败不阻断）
+    const materialIdValue = props.currentMaterial?.id;
+    if (materialIdValue) {
+      const fileId = `gen:${KB_USER_ID}:${materialIdValue}:lesson`;
+      const fileName = `教案-${props.currentMaterial.title || materialIdValue}.md`;
+      const md = buildLessonMarkdown({ plan: final, templateId: selectedTemplateId.value, language: locale.value });
+      void aiService
+        .vectorizeTextToKb({
+          userId: KB_USER_ID,
+          fileId,
+          fileName,
+          content: md,
+          fileType: 'md',
+          folderId: 1,
+          createdAt: Date.now(),
+          sourceType: 'material',
+          sourceMaterialId: materialIdValue,
+          sourceMaterialTitle: props.currentMaterial.title,
+        })
+        .then(() => {
+          const next = (store.kbFiles || []).filter((f) => f.id !== fileId);
+          next.unshift({
+            id: fileId,
+            name: fileName,
+            size: md.length,
+            type: 'md',
+            status: 'ready',
+            uploadedAt: new Date(),
+            folderId: 1,
+            sourceType: 'material',
+            sourceMaterialId: materialIdValue,
+            sourceMaterialTitle: props.currentMaterial.title,
+          });
+          store.setKbFiles(next);
+        })
+        .catch((e) => console.warn('lesson markdown 产物入库失败（已忽略）', e));
+    }
   } catch (e) {
     if (e instanceof ApiError && e.kind === 'abort') {
       toast.info(t('lesson.toast.cancelled'));
