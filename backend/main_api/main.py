@@ -151,6 +151,8 @@ class LessonPlanRequest(BaseModel):
     sessionId: str | None = None
     user_id: str | None = None
     kb_file_ids: list[str] | None = None
+    # 教案内容模板（用于影响生成策略/结构，保持与前端 camelCase 一致）
+    templateId: str | None = None
 
 
 class LessonStyle(BaseModel):
@@ -177,6 +179,24 @@ class LessonExportDocxRequest(BaseModel):
     lessonPlan: LessonPlan
     style: LessonStyle | None = None
     language: str | None = None
+    # 教案 docx 导出模板（与前端保持 camelCase）
+    templateId: str | None = None
+
+
+def _normalize_lesson_template_id(value: str | None) -> str:
+    """
+    统一归一化教案模板 ID（生成/预览/导出共用）。
+    - 未指定：默认 lesson_simple
+    - 兼容常见别名：simple/table/form/jnu 等
+    """
+    tpl = (value or "").strip() or "lesson_simple"
+    if tpl in {"default", "simple"}:
+        return "lesson_simple"
+    if tpl in {"table"}:
+        return "lesson_table"
+    if tpl in {"form", "jnu", "jnu_form", "lesson_form"}:
+        return "lesson_jnu_form"
+    return tpl
 
 
 def _split_objectives_text(text: str) -> list[str]:
@@ -228,6 +248,9 @@ def _fallback_generate_lesson_plan(req: LessonPlanRequest) -> LessonPlan:
     """
     lang = (req.language or "zh").strip().lower()
     want_english = lang in {"en", "english"}
+    tpl = _normalize_lesson_template_id(req.templateId)
+    if tpl not in {"lesson_simple", "lesson_table", "lesson_jnu_form"}:
+        tpl = "lesson_simple"
 
     title = (req.title or "").strip() or ("Lesson Plan" if want_english else "教案")
     objectives = _split_objectives_text(req.objectives or "")
@@ -236,6 +259,29 @@ def _fallback_generate_lesson_plan(req: LessonPlanRequest) -> LessonPlan:
             "理解本节课核心概念与关键结论" if not want_english else "Understand the key concepts and core conclusions",
             "能完成基础例题/练习并进行简单迁移" if not want_english else "Solve basic exercises and apply the concept",
         ]
+    if tpl == "lesson_jnu_form":
+        # 表单模板：目标用于“重点/难点”，确保最后一条为“难点：...”
+        diff = None
+        rest: list[str] = []
+        for item in objectives:
+            text = str(item or "").strip()
+            if not text:
+                continue
+            is_diff = bool(re.match(r"^difficulty\s*[:：]", text, re.IGNORECASE)) if want_english else bool(re.match(r"^难点\s*[:：]", text))
+            if is_diff and diff is None:
+                diff = text
+                continue
+            rest.append(text)
+
+        if diff is None:
+            topic = (req.title or "").strip() or ("this lesson" if want_english else "本节课")
+            diff = (
+                f"Difficulty: Explain and apply the key reasoning of {topic} in new contexts."
+                if want_english
+                else f"难点：掌握{topic}的关键推导与应用，并能迁移解决典型问题。"
+            )
+
+        objectives = rest + [diff]
 
     steps = _guess_procedure_steps_from_outline(req.outlineContent or "", max_steps=6)
     if not steps:
@@ -271,6 +317,9 @@ def _fallback_generate_lesson_plan(req: LessonPlanRequest) -> LessonPlan:
         "板书/白板",
         "练习题/作业纸",
     ] if not want_english else ["Slides", "Whiteboard", "Practice sheets"]
+    if tpl == "lesson_jnu_form":
+        # 参考资料占位（便于表单模板直接落地填写）
+        materials = list(materials) + (["教材/参考书：______"] if not want_english else ["Textbook/Reference: ______"])
 
     homework = (
         "完成课后练习 1~3 题，并用自己的话总结本课关键结论（不少于 100 字）。"
@@ -354,6 +403,9 @@ def _build_lesson_system_prompt(*, req: LessonPlanRequest, kb_context: str) -> s
     """
     lang = (req.language or "zh").strip().lower()
     want_english = lang in {"en", "english"}
+    tpl = _normalize_lesson_template_id(req.templateId)
+    if tpl not in {"lesson_simple", "lesson_table", "lesson_jnu_form"}:
+        tpl = "lesson_simple"
 
     if want_english:
         base = (
@@ -373,6 +425,19 @@ def _build_lesson_system_prompt(*, req: LessonPlanRequest, kb_context: str) -> s
             "- 输出必须是严格 JSON（不要 markdown、不要代码块围栏）。\n"
             "- 内容要可落地、可直接用于课堂。\n"
         )
+
+    if tpl == "lesson_jnu_form":
+        if want_english:
+            base += (
+                "\nTemplate: form-style (fields).\n"
+                "- Objectives will be used as Key Points and Difficulty.\n"
+                "- Ensure the final objective starts with 'Difficulty:'.\n"
+            )
+        else:
+            base += (
+                "\n当前模板：教案表单（字段）。\n"
+                "- objectives 将用于“重点/难点”。请确保最后一条以“难点：”开头。\n"
+            )
 
     context_bits: list[str] = []
     title = (req.title or "").strip()
@@ -477,9 +542,12 @@ async def stream_lesson_plan_sse(req: LessonPlanRequest) -> AsyncGenerator[bytes
         yield b"data: [DONE]\n\n"
         return
 
-    system_prompt = _build_lesson_system_prompt(req=req, kb_context=kb_context)
     lang = (req.language or "zh").strip().lower()
     want_english = lang in {"en", "english"}
+    tpl = _normalize_lesson_template_id(req.templateId)
+    if tpl not in {"lesson_simple", "lesson_table", "lesson_jnu_form"}:
+        tpl = "lesson_simple"
+    system_prompt = _build_lesson_system_prompt(req=req, kb_context=kb_context)
 
     last_flush = asyncio.get_event_loop().time()
 
@@ -502,13 +570,22 @@ async def stream_lesson_plan_sse(req: LessonPlanRequest) -> AsyncGenerator[bytes
         duration = str(meta.get("duration") or ("45 min" if want_english else "45分钟")).strip() or ("45 min" if want_english else "45分钟")
 
         # objectives
-        obj_prompt = (
-            'Return STRICT JSON only: {"objectives":["..."]}.\n'
-            "Write 3-6 concise objectives."
-            if want_english
-            else '仅输出严格 JSON：{"objectives":["..."]}。\n'
-                 "写 3~6 条可执行的教学目标。"
-        )
+        if tpl == "lesson_jnu_form":
+            obj_prompt = (
+                'Return STRICT JSON only: {"objectives":["..."]}.\n'
+                "Write 3-6 key points, then add ONE final item starting with 'Difficulty:'."
+                if want_english
+                else '仅输出严格 JSON：{"objectives":["..."]}。\n'
+                     "先写 3~6 条“重点”，再额外补充 1 条以“难点：”开头的条目（作为最后一条）。"
+            )
+        else:
+            obj_prompt = (
+                'Return STRICT JSON only: {"objectives":["..."]}.\n'
+                "Write 3-6 concise objectives."
+                if want_english
+                else '仅输出严格 JSON：{"objectives":["..."]}。\n'
+                     "写 3~6 条可执行的教学目标。"
+            )
         obj = await _generate_lesson_section_with_llm(
             llm_settings=llm_settings,
             system_prompt=system_prompt,
@@ -521,6 +598,27 @@ async def stream_lesson_plan_sse(req: LessonPlanRequest) -> AsyncGenerator[bytes
         objectives = [str(x).strip() for x in objectives if str(x).strip()]
         if not objectives:
             objectives = _fallback_generate_lesson_plan(req).objectives
+        elif tpl == "lesson_jnu_form":
+            # 兜底修正：确保最后一条是“难点：/Difficulty:”
+            diff = None
+            rest: list[str] = []
+            for item in objectives:
+                text = str(item or "").strip()
+                if not text:
+                    continue
+                is_diff = bool(re.match(r"^difficulty\s*[:：]", text, re.IGNORECASE)) if want_english else bool(re.match(r"^难点\s*[:：]", text))
+                if is_diff and diff is None:
+                    diff = text
+                    continue
+                rest.append(text)
+            if diff is None:
+                topic = (req.title or "").strip() or ("this lesson" if want_english else "本节课")
+                diff = (
+                    f"Difficulty: Explain and apply the key reasoning of {topic} in new contexts."
+                    if want_english
+                    else f"难点：掌握{topic}的关键推导与应用，并能迁移解决典型问题。"
+                )
+            objectives = rest + [diff]
 
         # 心跳：每10秒发一次注释，避免某些代理断连接
         now = asyncio.get_event_loop().time()
@@ -531,13 +629,22 @@ async def stream_lesson_plan_sse(req: LessonPlanRequest) -> AsyncGenerator[bytes
         yield _encode_sse_data(json.dumps({"type": "section", "section": "objectives", "data": objectives}, ensure_ascii=False, separators=(",", ":")))
 
         # materials
-        mat_prompt = (
-            'Return STRICT JSON only: {"materials":["..."]}.\n'
-            "List 3-8 materials/tools needed."
-            if want_english
-            else '仅输出严格 JSON：{"materials":["..."]}。\n'
-                 "列出 3~8 项教学材料/工具。"
-        )
+        if tpl == "lesson_jnu_form":
+            mat_prompt = (
+                'Return STRICT JSON only: {"materials":["..."]}.\n'
+                "List 4-10 items. Include at least one reference item (e.g., starts with 'Textbook:' or 'Reference:')."
+                if want_english
+                else '仅输出严格 JSON：{"materials":["..."]}。\n'
+                     "列出 4~10 项教学材料/工具；并至少包含 1 条参考资料（例如以“教材：/参考书：/参考资料：”开头）。"
+            )
+        else:
+            mat_prompt = (
+                'Return STRICT JSON only: {"materials":["..."]}.\n'
+                "List 3-8 materials/tools needed."
+                if want_english
+                else '仅输出严格 JSON：{"materials":["..."]}。\n'
+                     "列出 3~8 项教学材料/工具。"
+            )
         mat = await _generate_lesson_section_with_llm(
             llm_settings=llm_settings,
             system_prompt=system_prompt,
@@ -550,6 +657,15 @@ async def stream_lesson_plan_sse(req: LessonPlanRequest) -> AsyncGenerator[bytes
         materials = [str(x).strip() for x in materials if str(x).strip()]
         if not materials:
             materials = _fallback_generate_lesson_plan(req).materials
+        elif tpl == "lesson_jnu_form":
+            ref_keywords = (
+                ["textbook", "reference", "paper", "book", "isbn"]
+                if want_english
+                else ["教材", "课本", "参考", "文献", "论文", "书", "ISBN"]
+            )
+            has_ref = any(any(k.lower() in m.lower() for k in ref_keywords) for m in materials)
+            if not has_ref:
+                materials = materials + (["Textbook/Reference: ______"] if want_english else ["教材/参考书：______"])
 
         now = asyncio.get_event_loop().time()
         if now - last_flush > 10:
@@ -597,13 +713,22 @@ async def stream_lesson_plan_sse(req: LessonPlanRequest) -> AsyncGenerator[bytes
         yield _encode_sse_data(json.dumps({"type": "section", "section": "procedure", "data": [p.model_dump() for p in procedure]}, ensure_ascii=False, separators=(",", ":")))
 
         # homework
-        hw_prompt = (
-            'Return STRICT JSON only: {"homework":"..."}.\n'
-            "Keep it concise."
-            if want_english
-            else '仅输出严格 JSON：{"homework":"..."}。\n'
-                 "内容简洁可执行。"
-        )
+        if tpl == "lesson_jnu_form":
+            hw_prompt = (
+                'Return STRICT JSON only: {"homework":"..."}.\n'
+                "Write questions/discussion/homework, concise but actionable."
+                if want_english
+                else '仅输出严格 JSON：{"homework":"..."}。\n'
+                     "以“思考题/讨论题或作业”的形式输出，内容简洁可执行。"
+            )
+        else:
+            hw_prompt = (
+                'Return STRICT JSON only: {"homework":"..."}.\n'
+                "Keep it concise."
+                if want_english
+                else '仅输出严格 JSON：{"homework":"..."}。\n'
+                     "内容简洁可执行。"
+            )
         hw = await _generate_lesson_section_with_llm(
             llm_settings=llm_settings,
             system_prompt=system_prompt,
@@ -1511,6 +1636,22 @@ async def lesson_plan(request: LessonPlanRequest):
     )
 
 
+# 教案导出（docx）模板列表
+LESSON_DOCX_TEMPLATES: list[dict[str, str]] = [
+    {"id": "lesson_simple", "name": "简洁版", "description": "分节标题 + 列表"},
+    {"id": "lesson_table", "name": "表格版", "description": "流程表格布局"},
+    {"id": "lesson_jnu_form", "name": "教案表单（字段）", "description": "授课题目/授课类型/教学内容/手段与方法/作业/参考资料"},
+]
+
+
+@app.get("/lesson/templates")
+async def get_lesson_templates():
+    """
+    返回教案 Word（docx）导出可选模板列表（供前端选择）。
+    """
+    return {"data": LESSON_DOCX_TEMPLATES}
+
+
 def _lesson_safe_export_filename(title: str) -> str:
     """
     构造可用于 Content-Disposition 的 docx 文件名。
@@ -1521,13 +1662,16 @@ def _lesson_safe_export_filename(title: str) -> str:
     return f"{base}.docx"
 
 
-def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: str) -> bytes:
+def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: str, template_id: str | None = None) -> bytes:
     """
     生成 docx bytes（python-docx）。
-    - 直接按 LessonPlan 写文档，减少模板渲染带来的运行时依赖和不确定性
+    - 支持按 template_id 选择不同版式（类似 PPT 模板选择）
     """
     try:
         from docx import Document
+        from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
+        from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+        from docx.oxml import OxmlElement
         from docx.oxml.ns import qn
         from docx.shared import Pt, Cm
     except Exception as exc:  # pragma: no cover - 依赖缺失时给出明确错误
@@ -1536,20 +1680,19 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
     lang = (language or "zh").strip().lower()
     want_english = lang in {"en", "english"}
 
+    tpl = _normalize_lesson_template_id(template_id)
+
     def _safe_float(value: Any, fallback: float) -> float:
         try:
             return float(value)
         except Exception:
             return fallback
 
-    doc = Document()
-    section = doc.sections[0]
-    section.top_margin = Cm(_safe_float(style.marginTopCm, 2.54))
-    section.bottom_margin = Cm(_safe_float(style.marginBottomCm, 2.54))
-    section.left_margin = Cm(_safe_float(style.marginLeftCm, 2.54))
-    section.right_margin = Cm(_safe_float(style.marginRightCm, 2.54))
+    def _safe_text(value: Any, fallback: str) -> str:
+        text = str(value or "").strip()
+        return text if text else fallback
 
-    def _set_style_font(style_name: str, *, size_pt: int):
+    def _set_style_font(doc: Any, style_name: str, *, size_pt: int):
         try:
             st = doc.styles[style_name]
         except Exception:
@@ -1561,13 +1704,6 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
         except Exception:
             pass
 
-    _set_style_font("Normal", size_pt=style.bodySizePt)
-    _set_style_font("Title", size_pt=style.titleSizePt)
-    _set_style_font("Heading 1", size_pt=style.h1SizePt)
-    _set_style_font("Heading 2", size_pt=style.h2SizePt)
-    _set_style_font("List Bullet", size_pt=style.bodySizePt)
-    _set_style_font("List Number", size_pt=style.bodySizePt)
-
     def _set_run_font(run: Any, *, size_pt: int, bold: bool = False):
         run.font.name = style.fontZh
         run.font.size = Pt(int(size_pt))
@@ -1577,14 +1713,19 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
         except Exception:
             pass
 
-    def _add_paragraph(text: str, *, size_pt: int, bold: bool = False, style_name: str | None = None):
+    def _add_paragraph(doc: Any, text: str, *, size_pt: int, bold: bool = False, style_name: str | None = None, alignment: Any | None = None):
         p = doc.add_paragraph()
         if style_name:
             try:
                 p.style = style_name
             except Exception:
                 pass
-        run = p.add_run((text or "").strip() or ("N/A" if want_english else "—"))
+        if alignment is not None:
+            try:
+                p.alignment = alignment
+            except Exception:
+                pass
+        run = p.add_run(_safe_text(text, "N/A" if want_english else "—"))
         _set_run_font(run, size_pt=size_pt, bold=bold)
         try:
             p.paragraph_format.line_spacing = float(style.lineSpacing)
@@ -1592,81 +1733,537 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
             pass
         return p
 
-    # Title
-    _add_paragraph(
-        (plan.title or "").strip() or ("Lesson Plan" if want_english else "教案"),
-        size_pt=style.titleSizePt,
-        bold=True,
-        style_name="Title",
-    )
+    def _set_cell_text(cell: Any, text: str, *, size_pt: int, bold: bool = False, alignment: Any | None = None):
+        # cell.text 会重置段落样式，这里用 paragraph/run 精细控制字体
+        p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+        p.text = ""
+        if alignment is not None:
+            try:
+                p.alignment = alignment
+            except Exception:
+                pass
+        run = p.add_run(_safe_text(text, "N/A" if want_english else "—"))
+        _set_run_font(run, size_pt=size_pt, bold=bold)
+        try:
+            p.paragraph_format.line_spacing = float(style.lineSpacing)
+        except Exception:
+            pass
+        return p
 
-    # Meta
-    aud_label = "Audience" if want_english else "受众"
-    dur_label = "Duration" if want_english else "时长"
-    _add_paragraph(
-        f"{aud_label}：{(plan.targetAudience or '').strip() or ('Students' if want_english else '中学学生')} | "
-        f"{dur_label}：{(plan.duration or '').strip() or ('45 min' if want_english else '45分钟')}",
-        size_pt=style.bodySizePt,
-    )
+    def _set_cell_paragraphs(
+        cell: Any,
+        paragraphs: list[tuple[str, bool]],
+        *,
+        size_pt: int,
+        alignment: Any | None = None,
+    ):
+        """
+        以“多段落”方式写入单元格，便于实现“标签（加粗）+ 内容（多行）”的表单样式。
+        - paragraphs: [(text, bold), ...]
+        """
+        # cell.text 会重置段落，这里借助它清空后再逐段写入
+        cell.text = ""
+        for idx, (text, bold) in enumerate(paragraphs):
+            p = cell.paragraphs[0] if idx == 0 else cell.add_paragraph()
+            p.text = ""
+            if alignment is not None:
+                try:
+                    p.alignment = alignment
+                except Exception:
+                    pass
+            raw = str(text or "")
+            if raw:
+                run = p.add_run(raw)
+                _set_run_font(run, size_pt=size_pt, bold=bool(bold))
+            try:
+                p.paragraph_format.line_spacing = float(style.lineSpacing)
+            except Exception:
+                pass
 
-    # Objectives
-    _add_paragraph(
-        "Objectives" if want_english else "教学目标",
-        size_pt=style.h1SizePt,
-        bold=True,
-        style_name="Heading 1",
-    )
-    if plan.objectives:
-        for item in plan.objectives:
-            _add_paragraph(str(item), size_pt=style.bodySizePt, style_name="List Bullet")
-    else:
-        _add_paragraph("No objectives provided." if want_english else "未提供教学目标。", size_pt=style.bodySizePt, style_name="List Bullet")
+    def _shade_cell(cell: Any, *, fill_hex: str):
+        """
+        给单元格加底色（用于表头/标签列）。
+        - 不强依赖，失败则忽略（避免不同 docx 实现差异导致导出失败）
+        """
+        try:
+            tc_pr = cell._tc.get_or_add_tcPr()
+            shd = OxmlElement("w:shd")
+            shd.set(qn("w:val"), "clear")
+            shd.set(qn("w:color"), "auto")
+            shd.set(qn("w:fill"), fill_hex)
+            tc_pr.append(shd)
+        except Exception:
+            return
 
-    # Materials
-    _add_paragraph(
-        "Materials" if want_english else "教学材料",
-        size_pt=style.h1SizePt,
-        bold=True,
-        style_name="Heading 1",
-    )
-    if plan.materials:
-        for item in plan.materials:
-            _add_paragraph(str(item), size_pt=style.bodySizePt, style_name="List Bullet")
-    else:
-        _add_paragraph("No materials provided." if want_english else "未提供教学材料。", size_pt=style.bodySizePt, style_name="List Bullet")
+    def _prepare_doc() -> Any:
+        doc = Document()
+        section = doc.sections[0]
+        section.top_margin = Cm(_safe_float(style.marginTopCm, 2.54))
+        section.bottom_margin = Cm(_safe_float(style.marginBottomCm, 2.54))
+        section.left_margin = Cm(_safe_float(style.marginLeftCm, 2.54))
+        section.right_margin = Cm(_safe_float(style.marginRightCm, 2.54))
 
-    # Procedure
-    _add_paragraph(
-        "Procedure" if want_english else "教学流程",
-        size_pt=style.h1SizePt,
-        bold=True,
-        style_name="Heading 1",
-    )
-    if plan.procedure:
-        for item in plan.procedure:
-            step = (item.step or "").strip() or ("Untitled Step" if want_english else "未命名步骤")
-            duration = (item.duration or "").strip() or ("N/A" if want_english else "未填写时长")
-            activity = (item.activity or "").strip() or ("No activity details." if want_english else "未填写活动说明。")
-            if want_english:
-                _add_paragraph(f"{step} ({duration})", size_pt=style.bodySizePt, bold=True, style_name="List Number")
-            else:
-                _add_paragraph(f"{step}（{duration}）", size_pt=style.bodySizePt, bold=True, style_name="List Number")
-            _add_paragraph(activity, size_pt=style.bodySizePt)
-    else:
+        # 常用样式字体（尽量覆盖列表/标题，避免导出后字体不一致）
+        _set_style_font(doc, "Normal", size_pt=style.bodySizePt)
+        _set_style_font(doc, "Title", size_pt=style.titleSizePt)
+        _set_style_font(doc, "Heading 1", size_pt=style.h1SizePt)
+        _set_style_font(doc, "Heading 2", size_pt=style.h2SizePt)
+        _set_style_font(doc, "List Bullet", size_pt=style.bodySizePt)
+        _set_style_font(doc, "List Number", size_pt=style.bodySizePt)
+        _set_style_font(doc, "Table Grid", size_pt=style.bodySizePt)
+        return doc
+
+    def _build_common_sections(doc: Any):
+        """
+        共用分节内容（目标/材料/作业）。不同模板仅在“元信息/流程”呈现上有差异。
+        """
+        # Objectives
+        _add_paragraph(doc, "Objectives" if want_english else "教学目标", size_pt=style.h1SizePt, bold=True, style_name="Heading 1")
+        if plan.objectives:
+            for item in plan.objectives:
+                _add_paragraph(doc, str(item), size_pt=style.bodySizePt, style_name="List Bullet")
+        else:
+            _add_paragraph(
+                doc,
+                "No objectives provided." if want_english else "未提供教学目标。",
+                size_pt=style.bodySizePt,
+                style_name="List Bullet",
+            )
+
+        # Materials
+        _add_paragraph(doc, "Materials" if want_english else "教学材料", size_pt=style.h1SizePt, bold=True, style_name="Heading 1")
+        if plan.materials:
+            for item in plan.materials:
+                _add_paragraph(doc, str(item), size_pt=style.bodySizePt, style_name="List Bullet")
+        else:
+            _add_paragraph(
+                doc,
+                "No materials provided." if want_english else "未提供教学材料。",
+                size_pt=style.bodySizePt,
+                style_name="List Bullet",
+            )
+
+        # Homework
+        _add_paragraph(doc, "Homework" if want_english else "课后作业", size_pt=style.h1SizePt, bold=True, style_name="Heading 1")
         _add_paragraph(
-            "No procedure provided." if want_english else "未提供教学流程。",
+            doc,
+            (plan.homework or "").strip() or ("No homework provided." if want_english else "未提供课后作业。"),
             size_pt=style.bodySizePt,
-            style_name="List Number",
         )
 
-    # Homework
-    _add_paragraph(
-        "Homework" if want_english else "课后作业",
-        size_pt=style.h1SizePt,
-        bold=True,
-        style_name="Heading 1",
-    )
-    _add_paragraph((plan.homework or "").strip() or ("No homework provided." if want_english else "未提供课后作业。"), size_pt=style.bodySizePt)
+    def _build_simple(doc: Any):
+        # Title
+        _add_paragraph(
+            doc,
+            (plan.title or "").strip() or ("Lesson Plan" if want_english else "教案"),
+            size_pt=style.titleSizePt,
+            bold=True,
+            style_name="Title",
+        )
+
+        # Meta（单行）
+        aud_label = "Audience" if want_english else "受众"
+        dur_label = "Duration" if want_english else "时长"
+        _add_paragraph(
+            doc,
+            f"{aud_label}：{(plan.targetAudience or '').strip() or ('Students' if want_english else '中学学生')} | "
+            f"{dur_label}：{(plan.duration or '').strip() or ('45 min' if want_english else '45分钟')}",
+            size_pt=style.bodySizePt,
+        )
+
+        # Procedure（编号列表）
+        _add_paragraph(doc, "Procedure" if want_english else "教学流程", size_pt=style.h1SizePt, bold=True, style_name="Heading 1")
+        if plan.procedure:
+            for item in plan.procedure:
+                step = (item.step or "").strip() or ("Untitled Step" if want_english else "未命名步骤")
+                duration = (item.duration or "").strip() or ("N/A" if want_english else "未填写时长")
+                activity = (item.activity or "").strip() or ("No activity details." if want_english else "未填写活动说明。")
+                if want_english:
+                    _add_paragraph(doc, f"{step} ({duration})", size_pt=style.bodySizePt, bold=True, style_name="List Number")
+                else:
+                    _add_paragraph(doc, f"{step}（{duration}）", size_pt=style.bodySizePt, bold=True, style_name="List Number")
+                _add_paragraph(doc, activity, size_pt=style.bodySizePt)
+        else:
+            _add_paragraph(
+                doc,
+                "No procedure provided." if want_english else "未提供教学流程。",
+                size_pt=style.bodySizePt,
+                style_name="List Number",
+            )
+
+        _build_common_sections(doc)
+
+    def _build_table(doc: Any):
+        # Title（居中）
+        _add_paragraph(
+            doc,
+            (plan.title or "").strip() or ("Lesson Plan" if want_english else "教案"),
+            size_pt=style.titleSizePt,
+            bold=True,
+            style_name="Title",
+            alignment=WD_PARAGRAPH_ALIGNMENT.CENTER,
+        )
+
+        # Meta（表格：受众/时长）
+        aud_label = "Audience" if want_english else "受众"
+        dur_label = "Duration" if want_english else "时长"
+        meta = doc.add_table(rows=1, cols=4)
+        try:
+            meta.style = "Table Grid"
+        except Exception:
+            pass
+        try:
+            meta.alignment = WD_TABLE_ALIGNMENT.CENTER
+        except Exception:
+            pass
+        for cell in meta.rows[0].cells:
+            try:
+                cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            except Exception:
+                pass
+
+        meta_labels = [aud_label, (plan.targetAudience or "").strip() or ("Students" if want_english else "中学学生"), dur_label, (plan.duration or "").strip() or ("45 min" if want_english else "45分钟")]
+        for idx, cell in enumerate(meta.rows[0].cells):
+            is_label = idx % 2 == 0
+            if is_label:
+                _shade_cell(cell, fill_hex="F3F4F6")  # 灰底
+            _set_cell_text(
+                cell,
+                meta_labels[idx],
+                size_pt=style.bodySizePt,
+                bold=is_label,
+                alignment=WD_PARAGRAPH_ALIGNMENT.CENTER if is_label else WD_PARAGRAPH_ALIGNMENT.LEFT,
+            )
+
+        # Procedure（表格：环节/时长/活动）
+        _add_paragraph(doc, "Procedure" if want_english else "教学流程", size_pt=style.h1SizePt, bold=True, style_name="Heading 1")
+        items = plan.procedure or []
+        rows = (len(items) if items else 1) + 1  # + 表头
+        table = doc.add_table(rows=rows, cols=3)
+        try:
+            table.style = "Table Grid"
+        except Exception:
+            pass
+        try:
+            table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        except Exception:
+            pass
+        try:
+            table.autofit = False
+        except Exception:
+            pass
+
+        # 尝试设置列宽（不保证所有 Word 版本完全一致，但可提升可读性）
+        try:
+            table.columns[0].width = Cm(4)
+            table.columns[1].width = Cm(3)
+            table.columns[2].width = Cm(10)
+        except Exception:
+            pass
+
+        headers = ["Step" if want_english else "环节", "Duration" if want_english else "时长", "Activity" if want_english else "活动"]
+        header_row = table.rows[0]
+        for i, cell in enumerate(header_row.cells):
+            _shade_cell(cell, fill_hex="E5E7EB")  # 深一点的灰
+            try:
+                cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            except Exception:
+                pass
+            _set_cell_text(cell, headers[i], size_pt=style.bodySizePt, bold=True, alignment=WD_PARAGRAPH_ALIGNMENT.CENTER)
+
+        if items:
+            for idx, item in enumerate(items, start=1):
+                step = (item.step or "").strip() or ("Untitled Step" if want_english else "未命名步骤")
+                duration = (item.duration or "").strip() or ("N/A" if want_english else "未填写时长")
+                activity = (item.activity or "").strip() or ("No activity details." if want_english else "未填写活动说明。")
+                row = table.rows[idx]
+                for cell in row.cells:
+                    try:
+                        cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+                    except Exception:
+                        pass
+                _set_cell_text(row.cells[0], f"{idx}. {step}", size_pt=style.bodySizePt, bold=True)
+                _set_cell_text(row.cells[1], duration, size_pt=style.bodySizePt, alignment=WD_PARAGRAPH_ALIGNMENT.CENTER)
+                _set_cell_text(row.cells[2], activity, size_pt=style.bodySizePt)
+        else:
+            row = table.rows[1]
+            _set_cell_text(row.cells[0], "—", size_pt=style.bodySizePt)
+            _set_cell_text(row.cells[1], "—", size_pt=style.bodySizePt)
+            _set_cell_text(row.cells[2], "No procedure provided." if want_english else "未提供教学流程。", size_pt=style.bodySizePt)
+
+        _build_common_sections(doc)
+
+    def _build_jnu_form(doc: Any):
+        """
+        “字段表单”模板（参考用户提供的教案表格）：
+        - 授课题目、授课类型、授课时间（日期/周次节次）
+        - 教学内容（基本内容/重点/难点）
+        - 教学手段与方法、作业、参考资料
+        """
+
+        # 表头/字段标签（根据语言做最小翻译；该模板主要面向中文）
+        if want_english:
+            topic_label = "Teaching Topic (chapter/theme):"
+            lesson_type_label = "Lesson Type"
+            lesson_time_label = "Lesson Time"
+            date_placeholder = "YYYY  MM  DD"
+            period_placeholder = "Week __  Day __  Period __"
+            content_label = "Teaching Content (basics / key / difficult points):"
+            methods_label = "Teaching Tools and Methods:"
+            homework_label = "Questions / Discussion / Homework:"
+            refs_label = "References (books, papers, etc.):"
+            basics_label = "Basics:"
+            key_label = "Key Points:"
+            diff_label = "Difficult Points:"
+            tools_label = "Tools:"
+            method_label = "Methods:"
+        else:
+            topic_label = "授课题目（教学章节或主题）："
+            lesson_type_label = "授课类型"
+            lesson_time_label = "授课时间"
+            date_placeholder = "年   月   日"
+            period_placeholder = "第   周星期     第   节"
+            content_label = "教学内容（包括基本内容、重点、难点三部分）："
+            methods_label = "教学手段与方法："
+            homework_label = "思考题、讨论题或作业："
+            refs_label = "参考资料（包括辅助教材、参考书、文献等）："
+            basics_label = "基本内容："
+            key_label = "重点："
+            diff_label = "难点："
+            tools_label = "教学手段："
+            method_label = "教学方法："
+
+        def _infer_lesson_type() -> str:
+            """
+            尝试根据流程/活动粗略推断授课类型。
+            - 仅用于填表默认值，避免空白
+            """
+            haystack = " ".join(
+                [
+                    f"{(p.step or '').strip()} {(p.activity or '').strip()}".strip()
+                    for p in (plan.procedure or [])
+                ]
+            )
+            if want_english:
+                if "实验" in haystack or "experiment" in haystack.lower():
+                    return "Lab"
+                if "讨论" in haystack or "discussion" in haystack.lower():
+                    return "Discussion"
+                if "实践" in haystack or "实习" in haystack or "见习" in haystack:
+                    return "Practice"
+                return "Lecture"
+            else:
+                if "实验" in haystack:
+                    return "实验课"
+                if "讨论" in haystack:
+                    return "讨论课"
+                if "实践" in haystack or "实习" in haystack or "见习" in haystack:
+                    return "实践课"
+                return "理论课"
+
+        def _build_basic_content_lines() -> list[str]:
+            if not plan.procedure:
+                return ["—" if not want_english else "N/A"]
+            lines: list[str] = []
+            for idx, item in enumerate(plan.procedure, start=1):
+                step = (item.step or "").strip() or ("Untitled Step" if want_english else "未命名步骤")
+                duration = (item.duration or "").strip()
+                activity = (item.activity or "").strip()
+                if duration and activity:
+                    lines.append(f"{idx}. {step} ({duration}) {activity}" if want_english else f"{idx}. {step}（{duration}）{activity}")
+                elif duration:
+                    lines.append(f"{idx}. {step} ({duration})" if want_english else f"{idx}. {step}（{duration}）")
+                elif activity:
+                    lines.append(f"{idx}. {step}: {activity}" if want_english else f"{idx}. {step}：{activity}")
+                else:
+                    lines.append(f"{idx}. {step}")
+            return lines
+
+        def _build_methods() -> tuple[str, str]:
+            # 手段：优先用 materials 列表
+            tools = "、".join([str(x).strip() for x in (plan.materials or []) if str(x).strip()]) if not want_english else ", ".join([str(x).strip() for x in (plan.materials or []) if str(x).strip()])
+            tools = tools or ("—" if not want_english else "N/A")
+
+            # 方法：用简单规则从流程/活动中抽取关键词
+            haystack = " ".join(
+                [
+                    f"{(p.step or '').strip()} {(p.activity or '').strip()}".strip()
+                    for p in (plan.procedure or [])
+                ]
+            )
+            method_candidates: list[str] = []
+            if want_english:
+                method_candidates.append("Lecture")
+                if "讨论" in haystack or "discussion" in haystack.lower():
+                    method_candidates.append("Discussion")
+                if "示范" in haystack or "demo" in haystack.lower() or "demonstr" in haystack.lower():
+                    method_candidates.append("Demonstration")
+                if "练习" in haystack or "exercise" in haystack.lower() or "practice" in haystack.lower():
+                    method_candidates.append("Practice")
+                if "小组" in haystack or "合作" in haystack or "group" in haystack.lower():
+                    method_candidates.append("Group work")
+                if "提问" in haystack or "问答" in haystack or "q&a" in haystack.lower() or "question" in haystack.lower():
+                    method_candidates.append("Q&A")
+                # 去重保持顺序
+                uniq: list[str] = []
+                for m in method_candidates:
+                    if m not in uniq:
+                        uniq.append(m)
+                methods = ", ".join(uniq) if uniq else "N/A"
+            else:
+                method_candidates.append("讲授")
+                if "讨论" in haystack:
+                    method_candidates.append("讨论")
+                if "示范" in haystack:
+                    method_candidates.append("示范")
+                if "练习" in haystack or "训练" in haystack:
+                    method_candidates.append("练习")
+                if "小组" in haystack or "合作" in haystack:
+                    method_candidates.append("小组合作")
+                if "提问" in haystack or "问答" in haystack:
+                    method_candidates.append("提问")
+                uniq = []
+                for m in method_candidates:
+                    if m not in uniq:
+                        uniq.append(m)
+                methods = "、".join(uniq) if uniq else "—"
+
+            return tools, methods
+
+        def _build_refs_lines() -> list[str]:
+            # 参考资料：优先从 materials 中挑选“看起来像参考书/教材/文献”的项；否则留空
+            keywords = ("教材", "课本", "参考", "文献", "论文", "书", "ISBN")
+            refs = [str(x).strip() for x in (plan.materials or []) if str(x).strip() and any(k in str(x) for k in keywords)]
+            if not refs:
+                return ["—" if not want_english else "N/A"]
+            return [f"- {r}" for r in refs] if not want_english else [f"- {r}" for r in refs]
+
+        lesson_type_value = _infer_lesson_type()
+
+        # 7x3 表格，与用户示例一致：左侧（题目）跨 3 行，授课时间标签跨 2 行，后续 4 行各自跨 3 列
+        table = doc.add_table(rows=7, cols=3)
+        try:
+            table.style = "Table Grid"
+        except Exception:
+            pass
+        try:
+            table.autofit = False
+        except Exception:
+            pass
+
+        # 尝试设置列宽：A4 扣边距后约 15.9cm，可按需微调
+        try:
+            table.columns[0].width = Cm(9.0)
+            table.columns[1].width = Cm(2.6)
+            table.columns[2].width = Cm(4.3)
+        except Exception:
+            pass
+
+        # 合并单元格（python-docx 用矩形区域合并）
+        topic_cell = table.cell(0, 0).merge(table.cell(2, 0))
+        time_label_cell = table.cell(1, 1).merge(table.cell(2, 1))
+        for r in range(3, 7):
+            table.cell(r, 0).merge(table.cell(r, 2))
+
+        # 基础对齐
+        for r in range(7):
+            for c in range(3):
+                cell = table.cell(r, c)
+                try:
+                    cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+                except Exception:
+                    pass
+
+        # Row 0-2: 授课题目 / 类型 / 时间
+        _set_cell_paragraphs(
+            topic_cell,
+            [
+                (topic_label, True),
+                (_safe_text(plan.title, "Lesson Plan" if want_english else "教案"), False),
+            ],
+            size_pt=style.bodySizePt,
+        )
+
+        _shade_cell(table.cell(0, 1), fill_hex="F3F4F6")
+        _set_cell_text(table.cell(0, 1), lesson_type_label, size_pt=style.bodySizePt, bold=True, alignment=WD_PARAGRAPH_ALIGNMENT.CENTER)
+        _set_cell_text(table.cell(0, 2), lesson_type_value, size_pt=style.bodySizePt)
+
+        _shade_cell(time_label_cell, fill_hex="F3F4F6")
+        _set_cell_text(time_label_cell, lesson_time_label, size_pt=style.bodySizePt, bold=True, alignment=WD_PARAGRAPH_ALIGNMENT.CENTER)
+        _set_cell_text(table.cell(1, 2), date_placeholder, size_pt=style.bodySizePt)
+        _set_cell_text(table.cell(2, 2), period_placeholder, size_pt=style.bodySizePt)
+
+        # Row 3: 教学内容（基本/重点/难点）
+        basic_lines = _build_basic_content_lines()
+
+        obj_list = [str(x).strip() for x in (plan.objectives or []) if str(x).strip()]
+        key_objs: list[str] = []
+        diff_text = "N/A" if want_english else "—"
+        if obj_list:
+            last = obj_list[-1]
+            is_diff = bool(re.match(r"^difficulty\s*[:：]", last, re.IGNORECASE)) if want_english else bool(re.match(r"^难点\s*[:：]", last))
+            if is_diff:
+                key_objs = obj_list[:-1]
+                diff_text = re.sub(r"^difficulty\s*[:：]\s*", "", last, flags=re.IGNORECASE) if want_english else re.sub(r"^难点\s*[:：]\s*", "", last)
+            elif len(obj_list) >= 2:
+                key_objs = obj_list[:-1]
+                diff_text = last
+            else:
+                key_objs = obj_list
+
+        key_lines = [f"- {x}" for x in key_objs if str(x).strip()] or ["—" if not want_english else "N/A"]
+        diff_lines = [(diff_text or ("N/A" if want_english else "—"), False)]
+        content_cell = table.cell(3, 0)
+        paragraphs: list[tuple[str, bool]] = [(content_label, True), (basics_label, True)]
+        paragraphs.extend([(line, False) for line in basic_lines])
+        paragraphs.append(("", False))
+        paragraphs.append((key_label, True))
+        paragraphs.extend([(line, False) for line in key_lines])
+        paragraphs.append(("", False))
+        paragraphs.append((diff_label, True))
+        paragraphs.extend(diff_lines)
+        _set_cell_paragraphs(content_cell, paragraphs, size_pt=style.bodySizePt)
+
+        # Row 4: 教学手段与方法
+        tools_value, methods_value = _build_methods()
+        methods_cell = table.cell(4, 0)
+        _set_cell_paragraphs(
+            methods_cell,
+            [
+                (methods_label, True),
+                (f"{tools_label} {tools_value}", False),
+                (f"{method_label} {methods_value}", False),
+            ],
+            size_pt=style.bodySizePt,
+        )
+
+        # Row 5: 作业/讨论题
+        _set_cell_paragraphs(
+            table.cell(5, 0),
+            [
+                (homework_label, True),
+                (_safe_text(plan.homework, "—" if not want_english else "N/A"), False),
+            ],
+            size_pt=style.bodySizePt,
+        )
+
+        # Row 6: 参考资料
+        ref_lines = _build_refs_lines()
+        _set_cell_paragraphs(
+            table.cell(6, 0),
+            [(refs_label, True)] + [(line, False) for line in ref_lines],
+            size_pt=style.bodySizePt,
+        )
+
+    doc = _prepare_doc()
+    if tpl == "lesson_simple":
+        _build_simple(doc)
+    elif tpl == "lesson_table":
+        _build_table(doc)
+    elif tpl == "lesson_jnu_form":
+        _build_jnu_form(doc)
+    else:
+        raise ValueError(f"未知教案模板：{tpl}")
 
     out = io.BytesIO()
     doc.save(out)
@@ -1681,9 +2278,13 @@ async def lesson_export_docx(request: LessonExportDocxRequest):
     plan = request.lessonPlan
     style = request.style or LessonStyle()
     language = request.language or "zh"
+    template_id = (request.templateId or "").strip() or None
 
     try:
-        content = _build_lesson_docx_bytes(plan=plan, style=style, language=language)
+        content = _build_lesson_docx_bytes(plan=plan, style=style, language=language, template_id=template_id)
+    except ValueError as exc:
+        # 模板不合法属于 4xx（调用方参数错误），不要吞成 500
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("lesson_export_docx 失败: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
