@@ -25,6 +25,7 @@ TeachDo 是面向教师的智能备课平台，主链路为 Outline -> PPT 生�
 | Skill | When to use |
 |-------|-------------|
 | [repo-guidelines](.github/skills/repo-guidelines/SKILL.md) | 需要具体代码规范、测试约束、提交/PR 规则、环境与安全配置细节时加载 |
+| ui-ux-pro-max | 进行 UI/UX 相关设计与前端体验优化、页面/组件开发时加载 |
 
 ## Key Entry Points
 
