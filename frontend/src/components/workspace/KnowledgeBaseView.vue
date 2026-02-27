@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { KBFile, TeachingMaterial } from '#root/types';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
+import Skeleton from '@/components/common/Skeleton.vue';
 import { useI18n } from 'vue-i18n';
 import { aiService } from '@/services/aiService';
 import { KB_USER_ID, useAppStore } from '@/stores/appStore';
@@ -528,7 +529,18 @@ onBeforeUnmount(() => {
           </button>
 
           <div class="flex-1 overflow-y-auto overscroll-contain custom-scrollbar">
-            <div v-if="filteredFiles.length === 0" class="flex flex-col items-center justify-center py-10 text-slate-400">
+            <div v-if="syncing && filteredFiles.length === 0" class="px-4 pb-4 space-y-2" role="status" aria-live="polite">
+              <div
+                v-for="i in 6"
+                :key="`kb-skel-panel-${i}`"
+                class="rounded-2xl border border-slate-200/70 dark:border-slate-800/60 bg-indigo-50/60 dark:bg-indigo-900/10 px-3 py-3"
+              >
+                <Skeleton class="h-4 w-3/4" />
+                <Skeleton class="h-3 w-1/2 mt-2 opacity-80" />
+              </div>
+            </div>
+
+            <div v-else-if="filteredFiles.length === 0" class="flex flex-col items-center justify-center py-10 text-slate-400">
               <LucideIcon name="file" :size="32" class="mb-2 opacity-40" />
               <p class="text-sm">{{ t('kb.empty') }}</p>
             </div>
@@ -690,7 +702,25 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="flex-1 overflow-y-auto overscroll-contain custom-scrollbar">
-            <div v-if="filteredFiles.length === 0" class="flex flex-col items-center justify-center h-48 text-slate-400">
+            <div v-if="syncing && filteredFiles.length === 0" class="p-6 space-y-3" role="status" aria-live="polite">
+              <div v-for="i in 6" :key="`kb-skel-table-${i}`" class="grid grid-cols-12 gap-4 items-center">
+                <div class="col-span-6">
+                  <Skeleton class="h-4 w-3/4" />
+                  <Skeleton class="h-3 w-1/2 mt-2 opacity-80" />
+                </div>
+                <div class="col-span-2">
+                  <Skeleton class="h-4 w-16" />
+                </div>
+                <div class="col-span-3">
+                  <Skeleton class="h-6 w-24 rounded-full" />
+                </div>
+                <div class="col-span-1 flex justify-end">
+                  <Skeleton class="w-10 h-10 rounded-xl" />
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="filteredFiles.length === 0" class="flex flex-col items-center justify-center h-48 text-slate-400">
               <LucideIcon name="file" :size="40" class="mb-2 opacity-40" />
               <p class="text-sm">{{ t('kb.empty') }}</p>
             </div>

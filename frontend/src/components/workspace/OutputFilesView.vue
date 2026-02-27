@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import type { KBFile, TeachingMaterial } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
+import Skeleton from '@/components/common/Skeleton.vue';
 import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
@@ -320,7 +321,7 @@ onBeforeUnmount(() => {
           <div class="flex items-center justify-between">
             <div class="text-xs font-bold text-slate-600 dark:text-slate-300">教案（DOCX）</div>
             <button
-              v-if="docxArtifacts.length === 0"
+              v-if="!loadingArtifacts && docxArtifacts.length === 0"
               type="button"
               class="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline"
               @click="goToLessonTab"
@@ -329,7 +330,24 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div v-if="docxArtifacts.length === 0" class="text-xs text-slate-500 dark:text-slate-400">
+          <div v-if="loadingArtifacts && !artifactsError" class="space-y-2" role="status" aria-live="polite">
+            <div
+              v-for="i in 2"
+              :key="`docx-skel-${i}`"
+              class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/70 dark:bg-slate-900/30"
+            >
+              <div class="min-w-0 flex-1">
+                <Skeleton class="h-4 w-2/3" />
+                <Skeleton class="h-3 w-1/2 mt-2 opacity-80" />
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <Skeleton class="w-10 h-10 rounded-xl" />
+                <Skeleton class="w-10 h-10 rounded-xl" />
+              </div>
+            </div>
+          </div>
+
+          <div v-else-if="docxArtifacts.length === 0" class="text-xs text-slate-500 dark:text-slate-400">
             暂无教案 DOCX。
           </div>
           <div v-else class="space-y-2">
@@ -372,7 +390,7 @@ onBeforeUnmount(() => {
           <div class="flex items-center justify-between">
             <div class="text-xs font-bold text-slate-600 dark:text-slate-300">幻灯片（PPTX）</div>
             <button
-              v-if="pptxArtifacts.length === 0"
+              v-if="!loadingArtifacts && pptxArtifacts.length === 0"
               type="button"
               class="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline"
               @click="goToPptEditor"
@@ -381,7 +399,24 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div v-if="pptxArtifacts.length === 0" class="text-xs text-slate-500 dark:text-slate-400">
+          <div v-if="loadingArtifacts && !artifactsError" class="space-y-2" role="status" aria-live="polite">
+            <div
+              v-for="i in 2"
+              :key="`pptx-skel-${i}`"
+              class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/70 dark:bg-slate-900/30"
+            >
+              <div class="min-w-0 flex-1">
+                <Skeleton class="h-4 w-2/3" />
+                <Skeleton class="h-3 w-1/2 mt-2 opacity-80" />
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <Skeleton class="w-10 h-10 rounded-xl" />
+                <Skeleton class="w-10 h-10 rounded-xl" />
+              </div>
+            </div>
+          </div>
+
+          <div v-else-if="pptxArtifacts.length === 0" class="text-xs text-slate-500 dark:text-slate-400">
             暂无 PPTX。
           </div>
           <div v-else class="space-y-2">
