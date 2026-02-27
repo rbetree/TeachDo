@@ -1,21 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRouter } from 'vue-router';
 import type { KBFile, TeachingMaterial } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
-import type { ArtifactMeta } from '@/services/ai/artifactService';
+import type { ArtifactKind, ArtifactMeta } from '@/services/ai/artifactService';
 
 interface Props {
   currentMaterial: TeachingMaterial;
 }
 
 const props = defineProps<Props>();
-const router = useRouter();
 const { t } = useI18n();
 const store = useAppStore();
 
@@ -24,7 +22,6 @@ const loadingArtifacts = ref(false);
 const artifacts = ref<ArtifactMeta[]>([]);
 const artifactsError = ref<string | null>(null);
 const downloadingArtifactId = ref<string | null>(null);
-const deletingArtifactId = ref<string | null>(null);
 
 const normalizeStringArray = (raw: unknown): string[] => {
   if (!Array.isArray(raw)) return [];
@@ -43,7 +40,6 @@ const normalizeStringArray = (raw: unknown): string[] => {
 const isGenFileId = (fileId: string) => (fileId || '').startsWith('gen:');
 
 const selectedGenIdSet = computed(() => new Set(normalizeStringArray(props.currentMaterial.kbFileIds).filter(isGenFileId)));
-const selectedGenCount = computed(() => selectedGenIdSet.value.size);
 
 const persistKbFileIds = (nextIds: string[]) => {
   store.patchMaterial(props.currentMaterial.id, { kbFileIds: normalizeStringArray(nextIds) });
@@ -117,6 +113,38 @@ const formatDateTime = (value: unknown) => {
   }).format(date);
 };
 
+const parseGenFileId = (fileId: string) => {
+  const parts = (fileId || '').split(':');
+  if (parts[0] !== 'gen' || parts.length < 4) return null;
+  const user = (parts[1] || '').trim();
+  const materialId = (parts[2] || '').trim();
+  const kind = parts.slice(3).join(':').trim();
+  if (!user || !materialId || !kind) return null;
+  return { user, materialId, kind };
+};
+
+const getGenTag = (fileId: string) => {
+  const meta = parseGenFileId(fileId);
+  if (!meta) return (fileId || '').trim();
+  return `gen:${meta.user}`;
+};
+
+const inferArtifactKindFromGenKind = (genKind: string): ArtifactKind | null => {
+  const kind = (genKind || '').trim().toLowerCase();
+  if (!kind) return null;
+  if (kind === 'lesson' || kind.includes('lesson')) return 'docx';
+  if (kind === 'slides' || kind.includes('slide') || kind === 'ppt' || kind.includes('ppt')) return 'pptx';
+  return null;
+};
+
+const outputKindWeight = (kind: string) => {
+  const normalized = (kind || '').trim().toLowerCase();
+  if (normalized === 'outline') return 10;
+  if (normalized === 'lesson') return 20;
+  if (normalized === 'slides' || normalized === 'ppt') return 30;
+  return 999;
+};
+
 const downloadBlob = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -157,8 +185,94 @@ const refreshArtifacts = async () => {
   }
 };
 
-const docxArtifacts = computed(() => artifacts.value.filter((a) => a.kind === 'docx'));
-const pptxArtifacts = computed(() => artifacts.value.filter((a) => a.kind === 'pptx'));
+const sortArtifactsByCreatedAtDesc = (items: ArtifactMeta[]) =>
+  [...items].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
+
+const docxArtifacts = computed(() => sortArtifactsByCreatedAtDesc(artifacts.value.filter((a) => a.kind === 'docx')));
+const pptxArtifacts = computed(() => sortArtifactsByCreatedAtDesc(artifacts.value.filter((a) => a.kind === 'pptx')));
+
+const kbOutputFilesSorted = computed(() => {
+  return [...kbOutputFiles.value].sort((a, b) => {
+    const ak = parseGenFileId(a.id)?.kind || '';
+    const bk = parseGenFileId(b.id)?.kind || '';
+    const aw = outputKindWeight(ak);
+    const bw = outputKindWeight(bk);
+    if (aw !== bw) return aw - bw;
+    return (a.name || a.id).localeCompare(b.name || b.id);
+  });
+});
+
+interface OutputCard {
+  key: string;
+  title: string;
+  genTag: string;
+  kbFile: KBFile | null;
+  artifactKind: ArtifactKind | null;
+  artifacts: ArtifactMeta[];
+  latestArtifact: ArtifactMeta | null;
+}
+
+const buildFallbackTitle = (kind: ArtifactKind) => {
+  const base = (props.currentMaterial.title || '').trim();
+  if (kind === 'pptx') return `PPT:${base || '未命名'}`;
+  if (kind === 'docx') return `教案:${base || '未命名'}`;
+  return base || '未命名';
+};
+
+const outputCards = computed<OutputCard[]>(() => {
+  const cards: OutputCard[] = [];
+  const usedArtifactKinds = new Set<ArtifactKind>();
+
+  for (const file of kbOutputFilesSorted.value) {
+    const genKind = parseGenFileId(file.id)?.kind || '';
+    const artifactKind = inferArtifactKindFromGenKind(genKind);
+    const artifactsForCard = artifactKind === 'docx' ? docxArtifacts.value : artifactKind === 'pptx' ? pptxArtifacts.value : [];
+    if (artifactKind) usedArtifactKinds.add(artifactKind);
+
+    cards.push({
+      key: file.id,
+      title: (file.name || '').trim() || file.id,
+      genTag: getGenTag(file.id),
+      kbFile: file,
+      artifactKind,
+      artifacts: artifactsForCard,
+      latestArtifact: artifactsForCard[0] || null,
+    });
+  }
+
+  if (docxArtifacts.value.length > 0 && !usedArtifactKinds.has('docx')) {
+    cards.push({
+      key: 'artifact:docx',
+      title: buildFallbackTitle('docx'),
+      genTag: 'artifact:docx',
+      kbFile: null,
+      artifactKind: 'docx',
+      artifacts: docxArtifacts.value,
+      latestArtifact: docxArtifacts.value[0] || null,
+    });
+  }
+
+  if (pptxArtifacts.value.length > 0 && !usedArtifactKinds.has('pptx')) {
+    cards.push({
+      key: 'artifact:pptx',
+      title: buildFallbackTitle('pptx'),
+      genTag: 'artifact:pptx',
+      kbFile: null,
+      artifactKind: 'pptx',
+      artifacts: pptxArtifacts.value,
+      latestArtifact: pptxArtifacts.value[0] || null,
+    });
+  }
+
+  return cards.sort((a, b) => {
+    const ak = a.kbFile ? parseGenFileId(a.kbFile.id)?.kind || '' : a.artifactKind || '';
+    const bk = b.kbFile ? parseGenFileId(b.kbFile.id)?.kind || '' : b.artifactKind || '';
+    const aw = outputKindWeight(ak);
+    const bw = outputKindWeight(bk);
+    if (aw !== bw) return aw - bw;
+    return a.title.localeCompare(b.title);
+  });
+});
 
 const handleDownloadArtifact = async (artifact: ArtifactMeta) => {
   if (!artifact?.artifact_id) return;
@@ -177,30 +291,6 @@ const handleDownloadArtifact = async (artifact: ArtifactMeta) => {
   } finally {
     downloadingArtifactId.value = null;
   }
-};
-
-const handleDeleteArtifact = async (artifact: ArtifactMeta) => {
-  if (!artifact?.artifact_id) return;
-  if (!confirm('确认删除该文件？')) return;
-  deletingArtifactId.value = artifact.artifact_id;
-  try {
-    await aiService.deleteArtifact({ userId: KB_USER_ID, materialId: props.currentMaterial.id, artifactId: artifact.artifact_id });
-    toast.success('已删除');
-    await refreshArtifacts();
-  } catch (e) {
-    console.error(e);
-    toast.error(t('kb.toast.delete_failed'));
-  } finally {
-    deletingArtifactId.value = null;
-  }
-};
-
-const goToLessonTab = async () => {
-  await router.push({ name: 'material-tab', params: { materialId: props.currentMaterial.id, tab: 'lesson' } });
-};
-
-const goToPptEditor = async () => {
-  await router.push({ name: 'material-ppt-editor', params: { materialId: props.currentMaterial.id } });
 };
 
 watch(
@@ -227,234 +317,104 @@ onBeforeUnmount(() => {
   if (typeof window === 'undefined') return;
   window.removeEventListener('teachdo:artifacts-updated', handleArtifactsUpdated as EventListener);
 });
+
+defineExpose({
+  refreshArtifacts,
+  loadingArtifacts,
+  clearSelectedGen,
+});
 </script>
 
 <template>
-  <div class="h-full flex flex-col gap-4">
-    <section class="bg-white/60 dark:bg-slate-900/30 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 overflow-hidden">
-      <header class="px-4 py-3 border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between gap-2">
-        <div class="min-w-0">
-          <div class="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">文本产物（Markdown）</div>
-          <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">勾选后将全文加入上下文（不检索）</div>
-        </div>
+  <div class="space-y-3">
+    <div v-if="artifactsError" class="text-xs text-red-600 dark:text-red-300">
+      {{ artifactsError }}
+    </div>
 
-        <button
-          type="button"
-          class="px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-          :disabled="selectedGenCount === 0"
-          @click="clearSelectedGen"
-        >
-          清空
-        </button>
-      </header>
+    <div v-if="outputCards.length === 0" class="text-xs text-slate-500 dark:text-slate-400">
+      暂无产物。生成大纲/PPT/教案后，这里会出现可下载的文件。
+    </div>
 
-      <div class="max-h-[38vh] overflow-auto custom-scrollbar">
-        <div v-if="kbOutputFiles.length === 0" class="p-4 text-xs text-slate-500 dark:text-slate-400">
-          暂无文本产物。生成大纲/PPT/教案后，这里会出现可勾选的产物。
-        </div>
+    <div v-else class="space-y-3">
+      <div
+        v-for="card in outputCards"
+        :key="card.key"
+        class="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3"
+      >
+        <div class="flex items-start gap-3">
+          <input
+            v-if="card.kbFile"
+            type="checkbox"
+            class="mt-1 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/40 disabled:opacity-40"
+            :checked="selectedGenIdSet.has(card.kbFile.id)"
+            :disabled="card.kbFile.status !== 'ready'"
+            :aria-label="t('kb.picker.toggle')"
+            @change="() => toggleGenSelected(card.kbFile!.id)"
+          />
+          <div v-else class="w-4 h-4 mt-1"></div>
 
-        <div v-else class="divide-y divide-slate-200/50 dark:divide-slate-800/50">
-          <div
-            v-for="file in kbOutputFiles"
-            :key="file.id"
-            class="px-4 py-3 flex items-start justify-between gap-3 hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors"
-          >
-            <label class="flex items-start gap-3 min-w-0 cursor-pointer">
-              <input
-                type="checkbox"
-                class="mt-1 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/40"
-                :checked="selectedGenIdSet.has(file.id)"
-                @change="() => toggleGenSelected(file.id)"
-              />
-              <div class="min-w-0">
-                <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate" :title="file.name">{{ file.name }}</div>
-                <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <span class="font-mono truncate">{{ file.id }}</span>
-                  <span v-if="file.size" class="shrink-0">{{ formatSize(file.size) }}</span>
-                  <span v-if="file.uploadedAt" class="shrink-0">{{ formatDateTime(file.uploadedAt) }}</span>
-                </div>
-              </div>
-            </label>
+          <div class="min-w-0 flex-1">
+            <div class="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate" :title="card.title">
+              {{ card.title }}
+            </div>
 
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 min-w-0">
+              <span class="font-mono truncate">{{ card.genTag }}</span>
+              <span v-if="card.kbFile?.size" class="shrink-0">{{ formatSize(card.kbFile.size) }}</span>
+              <span v-if="card.kbFile?.uploadedAt" class="shrink-0">{{ formatDateTime(card.kbFile.uploadedAt) }}</span>
+            </div>
+
+            <div class="mt-3 flex flex-wrap items-center gap-3">
               <button
+                v-if="card.kbFile"
                 type="button"
-                class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 transition-colors disabled:opacity-40"
-                :aria-label="t('kb.action.export')"
-                :title="t('kb.action.export')"
-                :disabled="file.status !== 'ready' || exportingKbFileId === file.id"
-                @click="handleExportKb(file)"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-40"
+                :disabled="card.kbFile.status !== 'ready' || exportingKbFileId === card.kbFile.id"
+                @click="handleExportKb(card.kbFile)"
               >
                 <LucideIcon name="download" class="w-4 h-4" />
+                下载md
+              </button>
+              <button
+                v-else
+                type="button"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-100 opacity-50 cursor-not-allowed"
+                disabled
+              >
+                <LucideIcon name="download" class="w-4 h-4" />
+                下载md
+              </button>
+
+              <button
+                type="button"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-40"
+                :disabled="!card.latestArtifact || downloadingArtifactId === card.latestArtifact.artifact_id"
+                @click="card.latestArtifact ? handleDownloadArtifact(card.latestArtifact) : null"
+              >
+                <LucideIcon name="download" class="w-4 h-4" />
+                下载源文件
               </button>
             </div>
-          </div>
-        </div>
-      </div>
-    </section>
 
-    <section class="bg-white/60 dark:bg-slate-900/30 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 overflow-hidden">
-      <header class="px-4 py-3 border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between gap-2">
-        <div class="min-w-0">
-          <div class="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">导出文件（DOCX/PPTX）</div>
-          <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">后端持久化存储，可再次下载</div>
-        </div>
-
-        <button
-          type="button"
-          class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 transition-colors disabled:opacity-40"
-          :aria-label="t('kb.action.refresh')"
-          :title="t('kb.action.refresh')"
-          :disabled="loadingArtifacts"
-          @click="refreshArtifacts"
-        >
-          <LucideIcon name="refresh-cw" class="w-4 h-4" :class="loadingArtifacts ? 'animate-spin' : ''" />
-        </button>
-      </header>
-
-      <div class="p-4 space-y-3">
-        <div v-if="artifactsError" class="text-xs text-red-600 dark:text-red-300">
-          {{ artifactsError }}
-        </div>
-
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <div class="text-xs font-bold text-slate-600 dark:text-slate-300">教案（DOCX）</div>
-            <button
-              v-if="!loadingArtifacts && docxArtifacts.length === 0"
-              type="button"
-              class="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline"
-              @click="goToLessonTab"
-            >
-              去教案页导出并保存
-            </button>
-          </div>
-
-          <div v-if="loadingArtifacts && !artifactsError" class="space-y-2" role="status" aria-live="polite">
-            <div
-              v-for="i in 2"
-              :key="`docx-skel-${i}`"
-              class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/70 dark:bg-slate-900/30"
-            >
-              <div class="min-w-0 flex-1">
-                <Skeleton class="h-4 w-2/3" />
-                <Skeleton class="h-3 w-1/2 mt-2 opacity-80" />
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <Skeleton class="w-10 h-10 rounded-xl" />
-                <Skeleton class="w-10 h-10 rounded-xl" />
-              </div>
-            </div>
-          </div>
-
-          <div v-else-if="docxArtifacts.length === 0" class="text-xs text-slate-500 dark:text-slate-400">
-            暂无教案 DOCX。
-          </div>
-          <div v-else class="space-y-2">
-            <div
-              v-for="a in docxArtifacts"
-              :key="a.artifact_id"
-              class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/70 dark:bg-slate-900/30"
-            >
-              <div class="min-w-0">
-                <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate" :title="a.file_name">{{ a.file_name }}</div>
-                <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <span class="font-mono truncate">{{ a.artifact_id }}</span>
-                  <span v-if="typeof a.size === 'number'" class="shrink-0">{{ formatSize(a.size) }}</span>
-                  <span v-if="typeof a.created_at === 'number'" class="shrink-0">{{ formatDateTime(a.created_at) }}</span>
+            <div v-if="card.artifactKind && loadingArtifacts && !artifactsError && card.artifacts.length === 0" class="mt-3 space-y-2" role="status" aria-live="polite">
+              <div
+                v-for="i in 2"
+                :key="`artifact-skel-${card.key}-${i}`"
+                class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/70 dark:bg-slate-900/30"
+              >
+                <div class="min-w-0 flex-1">
+                  <Skeleton class="h-4 w-2/3" />
+                  <Skeleton class="h-3 w-1/2 mt-2 opacity-80" />
                 </div>
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 transition-colors disabled:opacity-40"
-                  :disabled="downloadingArtifactId === a.artifact_id"
-                  @click="handleDownloadArtifact(a)"
-                >
-                  <LucideIcon name="download" class="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 hover:text-red-600 hover:border-red-200 dark:hover:border-red-800/40 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
-                  :disabled="deletingArtifactId === a.artifact_id"
-                  @click="handleDeleteArtifact(a)"
-                >
-                  <LucideIcon name="trash-2" class="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="space-y-2 pt-2 border-t border-slate-200/60 dark:border-slate-800/60">
-          <div class="flex items-center justify-between">
-            <div class="text-xs font-bold text-slate-600 dark:text-slate-300">幻灯片（PPTX）</div>
-            <button
-              v-if="!loadingArtifacts && pptxArtifacts.length === 0"
-              type="button"
-              class="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline"
-              @click="goToPptEditor"
-            >
-              去编辑器导出并保存
-            </button>
-          </div>
-
-          <div v-if="loadingArtifacts && !artifactsError" class="space-y-2" role="status" aria-live="polite">
-            <div
-              v-for="i in 2"
-              :key="`pptx-skel-${i}`"
-              class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/70 dark:bg-slate-900/30"
-            >
-              <div class="min-w-0 flex-1">
-                <Skeleton class="h-4 w-2/3" />
-                <Skeleton class="h-3 w-1/2 mt-2 opacity-80" />
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <Skeleton class="w-10 h-10 rounded-xl" />
-                <Skeleton class="w-10 h-10 rounded-xl" />
-              </div>
-            </div>
-          </div>
-
-          <div v-else-if="pptxArtifacts.length === 0" class="text-xs text-slate-500 dark:text-slate-400">
-            暂无 PPTX。
-          </div>
-          <div v-else class="space-y-2">
-            <div
-              v-for="a in pptxArtifacts"
-              :key="a.artifact_id"
-              class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/70 dark:bg-slate-900/30"
-            >
-              <div class="min-w-0">
-                <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate" :title="a.file_name">{{ a.file_name }}</div>
-                <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <span class="font-mono truncate">{{ a.artifact_id }}</span>
-                  <span v-if="typeof a.size === 'number'" class="shrink-0">{{ formatSize(a.size) }}</span>
-                  <span v-if="typeof a.created_at === 'number'" class="shrink-0">{{ formatDateTime(a.created_at) }}</span>
+                <div class="flex items-center gap-2 shrink-0">
+                  <Skeleton class="w-10 h-10 rounded-xl" />
+                  <Skeleton class="w-10 h-10 rounded-xl" />
                 </div>
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 transition-colors disabled:opacity-40"
-                  :disabled="downloadingArtifactId === a.artifact_id"
-                  @click="handleDownloadArtifact(a)"
-                >
-                  <LucideIcon name="download" class="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 hover:text-red-600 hover:border-red-200 dark:hover:border-red-800/40 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
-                  :disabled="deletingArtifactId === a.artifact_id"
-                  @click="handleDeleteArtifact(a)"
-                >
-                  <LucideIcon name="trash-2" class="w-4 h-4" />
-                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </section>
+    </div>
   </div>
 </template>
