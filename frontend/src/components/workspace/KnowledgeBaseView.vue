@@ -42,7 +42,8 @@ const files = computed(() => {
 });
 
 const filteredFiles = computed(() => {
-  const query = searchQuery.value.toLowerCase();
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return files.value;
   return files.value.filter((f) => f.name.toLowerCase().includes(query));
 });
 
@@ -394,81 +395,22 @@ onBeforeUnmount(() => {
   uploadTimers.forEach((timer) => window.clearInterval(timer));
   uploadTimers.clear();
 });
+
+defineExpose({
+  refreshFromBackend,
+  syncing,
+  selectedKbFileCount,
+  clearSelectedKbFiles,
+});
 </script>
 
 <template>
   <div :class="['h-full flex flex-col', isPanel ? 'gap-2' : 'gap-6']">
     <input ref="fileInputRef" type="file" class="hidden" @change="handleFilePicked" />
 
-    <!-- Panel Variant: 紧凑侧栏布局 -->
-    <div
-      v-if="isPanel"
-      class="px-4 py-4 border-b border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-900/30 backdrop-blur"
-    >
-      <div class="flex items-center justify-between gap-3">
-        <div class="flex items-center gap-2 min-w-0">
-          <div class="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 text-indigo-600 dark:text-indigo-300 flex items-center justify-center border border-indigo-100 dark:border-indigo-800/40 flex-shrink-0">
-            <LucideIcon name="database" :size="18" />
-          </div>
-          <div class="min-w-0">
-            <div class="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">
-              {{ sourceFilter === 'uploaded' ? t('workspace.references.title') : t('kb.title') }}
-            </div>
-            <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              <template v-if="sourceFilter === 'uploaded'">
-                {{ t('workspace.references.subtitle') }} · {{ t('kb.stats.total') }} {{ files.length }}
-              </template>
-              <template v-else>
-                {{ t('kb.global') }} · {{ t('kb.stats.total') }} {{ files.length }}
-              </template>
-            </div>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          class="w-10 h-10 inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 transition-colors"
-          :aria-label="t('kb.action.refresh')"
-          :title="t('kb.action.refresh')"
-          @click="refreshFromBackend"
-        >
-          <LucideIcon name="refresh-cw" :size="18" :class="syncing ? 'animate-spin' : ''" />
-        </button>
-      </div>
-
-      <div class="mt-4">
-        <div v-if="activeMaterial" class="flex items-center justify-between gap-2 mb-3">
-          <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-            {{ t('kb.picker.selected', { count: selectedKbFileCount }) }}
-          </div>
-          <button
-            type="button"
-            class="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-            :disabled="selectedKbFileCount === 0"
-            @click="clearSelectedKbFiles"
-          >
-            {{ t('kb.picker.clear') }}
-          </button>
-        </div>
-
-	        <div class="relative">
-	          <LucideIcon name="search" :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-	          <input
-	            v-model="searchQuery"
-	            type="text"
-	            :placeholder="t('kb.search')"
-              :aria-label="t('kb.search')"
-              name="kb-search"
-              autocomplete="off"
-		            class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:focus-visible:ring-offset-slate-950"
-		          />
-	        </div>
-	      </div>
-    </div>
-
     <!-- Page Variant: 原页面布局 -->
     <div
-      v-else
+      v-if="!isPanel"
       class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm"
     >
       <div>
