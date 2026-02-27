@@ -1352,13 +1352,13 @@ def _normalize_kb_file_ids(kb_file_ids: list[str] | None) -> list[str]:
 def _split_kb_file_ids(kb_file_ids: list[str]) -> tuple[list[str], list[str]]:
     """
     按约定将 KB 文件拆分为两类：
-    - full_ids：课程产出（gen: 前缀）→ 全文注入（不经检索）
-    - rag_ids：参考资料（非 gen:）→ 仅用于 personaldb /search（RAG）
+    - full_ids：全文注入（gen:/full: 前缀）→ 拉取全文加入上下文（不经检索）
+    - rag_ids：RAG 检索（非 gen:/full:）→ 仅用于 personaldb /search（只注入相关片段）
     """
     full_ids: list[str] = []
     rag_ids: list[str] = []
     for fid in kb_file_ids or []:
-        if str(fid).startswith("gen:"):
+        if str(fid).startswith("gen:") or str(fid).startswith("full:"):
             full_ids.append(str(fid))
         else:
             rag_ids.append(str(fid))

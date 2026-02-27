@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n';
 import { aiService } from '@/services/aiService';
 import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 import { getKbSource, getKbSourceUi } from '@/utils/kbSource';
+import { isFullTextKbFileId } from '@/utils/kbFileId';
 
 type KnowledgeBaseViewVariant = 'page' | 'panel';
 type KnowledgeBaseSourceFilter = 'all' | 'uploaded';
@@ -61,12 +62,10 @@ const normalizeStringArray = (raw: unknown): string[] => {
   return result;
 };
 
-const isGenFileId = (fileId: string) => (fileId || '').startsWith('gen:');
-
 const selectedKbFileIdSet = computed(() => {
   const raw = normalizeStringArray(activeMaterial.value?.kbFileIds);
   if (sourceFilter.value === 'uploaded') {
-    return new Set(raw.filter((id) => !isGenFileId(id)));
+    return new Set(raw.filter((id) => !isFullTextKbFileId(id)));
   }
   return new Set(raw);
 });
@@ -96,8 +95,8 @@ const clearSelectedKbFiles = () => {
   if (!material) return;
   const current = normalizeStringArray(material.kbFileIds);
   if (sourceFilter.value === 'uploaded') {
-    // 仅清空“参考资料”（非 gen:），避免影响右侧产物的全文注入选择
-    persistKbFileIds(current.filter((id) => isGenFileId(id)));
+    // 仅清空“检索知识库”（非全文注入），避免影响右侧“全文注入”选择
+    persistKbFileIds(current.filter((id) => isFullTextKbFileId(id)));
     return;
   }
   persistKbFileIds([]);

@@ -24,9 +24,15 @@ function parseContentDispositionFilename(value: string | null): string | null {
 
 /**
  * POST /kb/upload
- * 上传知识库文件并向量化（folder_id: 0=上传素材，1=生成产物）。
+ * 上传知识库文件并向量化（folder_id: 0=上传素材，1=生成产物，2=全文上传）。
  */
-export async function kbUpload(input: { userId: string; file: File; folderId?: number; signal?: AbortSignal }): Promise<{
+export async function kbUpload(input: {
+  userId: string;
+  file: File;
+  folderId?: number;
+  fileId?: string;
+  signal?: AbortSignal;
+}): Promise<{
   user_id: string;
   file_id: string;
   file_name: string;
@@ -43,6 +49,9 @@ export async function kbUpload(input: { userId: string; file: File; folderId?: n
   const formData = new FormData();
   formData.append('user_id', input.userId);
   formData.append('folder_id', String(input.folderId ?? 0));
+  if (typeof input.fileId === 'string' && input.fileId.trim()) {
+    formData.append('file_id', input.fileId.trim());
+  }
   formData.append('file_type', input.file.name.split('.').pop() || 'unknown');
   formData.append('file', input.file);
 

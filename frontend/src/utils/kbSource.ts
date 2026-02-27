@@ -12,6 +12,7 @@ export type KbSource = 'uploaded' | 'generated' | 'unknown';
  */
 export function getKbSource(folderId?: number): KbSource {
   if (folderId === 1) return 'generated';
+  if (folderId === 2) return 'uploaded';
   if (folderId === 0 || typeof folderId !== 'number' || Number.isNaN(folderId)) return 'uploaded';
   return 'unknown';
 }

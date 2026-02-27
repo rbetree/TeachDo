@@ -12,6 +12,7 @@ import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import type { TeachingMaterial } from '#root/types';
 import type { IconName } from '@/components/common/LucideIcon.vue';
+import { isFullTextKbFileId } from '@/utils/kbFileId';
 
 const OutlineView = defineAsyncComponent(() => import('@/components/workspace/OutlineView.vue'));
 const LessonPlanView = defineAsyncComponent(() => import('@/components/workspace/LessonPlanView.vue'));
@@ -33,12 +34,15 @@ const relatedKbFileIds = computed(() => {
   const material = currentMaterial.value;
   if (!material) return [];
 
-  const prefix = `gen:${KB_USER_ID}:${material.id}:`;
+  const genPrefix = `gen:${KB_USER_ID}:${material.id}:`;
+  const fullPrefix = `full:${KB_USER_ID}:${material.id}:`;
   const ids = store.kbFiles
     .filter((file) => {
       const fileId = file.id || '';
       const folderId = typeof file.folderId === 'number' ? file.folderId : 0;
-      return folderId === 1 && fileId.startsWith(prefix);
+      if (folderId === 1 && fileId.startsWith(genPrefix)) return true;
+      if (folderId === 2 && fileId.startsWith(fullPrefix)) return true;
+      return false;
     })
     .map((file) => file.id);
 
@@ -52,20 +56,17 @@ const selectedReferenceCount = computed(() => {
   const raw = Array.isArray(material?.kbFileIds) ? material!.kbFileIds : [];
   const ids = raw
     .map((x) => (typeof x === 'string' ? x.trim() : ''))
-    .filter((x) => x && !x.startsWith('gen:'));
+    .filter((x) => x && !isFullTextKbFileId(x));
   return new Set(ids).size;
 });
 
-const outputKbFileCount = computed(() => {
+const selectedFullCount = computed(() => {
   const material = currentMaterial.value;
   if (!material) return 0;
-
-  const prefix = `gen:${KB_USER_ID}:${material.id}:`;
-  const ids = (store.kbFiles || [])
-    .filter((file) => (typeof file.folderId === 'number' ? file.folderId : 0) === 1)
-    .filter((file) => file.sourceMaterialId === material.id || (file.id || '').startsWith(prefix))
-    .map((file) => file.id);
-
+  const raw = Array.isArray(material.kbFileIds) ? material.kbFileIds : [];
+  const ids = raw
+    .map((x) => (typeof x === 'string' ? x.trim() : ''))
+    .filter((x) => x && isFullTextKbFileId(x));
   return new Set(ids).size;
 });
 
@@ -119,13 +120,20 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
   deleting.value = true;
   try {
     if (payload.deleteKbFiles) {
-      const prefix = `gen:${KB_USER_ID}:${material.id}:`;
+      const genPrefix = `gen:${KB_USER_ID}:${material.id}:`;
+      const fullPrefix = `full:${KB_USER_ID}:${material.id}:`;
       let fileIds = relatedKbFileIds.value;
       if (!fileIds.length) {
         try {
           const serverFiles = await aiService.kbListFiles({ userId: KB_USER_ID });
           fileIds = serverFiles
-            .filter((f) => (typeof f.folder_id === 'number' ? f.folder_id : 0) === 1 && (f.file_id || '').startsWith(prefix))
+            .filter((f) => {
+              const fileId = (f.file_id || '').trim();
+              const folderId = typeof f.folder_id === 'number' ? f.folder_id : 0;
+              if (folderId === 1 && fileId.startsWith(genPrefix)) return true;
+              if (folderId === 2 && fileId.startsWith(fullPrefix)) return true;
+              return false;
+            })
             .map((f) => f.file_id);
         } catch (e) {
           console.warn('知识库文件列表拉取失败（已忽略）', e);
@@ -133,6 +141,7 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
         }
       }
       if (fileIds.length) {
+        fileIds = Array.from(new Set(fileIds));
         const ids = new Set(fileIds);
         store.setKbFiles(store.kbFiles.filter((f) => !ids.has(f.id)));
 
@@ -235,7 +244,7 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
                   :title="t('workspace.references.title')"
                   @click="ui.toggleReferencePanel()"
                 >
-                  <LucideIcon name="database" class="w-4 h-4" />
+                  <LucideIcon name="search" class="w-4 h-4" />
                   <span>{{ t('workspace.references.title') }}</span>
                   <span
                     v-if="selectedReferenceCount > 0"
@@ -255,13 +264,13 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
                   :title="t('workspace.outputs.title')"
                   @click="ui.toggleOutputPanel()"
                 >
-                  <LucideIcon name="file" class="w-4 h-4" />
+                  <LucideIcon name="book-open" class="w-4 h-4" />
                   <span>{{ t('workspace.outputs.title') }}</span>
                   <span
-                    v-if="outputKbFileCount > 0"
+                    v-if="selectedFullCount > 0"
                     class="ml-1 inline-flex items-center justify-center min-w-6 h-5 px-1.5 rounded-full bg-emerald-600 text-white text-[11px] font-black"
                   >
-                    {{ outputKbFileCount }}
+                    {{ selectedFullCount }}
                   </span>
                 </button>
                 <div ref="workspaceActionHost" class="flex-1 min-w-0 flex items-center h-full"></div>

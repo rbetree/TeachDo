@@ -66,7 +66,7 @@ onMounted(() => {
           class="p-2 rounded-lg border border-transparent text-slate-500 dark:text-slate-300 flex items-center justify-center w-full"
           :title="t('workspace.references.title')"
         >
-          <LucideIcon name="database" class="w-5 h-5" />
+                  <LucideIcon name="search" class="w-5 h-5" />
         </div>
       </div>
 
@@ -74,7 +74,7 @@ onMounted(() => {
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 min-w-0">
             <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 flex items-center justify-center border border-indigo-100 dark:border-indigo-800/40 shrink-0">
-              <LucideIcon name="database" class="w-5 h-5" />
+              <LucideIcon name="search" class="w-5 h-5" />
             </div>
             <div class="min-w-0">
               <div class="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">

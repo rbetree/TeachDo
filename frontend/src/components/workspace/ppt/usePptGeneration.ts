@@ -6,6 +6,7 @@ import type { ImgPoolItem } from '@/editor-runtime/aippt/aipptGenerator';
 import { buildSlidesMarkdown, mapAipptSlideToPreview } from '@/components/workspace/ppt/pptGenerationUtils';
 import { KB_USER_ID } from '@/stores/appStore';
 import { ApiError } from '@/services/apiClient';
+import { isFullTextKbFileId } from '@/utils/kbFileId';
 
 export type PptViewState = 'SELECT_TEMPLATE' | 'PREVIEW';
 
@@ -114,7 +115,8 @@ export function usePptGeneration(params: UsePptGenerationParams) {
     viewState.value = 'PREVIEW';
 
     const kbFileIds = kbFileIdsForRequest.value;
-    const useKb = kbFileIds.length > 0;
+    const ragKbFileIds = kbFileIds.filter((id) => !isFullTextKbFileId(id));
+    const useKb = ragKbFileIds.length > 0;
 
     let width = 960;
     let height = 540;
@@ -151,7 +153,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
         language: 'zh',
         generateFromWebSearch: generateFromWebSearch.value,
         generateFromUploadedFile: useKb,
-        kbFileIds: useKb ? kbFileIds : null,
+        kbFileIds: kbFileIds.length > 0 ? kbFileIds : null,
         signal: controller.signal,
         onSlide: (slide) => {
           if (slide.images?.length) {

@@ -366,7 +366,7 @@ def test_tools_aippt_keeps_kb_when_personaldb_ready(main_api_client, monkeypatch
         "generateFromUploadedFile": True,
         "generateFromWebSearch": False,
         "kb_folder_ids": [0, 1],
-        "kb_file_ids": ["upload:test:fid0", "gen:test:slides"],
+        "kb_file_ids": ["upload:test:fid0", "gen:test:slides", "full:test:fid2"],
     }
     with main_api_client.stream("POST", "/tools/aippt", json=payload) as resp:
         assert resp.status_code == 200

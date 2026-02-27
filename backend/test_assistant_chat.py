@@ -103,7 +103,7 @@ def test_assistant_chat_enriches_with_kb_and_material(
     payload = {
         "messages": [{"role": "user", "content": "请根据知识库解释三角形内角和定理"}],
         "user_id": "default_user",
-        "kb_file_ids": ["upload:test:fid0", "gen:test:fid1"],
+        "kb_file_ids": ["upload:test:fid0", "gen:test:fid1", "full:test:fid2"],
         "material": {
             "title": "三角形的基本性质",
             "subject": "数学",
@@ -124,7 +124,10 @@ def test_assistant_chat_enriches_with_kb_and_material(
     assert stub_state["search_payload"]["query"] == "请根据知识库解释三角形内角和定理"
     assert stub_state["search_payload"]["fileIds"] == ["upload:test:fid0"]
 
-    assert stub_state["content_calls"] == [{"user_id": "default_user", "file_id": "gen:test:fid1"}]
+    assert stub_state["content_calls"] == [
+        {"user_id": "default_user", "file_id": "gen:test:fid1"},
+        {"user_id": "default_user", "file_id": "full:test:fid2"},
+    ]
 
     system_prompt = (seen["messages"][0] or {}).get("content", "")
     assert "当前教学资料" in system_prompt

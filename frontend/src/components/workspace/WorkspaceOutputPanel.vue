@@ -5,6 +5,7 @@ import type { TeachingMaterial } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
 import OutputFilesView from '@/components/workspace/OutputFilesView.vue';
+import { isFullTextKbFileId } from '@/utils/kbFileId';
 
 interface Props {
   currentMaterial: TeachingMaterial | null;
@@ -33,13 +34,11 @@ const normalizeStringArray = (raw: unknown): string[] => {
   return result;
 };
 
-const isGenFileId = (fileId: string) => (fileId || '').startsWith('gen:');
-
-const selectedGenCount = computed(() => normalizeStringArray(props.currentMaterial?.kbFileIds).filter(isGenFileId).length);
+const selectedFullCount = computed(() => normalizeStringArray(props.currentMaterial?.kbFileIds).filter(isFullTextKbFileId).length);
 const artifactsLoading = computed(() => outputFilesRef.value?.loadingArtifacts ?? false);
 
-const handleClearSelectedGen = () => {
-  outputFilesRef.value?.clearSelectedGen?.();
+const handleClearSelectedFull = () => {
+  outputFilesRef.value?.clearSelectedFull?.();
 };
 
 const handleRefreshArtifacts = () => {
@@ -83,7 +82,7 @@ onMounted(() => {
           class="p-2 rounded-lg border border-transparent text-slate-500 dark:text-slate-300 flex items-center justify-center w-full"
           :title="t('workspace.outputs.title')"
         >
-          <LucideIcon name="file" class="w-5 h-5" />
+          <LucideIcon name="book-open" class="w-5 h-5" />
         </div>
       </div>
 
@@ -91,7 +90,7 @@ onMounted(() => {
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 min-w-0">
             <div class="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center border border-emerald-100 dark:border-emerald-800/40 shrink-0">
-              <LucideIcon name="file" class="w-5 h-5" />
+              <LucideIcon name="book-open" class="w-5 h-5" />
             </div>
             <div class="min-w-0">
               <div class="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">
@@ -128,13 +127,13 @@ onMounted(() => {
 
         <div v-if="props.currentMaterial" class="mt-3 flex items-center justify-between gap-2">
           <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-            {{ t('kb.picker.selected', { count: selectedGenCount }) }}
+            {{ t('kb.picker.selected', { count: selectedFullCount }) }}
           </div>
           <button
             type="button"
             class="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-            :disabled="selectedGenCount === 0"
-            @click="handleClearSelectedGen"
+            :disabled="selectedFullCount === 0"
+            @click="handleClearSelectedFull"
           >
             {{ t('kb.picker.clear') }}
           </button>
@@ -142,9 +141,9 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="!collapsed" class="flex-1 min-h-0 overflow-auto p-4">
+    <div v-if="!collapsed" class="flex-1 min-h-0 overflow-hidden">
       <OutputFilesView v-if="props.currentMaterial" ref="outputFilesRef" :current-material="props.currentMaterial" />
-      <div v-else class="text-xs text-slate-500 dark:text-slate-400">
+      <div v-else class="px-4 pt-4 text-xs text-slate-500 dark:text-slate-400">
         {{ t('workspace.no_course') }}
       </div>
     </div>
