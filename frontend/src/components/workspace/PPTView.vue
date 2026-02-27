@@ -73,7 +73,7 @@ watch(
 );
 
 const goToKnowledgeBase = () => {
-  ui.setRightPanelTab('kb');
+  ui.openReferencePanel();
 };
 
 const goToOutline = () => {

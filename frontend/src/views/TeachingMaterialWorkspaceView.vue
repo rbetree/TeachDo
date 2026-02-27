@@ -7,6 +7,7 @@ import WorkspaceLeftPanel from '@/components/workspace/WorkspaceLeftPanel.vue';
 import WorkspaceOutputPanel from '@/components/workspace/WorkspaceOutputPanel.vue';
 import TeachingMaterialDeleteDialog from '@/components/workspace/TeachingMaterialDeleteDialog.vue';
 import { KB_USER_ID, useAppStore } from '@/stores/appStore';
+import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
 import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import type { TeachingMaterial } from '#root/types';
@@ -20,6 +21,7 @@ const AssistantView = defineAsyncComponent(() => import('@/components/workspace/
 const router = useRouter();
 const route = useRoute();
 const store = useAppStore();
+const ui = useWorkspaceUiStore();
 const { t } = useI18n();
 const workspaceActionHost = ref<HTMLElement | null>(null);
 
@@ -44,6 +46,31 @@ const relatedKbFileIds = computed(() => {
 });
 
 const relatedKbCount = computed(() => relatedKbFileIds.value.length);
+
+const selectedReferenceCount = computed(() => {
+  const material = currentMaterial.value;
+  const raw = Array.isArray(material?.kbFileIds) ? material!.kbFileIds : [];
+  const ids = raw
+    .map((x) => (typeof x === 'string' ? x.trim() : ''))
+    .filter((x) => x && !x.startsWith('gen:'));
+  return new Set(ids).size;
+});
+
+const outputKbFileCount = computed(() => {
+  const material = currentMaterial.value;
+  if (!material) return 0;
+
+  const prefix = `gen:${KB_USER_ID}:${material.id}:`;
+  const ids = (store.kbFiles || [])
+    .filter((file) => (typeof file.folderId === 'number' ? file.folderId : 0) === 1)
+    .filter((file) => file.sourceMaterialId === material.id || (file.id || '').startsWith(prefix))
+    .map((file) => file.id);
+
+  return new Set(ids).size;
+});
+
+const referencePanelOpen = computed(() => !ui.referencePanelCollapsed);
+const outputPanelOpen = computed(() => !ui.outputPanelCollapsed);
 
 type MaterialTab = 'outline' | 'lesson' | 'ppt' | 'assistant';
 
@@ -197,7 +224,46 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
             </div>
 
             <div class="flex-1 min-w-0">
-              <div class="toolbar-shell">
+              <div class="toolbar-shell gap-1">
+                <button
+                  type="button"
+                  class="toolbar-item px-3 md:hidden border transition-colors"
+                  :class="referencePanelOpen
+                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/30'
+                    : 'bg-white/80 dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600'"
+                  :aria-label="t('workspace.references.title')"
+                  :title="t('workspace.references.title')"
+                  @click="ui.toggleReferencePanel()"
+                >
+                  <LucideIcon name="database" class="w-4 h-4" />
+                  <span>{{ t('workspace.references.title') }}</span>
+                  <span
+                    v-if="selectedReferenceCount > 0"
+                    class="ml-1 inline-flex items-center justify-center min-w-6 h-5 px-1.5 rounded-full bg-indigo-600 text-white text-[11px] font-black"
+                  >
+                    {{ selectedReferenceCount }}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  class="toolbar-item px-3 md:hidden border transition-colors"
+                  :class="outputPanelOpen
+                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
+                    : 'bg-white/80 dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600'"
+                  :aria-label="t('workspace.outputs.title')"
+                  :title="t('workspace.outputs.title')"
+                  @click="ui.toggleOutputPanel()"
+                >
+                  <LucideIcon name="file" class="w-4 h-4" />
+                  <span>{{ t('workspace.outputs.title') }}</span>
+                  <span
+                    v-if="outputKbFileCount > 0"
+                    class="ml-1 inline-flex items-center justify-center min-w-6 h-5 px-1.5 rounded-full bg-emerald-600 text-white text-[11px] font-black"
+                  >
+                    {{ outputKbFileCount }}
+                  </span>
+                </button>
                 <div ref="workspaceActionHost" class="flex-1 min-w-0 flex items-center h-full"></div>
               </div>
             </div>

@@ -17,13 +17,14 @@ const ui = useWorkspaceUiStore();
 
 const collapsed = computed(() => ui.outputPanelCollapsed);
 
-const panelWidthClass = computed(() => (collapsed.value ? 'w-14' : 'w-[360px]'));
-const panelPositionClass = computed(() => (collapsed.value ? '' : 'fixed top-16 right-0 bottom-0 z-50 shadow-2xl md:static md:shadow-none'));
+const panelWidthClass = computed(() => (collapsed.value ? 'w-[360px] md:w-14' : 'w-[360px]'));
+const panelPositionClass = 'fixed top-16 right-0 bottom-0 z-50 shadow-2xl md:static md:shadow-none';
+const panelTransformClass = computed(() => (collapsed.value ? 'translate-x-full md:translate-x-0' : 'translate-x-0'));
 
 onMounted(() => {
   if (typeof window === 'undefined') return;
   if (window.matchMedia('(max-width: 767px)').matches) {
-    ui.collapseOutputPanel();
+    ui.closeOutputPanel();
   }
 });
 </script>
@@ -32,11 +33,11 @@ onMounted(() => {
   <div
     v-if="!collapsed"
     class="fixed inset-0 top-16 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden"
-    @click="ui.collapseOutputPanel()"
+    @click="ui.closeOutputPanel()"
   ></div>
   <aside
-    class="h-full shrink-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col overflow-hidden"
-    :class="[panelWidthClass, panelPositionClass]"
+    class="h-full shrink-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col overflow-hidden transition-transform duration-300"
+    :class="[panelWidthClass, panelPositionClass, panelTransformClass]"
   >
     <div class="border-b border-slate-100 dark:border-slate-800">
       <div v-if="collapsed" class="p-2 flex flex-col items-center gap-2">
@@ -44,7 +45,7 @@ onMounted(() => {
           type="button"
           class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-300"
           :aria-label="t('common.expand')"
-          @click="ui.toggleOutputPanelCollapsed()"
+          @click="ui.toggleOutputPanel()"
         >
           <LucideIcon name="arrow-left" class="w-5 h-5" />
         </button>
@@ -76,7 +77,7 @@ onMounted(() => {
           type="button"
           class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-300"
           :aria-label="t('common.collapse')"
-          @click="ui.toggleOutputPanelCollapsed()"
+          @click="ui.toggleOutputPanel()"
         >
           <LucideIcon name="arrow-right" class="w-5 h-5" />
         </button>

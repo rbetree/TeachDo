@@ -1,41 +1,50 @@
 import { defineStore } from 'pinia';
 
-export type WorkspaceRightPanelTab = 'kb' | 'assistant';
-
 interface WorkspaceUiState {
-  rightPanelCollapsed: boolean;
-  rightPanelTab: WorkspaceRightPanelTab;
+  referencePanelCollapsed: boolean;
   outputPanelCollapsed: boolean;
 }
 
+const isMobileViewport = () =>
+  typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 767px)').matches;
+
 export const useWorkspaceUiStore = defineStore('workspace_ui', {
   state: (): WorkspaceUiState => ({
-    rightPanelCollapsed: false,
-    rightPanelTab: 'kb',
-    outputPanelCollapsed: false,
+    referencePanelCollapsed: isMobileViewport(),
+    outputPanelCollapsed: isMobileViewport(),
   }),
   actions: {
-    setRightPanelTab(tab: WorkspaceRightPanelTab) {
-      this.rightPanelTab = tab;
-      this.rightPanelCollapsed = false;
+    openReferencePanel() {
+      if (isMobileViewport()) {
+        this.outputPanelCollapsed = true;
+      }
+      this.referencePanelCollapsed = false;
     },
-    toggleRightPanelCollapsed() {
-      this.rightPanelCollapsed = !this.rightPanelCollapsed;
+    closeReferencePanel() {
+      this.referencePanelCollapsed = true;
     },
-    expandRightPanel() {
-      this.rightPanelCollapsed = false;
+    toggleReferencePanel() {
+      if (this.referencePanelCollapsed) {
+        this.openReferencePanel();
+      } else {
+        this.closeReferencePanel();
+      }
     },
-    collapseRightPanel() {
-      this.rightPanelCollapsed = true;
-    },
-    toggleOutputPanelCollapsed() {
-      this.outputPanelCollapsed = !this.outputPanelCollapsed;
-    },
-    expandOutputPanel() {
+    openOutputPanel() {
+      if (isMobileViewport()) {
+        this.referencePanelCollapsed = true;
+      }
       this.outputPanelCollapsed = false;
     },
-    collapseOutputPanel() {
+    closeOutputPanel() {
       this.outputPanelCollapsed = true;
+    },
+    toggleOutputPanel() {
+      if (this.outputPanelCollapsed) {
+        this.openOutputPanel();
+      } else {
+        this.closeOutputPanel();
+      }
     },
   },
 });
