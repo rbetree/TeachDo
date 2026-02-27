@@ -21,7 +21,7 @@ const emit = defineEmits<Emits>();
 <template>
   <div class="workspace-card flex-1 min-h-0 p-4 md:p-6">
     <div
-      class="h-full w-full flex flex-col items-center justify-center text-slate-400 p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-slate-50/50 dark:bg-slate-900/30"
+      class="h-full w-full flex flex-col items-center justify-center text-slate-400 p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-slate-50/50 dark:bg-slate-950/35"
     >
       <div class="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center mb-4">
         <LucideIcon :name="props.icon" :size="32" class="opacity-60" />

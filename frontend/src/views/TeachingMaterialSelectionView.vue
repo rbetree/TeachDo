@@ -90,7 +90,7 @@ const handleCreate = (material: TeachingMaterial) => {
 </script>
 
 <template>
-  <section class="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-slate-50 dark:bg-slate-900 transition-colors duration-300 font-sans">
+  <section class="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-slate-100 dark:bg-slate-950 transition-colors duration-300 font-sans">
     <div class="absolute inset-0 opacity-40 pointer-events-none bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] dark:bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:20px_20px]"></div>
 
     <div class="relative z-10 mx-auto max-w-6xl px-6 md:px-10 py-8 md:py-10">
@@ -168,7 +168,7 @@ const handleCreate = (material: TeachingMaterial) => {
 	            v-for="material in sortedMaterials"
 	            :key="material.id"
 	            :to="{ name: 'material', params: { materialId: material.id } }"
-	            class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-colors transition-transform transition-shadow duration-300 flex flex-col h-60 overflow-hidden group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
+	            class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-colors transition-transform transition-shadow duration-300 flex flex-col h-60 overflow-hidden group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:focus-visible:ring-offset-slate-950"
 	          >
             <div class="p-7 flex flex-col h-full gap-4">
               <div class="flex items-start justify-between gap-4">
@@ -215,7 +215,7 @@ const handleCreate = (material: TeachingMaterial) => {
 
 	          <button
 	            type="button"
-	            class="flex flex-col items-center justify-center p-8 h-60 rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-800/40 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
+	            class="flex flex-col items-center justify-center p-8 h-60 rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-800/40 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:focus-visible:ring-offset-slate-950"
 	            @click="createOpen = true"
 	          >
             <div class="w-16 h-16 rounded-full border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:scale-110 transition">

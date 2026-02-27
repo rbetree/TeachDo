@@ -58,7 +58,7 @@ onUnmounted(() => {
         <span class="text-sm font-medium">{{ toast.message }}</span>
         <button
           type="button"
-          class="w-11 h-11 -my-2 -mr-2 inline-flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-300 opacity-70 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
+          class="w-11 h-11 -my-2 -mr-2 inline-flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-300 opacity-70 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:focus-visible:ring-offset-slate-950"
           :aria-label="t('common.close')"
           :title="t('common.close')"
           @click="remove(toast.id)"

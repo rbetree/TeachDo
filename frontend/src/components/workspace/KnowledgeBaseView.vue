@@ -460,8 +460,8 @@ onBeforeUnmount(() => {
               :aria-label="t('kb.search')"
               name="kb-search"
               autocomplete="off"
-	            class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
-	          />
+		            class="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 focus:border-indigo-400 dark:focus:border-indigo-700 rounded-xl text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:focus-visible:ring-offset-slate-950"
+		          />
 	        </div>
 	      </div>
     </div>
@@ -510,10 +510,10 @@ onBeforeUnmount(() => {
         <template v-if="isPanel">
           <button
             type="button"
-            class="mx-4 mt-3 mb-3 p-4 border-2 border-dashed rounded-2xl flex items-center gap-3 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
-            :class="isDragging
-              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-              : 'border-indigo-300/80 dark:border-indigo-700/70 bg-indigo-50/50 dark:bg-indigo-900/10 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'"
+	            class="mx-4 mt-3 mb-3 p-4 border-2 border-dashed rounded-2xl flex items-center gap-3 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:focus-visible:ring-offset-slate-950"
+	            :class="isDragging
+	              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+	              : 'border-indigo-300/80 dark:border-indigo-700/70 bg-indigo-50/50 dark:bg-indigo-900/10 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'"
             @click="openFilePicker"
             @dragover.prevent="handleDragOver"
             @dragleave.prevent="handleDragLeave"
@@ -585,10 +585,10 @@ onBeforeUnmount(() => {
                           v-if="activeMaterial"
                           :id="`kb-select-${file.id}`"
                           type="checkbox"
-                          class="mt-0.5 h-4 w-4 accent-indigo-600 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
-                          :checked="isKbFileSelected(file.id)"
-                          :disabled="file.status !== 'ready'"
-                          :aria-label="t('kb.picker.toggle')"
+	                          class="mt-0.5 h-4 w-4 accent-indigo-600 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:focus-visible:ring-offset-slate-950"
+	                          :checked="isKbFileSelected(file.id)"
+	                          :disabled="file.status !== 'ready'"
+	                          :aria-label="t('kb.picker.toggle')"
                           @change="toggleKbFileSelected(file.id)"
                         />
 					                </div>
@@ -674,10 +674,10 @@ onBeforeUnmount(() => {
         <template v-else>
 	          <button
 	            type="button"
-	            class="m-4 p-8 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900"
-	            :class="isDragging
-	              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-	              : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800'"
+		            class="m-4 p-8 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:focus-visible:ring-offset-slate-950"
+		            :class="isDragging
+		              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+		              : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800'"
 	            @click="openFilePicker"
 	            @dragover.prevent="handleDragOver"
 	            @dragleave.prevent="handleDragLeave"

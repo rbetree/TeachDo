@@ -56,7 +56,7 @@ const handleReset = () => {
 </script>
 
 <template>
-  <section class="min-h-[calc(100vh-4rem)] bg-slate-50 dark:bg-slate-900">
+  <section class="min-h-[calc(100vh-4rem)] bg-slate-100 dark:bg-slate-950">
     <div class="mx-auto max-w-6xl px-6 md:px-10 py-8 md:py-10 space-y-6">
       <header class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
@@ -87,7 +87,7 @@ const handleReset = () => {
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2 space-y-6">
           <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-slate-50/70 dark:bg-slate-900/50">
+            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-slate-50/70 dark:bg-slate-950/35">
               <div class="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300">
                 <LucideIcon name="shield" :size="18" />
               </div>
@@ -199,7 +199,7 @@ const handleReset = () => {
           </div>
 
           <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-slate-50/70 dark:bg-slate-900/50">
+            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-slate-50/70 dark:bg-slate-950/35">
               <div class="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300">
                 <LucideIcon name="server" :size="18" />
               </div>

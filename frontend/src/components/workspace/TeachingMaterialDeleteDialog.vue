@@ -127,7 +127,7 @@ onBeforeUnmount(() => {
               {{ t('material.delete.desc', { title: props.material.title }) }}
             </div>
 
-            <label class="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/30 p-4">
+            <label class="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/35 p-4">
               <input
                 v-model="deleteKbFiles"
                 type="checkbox"

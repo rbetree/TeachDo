@@ -169,11 +169,11 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
 <template>
   <section
     v-if="currentMaterial"
-    class="flex h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans text-slate-900 dark:text-slate-100"
+    class="flex h-[calc(100vh-64px)] bg-slate-100 dark:bg-slate-950 overflow-hidden font-sans text-slate-900 dark:text-slate-100"
   >
     <WorkspaceLeftPanel :current-material="currentMaterial" />
 
-    <main class="flex-1 flex flex-col relative bg-slate-50 dark:bg-slate-950 min-w-0">
+    <main class="flex-1 flex flex-col relative bg-slate-100 dark:bg-slate-950 min-w-0">
       <div class="flex-1 flex flex-col relative min-h-0">
         <header class="px-6 md:px-8 py-3 bg-white/70 dark:bg-slate-900/70 backdrop-blur sticky top-0 z-10 border-b border-slate-200/60 dark:border-slate-800/60">
           <div class="flex items-center justify-between gap-4 mb-3">

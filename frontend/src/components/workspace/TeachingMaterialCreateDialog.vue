@@ -187,7 +187,7 @@ onBeforeUnmount(() => {
               ></textarea>
             </label>
 
-            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/30 p-3">
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/35 p-3">
               <div class="flex items-start gap-3">
                 <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 text-indigo-600 dark:text-indigo-300 flex items-center justify-center border border-indigo-100 dark:border-indigo-800/40 flex-shrink-0">
                   <LucideIcon name="database" :size="18" />
