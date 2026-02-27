@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
                   ref="titleInputRef"
                   v-model="form.title"
                   type="text"
-                  class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  class="td-input"
                   :placeholder="t('material.form.title_placeholder')"
                 />
               </label>
@@ -157,7 +157,7 @@ onBeforeUnmount(() => {
                 <input
                   v-model="form.subject"
                   type="text"
-                  class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  class="td-input"
                   :placeholder="t('material.form.subject_placeholder')"
                 />
               </label>
@@ -170,7 +170,7 @@ onBeforeUnmount(() => {
               <textarea
                 v-model="form.description"
                 rows="2"
-                class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                class="td-input resize-none"
                 :placeholder="t('material.form.description_placeholder')"
               ></textarea>
             </label>
@@ -182,7 +182,7 @@ onBeforeUnmount(() => {
               <textarea
                 v-model="form.objectives"
                 rows="4"
-                class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                class="td-input resize-none"
                 :placeholder="t('material.form.objectives_placeholder')"
               ></textarea>
             </label>
@@ -205,14 +205,14 @@ onBeforeUnmount(() => {
           <div class="px-5 py-4 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-end gap-2 bg-slate-50/40 dark:bg-slate-950/20">
             <button
               type="button"
-              class="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              class="td-btn-secondary"
               @click="close"
             >
               {{ t('sidebar.cancel') }}
             </button>
             <button
               type="button"
-              class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md transition-colors disabled:bg-slate-300 disabled:text-slate-500"
+              class="td-btn-primary"
               :disabled="creationDisabled"
               @click="handleCreate"
             >
@@ -224,61 +224,3 @@ onBeforeUnmount(() => {
     </Transition>
   </Teleport>
 </template>
-
-<style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
-}
-
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(71, 85, 105, 0.5);
-}
-
-.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 0.7);
-}
-
-.td-modal-enter-active,
-.td-modal-leave-active {
-  transition: opacity 150ms ease;
-}
-
-.td-modal-enter-from,
-.td-modal-leave-to {
-  opacity: 0;
-}
-
-.td-modal-enter-active .td-modal-panel,
-.td-modal-leave-active .td-modal-panel {
-  transition: transform 150ms ease, opacity 150ms ease;
-}
-
-.td-modal-enter-from .td-modal-panel,
-.td-modal-leave-to .td-modal-panel {
-  opacity: 0;
-  transform: translateY(6px) scale(0.98);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .td-modal-enter-active,
-  .td-modal-leave-active,
-  .td-modal-enter-active .td-modal-panel,
-  .td-modal-leave-active .td-modal-panel {
-    transition: none;
-  }
-}
-</style>

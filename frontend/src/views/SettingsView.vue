@@ -56,8 +56,8 @@ const handleReset = () => {
 </script>
 
 <template>
-  <section class="min-h-screen pt-16 pb-12 px-6 bg-slate-50 dark:bg-slate-900">
-    <div class="max-w-6xl mx-auto space-y-6">
+  <section class="min-h-[calc(100vh-4rem)] bg-slate-50 dark:bg-slate-900">
+    <div class="mx-auto max-w-6xl px-6 md:px-10 py-8 md:py-10 space-y-6">
       <header class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -100,18 +100,18 @@ const handleReset = () => {
               <div class="grid md:grid-cols-2 gap-4">
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.outlineBase') }}</span>
-                  <input v-model="config.outlineBaseUrl" class="input" />
+                  <input v-model="config.outlineBaseUrl" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.outlineModel') }}</span>
-                  <input v-model="config.outlineModel" class="input" />
+                  <input v-model="config.outlineModel" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.outlineKey') }}</span>
                   <div class="flex gap-2">
-	                    <input v-model="config.outlineApiKey" :type="showKeys.outlineApiKey ? 'text' : 'password'" class="input flex-1" />
+	                    <input v-model="config.outlineApiKey" :type="showKeys.outlineApiKey ? 'text' : 'password'" class="td-input flex-1" />
 	                    <button
-	                      class="icon-btn"
+	                      class="td-icon-btn"
 	                      type="button"
 	                      :aria-label="getKeyToggleLabel('outlineApiKey')"
 	                      :title="getKeyToggleLabel('outlineApiKey')"
@@ -121,21 +121,21 @@ const handleReset = () => {
 	                      <LucideIcon :name="showKeys.outlineApiKey ? 'eye-off' : 'eye'" :size="16" />
 	                    </button>
 	                  </div>
-	                </label>
+                </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.pptWriterBase') }}</span>
-                  <input v-model="config.pptWriterBaseUrl" class="input" />
+                  <input v-model="config.pptWriterBaseUrl" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.pptWriterModel') }}</span>
-                  <input v-model="config.pptWriterModel" class="input" />
+                  <input v-model="config.pptWriterModel" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.pptWriterKey') }}</span>
                   <div class="flex gap-2">
-	                    <input v-model="config.pptWriterApiKey" :type="showKeys.pptWriterApiKey ? 'text' : 'password'" class="input flex-1" />
+	                    <input v-model="config.pptWriterApiKey" :type="showKeys.pptWriterApiKey ? 'text' : 'password'" class="td-input flex-1" />
 	                    <button
-	                      class="icon-btn"
+	                      class="td-icon-btn"
 	                      type="button"
 	                      :aria-label="getKeyToggleLabel('pptWriterApiKey')"
 	                      :title="getKeyToggleLabel('pptWriterApiKey')"
@@ -145,21 +145,21 @@ const handleReset = () => {
 	                      <LucideIcon :name="showKeys.pptWriterApiKey ? 'eye-off' : 'eye'" :size="16" />
 	                    </button>
 	                  </div>
-	                </label>
+                </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.pptCheckerBase') }}</span>
-                  <input v-model="config.pptCheckerBaseUrl" class="input" />
+                  <input v-model="config.pptCheckerBaseUrl" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.pptCheckerModel') }}</span>
-                  <input v-model="config.pptCheckerModel" class="input" />
+                  <input v-model="config.pptCheckerModel" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.pptCheckerKey') }}</span>
                   <div class="flex gap-2">
-	                    <input v-model="config.pptCheckerApiKey" :type="showKeys.pptCheckerApiKey ? 'text' : 'password'" class="input flex-1" />
+	                    <input v-model="config.pptCheckerApiKey" :type="showKeys.pptCheckerApiKey ? 'text' : 'password'" class="td-input flex-1" />
 	                    <button
-	                      class="icon-btn"
+	                      class="td-icon-btn"
 	                      type="button"
 	                      :aria-label="getKeyToggleLabel('pptCheckerApiKey')"
 	                      :title="getKeyToggleLabel('pptCheckerApiKey')"
@@ -169,21 +169,21 @@ const handleReset = () => {
 	                      <LucideIcon :name="showKeys.pptCheckerApiKey ? 'eye-off' : 'eye'" :size="16" />
 	                    </button>
 	                  </div>
-	                </label>
+                </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.embeddingBase') }}</span>
-                  <input v-model="config.embeddingBaseUrl" class="input" />
+                  <input v-model="config.embeddingBaseUrl" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.embeddingModel') }}</span>
-                  <input v-model="config.embeddingModel" class="input" />
+                  <input v-model="config.embeddingModel" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.embeddingKey') }}</span>
                   <div class="flex gap-2">
-	                    <input v-model="config.embeddingApiKey" :type="showKeys.embeddingApiKey ? 'text' : 'password'" class="input flex-1" />
+	                    <input v-model="config.embeddingApiKey" :type="showKeys.embeddingApiKey ? 'text' : 'password'" class="td-input flex-1" />
 	                    <button
-	                      class="icon-btn"
+	                      class="td-icon-btn"
 	                      type="button"
 	                      :aria-label="getKeyToggleLabel('embeddingApiKey')"
 	                      :title="getKeyToggleLabel('embeddingApiKey')"
@@ -212,23 +212,23 @@ const handleReset = () => {
               <div class="grid md:grid-cols-2 gap-4">
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.outlineApi') }}</span>
-                  <input v-model="config.outlineApi" class="input" />
+                  <input v-model="config.outlineApi" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.contentApi') }}</span>
-                  <input v-model="config.contentApi" class="input" />
+                  <input v-model="config.contentApi" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.personalDb') }}</span>
-                  <input v-model="config.personalDb" class="input" />
+                  <input v-model="config.personalDb" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.httpProxy') }}</span>
-                  <input v-model="config.httpProxy" class="input" />
+                  <input v-model="config.httpProxy" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.httpsProxy') }}</span>
-                  <input v-model="config.httpsProxy" class="input" />
+                  <input v-model="config.httpsProxy" class="td-input" />
                 </label>
                 <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 pt-4">
                   <input v-model="config.useChart" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
@@ -272,12 +272,3 @@ const handleReset = () => {
     </div>
   </section>
 </template>
-
-<style scoped>
-.input {
-  @apply w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500;
-}
-.icon-btn {
-  @apply px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors;
-}
-</style>

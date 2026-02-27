@@ -149,7 +149,7 @@ onBeforeUnmount(() => {
             <button
               ref="cancelButtonRef"
               type="button"
-              class="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+              class="td-btn-secondary disabled:opacity-50"
               :disabled="props.loading"
               @click="close"
             >
@@ -157,7 +157,7 @@ onBeforeUnmount(() => {
             </button>
             <button
               type="button"
-              class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-md transition-colors disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
+              class="td-btn-danger"
               :disabled="props.loading"
               @click="onConfirm"
             >

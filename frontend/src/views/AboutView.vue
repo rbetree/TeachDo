@@ -22,8 +22,8 @@ const experienceKeys = ['about.experience.1', 'about.experience.2', 'about.exper
 </script>
 
 <template>
-  <section class="min-h-screen pt-16 pb-12 px-6 bg-slate-50 dark:bg-slate-900">
-    <div class="max-w-6xl mx-auto space-y-10 animate-fade-in">
+  <section class="min-h-[calc(100vh-4rem)] bg-slate-50 dark:bg-slate-900">
+    <div class="mx-auto max-w-6xl px-6 md:px-10 py-8 md:py-10 space-y-10 animate-fade-in">
       <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <p class="text-sm uppercase tracking-widest text-indigo-500 font-bold">{{ t('about.title') }}</p>
