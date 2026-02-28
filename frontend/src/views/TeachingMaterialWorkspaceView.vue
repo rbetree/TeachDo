@@ -316,7 +316,7 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
 
           <div v-else class="h-full p-4 md:p-5">
             <div class="h-full max-w-6xl mx-auto min-h-0">
-              <AssistantView v-if="currentMaterial" :current-material="currentMaterial" variant="page" />
+              <AssistantView v-if="currentMaterial" :current-material="currentMaterial" :header-action-host="workspaceActionHost" variant="page" />
             </div>
           </div>
         </div>
