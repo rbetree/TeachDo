@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import type { TeachingMaterial } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
-import { useWorkspaceUiStore } from '@/stores/workspaceUiStore';
 import WorkspaceNeedOutlineState from '@/components/workspace/WorkspaceNeedOutlineState.vue';
 import PptPreviewPanel from '@/components/workspace/ppt/PptPreviewPanel.vue';
 import PptTemplateSelector from '@/components/workspace/ppt/PptTemplateSelector.vue';
@@ -23,7 +22,6 @@ const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const { t } = useI18n();
 const router = useRouter();
-const ui = useWorkspaceUiStore();
 
 const currentMaterialRef = toRef(props, 'currentMaterial');
 
@@ -35,7 +33,6 @@ const {
   presentation,
   viewState,
   generateFromWebSearch,
-  selectedKbFileIds,
   handleGenerate,
   cancelGenerate,
   generationCanceled,
@@ -71,10 +68,6 @@ watch(
     currentSlideIndex.value = 0;
   },
 );
-
-const goToKnowledgeBase = () => {
-  ui.openReferencePanel();
-};
 
 const goToOutline = () => {
   router.push({ name: 'material-tab', params: { materialId: props.currentMaterial.id, tab: 'outline' } });
@@ -159,20 +152,6 @@ const handleRegenerate = async () => {
             />
             <span>{{ t('ppt.advanced.web_search') }}</span>
           </label>
-
-          <button
-            type="button"
-            class="toolbar-item border transition-colors"
-            :class="selectedKbFileIds.length
-              ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/30'
-              : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600'"
-            :title="t('ppt.advanced.manage_kb_files')"
-            :aria-label="t('ppt.advanced.manage_kb_files')"
-            @click="goToKnowledgeBase"
-          >
-            <LucideIcon name="database" class="w-4 h-4" />
-            <span>{{ t('ppt.toolbar.kb_refs', { count: selectedKbFileIds.length }) }}</span>
-          </button>
 
           <template v-if="viewState === 'SELECT_TEMPLATE'">
             <button
