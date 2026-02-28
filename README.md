@@ -57,9 +57,9 @@ npm run dev
 
 ## 🧭 路由速查（TeachDo）
 
-- 工作台：`/course/:courseId`
-- 单元标签：`/course/:courseId/unit/:unitId/:tab`
-- 独立编辑器：`/course/:courseId/unit/:unitId/ppt/editor`
+- 选择教学资料：`/`
+- 工作台：`/material/:materialId/:tab`（`tab` ∈ `outline` / `lesson` / `ppt` / `assistant`）
+- 独立编辑器：`/material/:materialId/ppt/editor`
 
 ## ✅ 工程校验（发布前必跑）
 

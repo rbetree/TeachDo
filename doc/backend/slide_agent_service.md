@@ -2,7 +2,7 @@
 
 ## 概述
 
-[`slide_agent`](../../backend/slide_agent/) 是 AI2PPT 项目中负责**幻灯片内容生成**的核心服务。它接收由 [`simpleOutline`](../../backend/simpleOutline/) 生成的 Markdown 大纲，将其解析为结构化的幻灯片数据，并通过多 Agent 协作逐页生成详细的 PPT 内容（包括文本扩写、图片搜索、图表数据等）。
+[`slide_agent`](../../backend/slide_agent/) 是 TeachDo 后端中负责**幻灯片内容生成**的核心服务（历史沿袭自 AI2PPT）。它接收由 [`simpleOutline`](../../backend/simpleOutline/) 生成的 Markdown 大纲，将其解析为结构化的幻灯片数据，并通过多 Agent 协作逐页生成详细的 PPT 内容（包括文本扩写、图片搜索、图表数据等）。
 
 ## 角色和职责
 
@@ -662,7 +662,7 @@ python backend/slide_agent/a2a_client.py
 
 ## 总结
 
-[`slide_agent`](../../backend/slide_agent/) 是 AI2PPT 项目中最复杂的服务之一，通过多 Agent 协作实现了：
+[`slide_agent`](../../backend/slide_agent/) 是 TeachDo 中最复杂的服务之一（历史沿袭自 AI2PPT），通过多 Agent 协作实现了：
 
 1. **大纲解析**：Markdown → JSON 结构化数据
 2. **内容生成**：逐页扩写，支持文本、图片、图表

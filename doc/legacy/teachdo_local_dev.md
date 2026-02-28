@@ -1,4 +1,10 @@
-# TeachDo 本地开发工作流与规范
+# TeachDo 本地开发工作流与规范（已归档）
+
+> ⚠️ 本文件面向旧的 React/Vite 版本；当前 TeachDo 前端为 **Vue 3 + Vite**：
+> - 维护版入口：`frontend/README.md`
+> - 本地开发规范：`frontend/teachdo_local_dev.md`
+>
+> 本文仅用于历史对照与排查遗留问题。
 
 ## 1. 背景与目标
 TeachDo 在仓库中提供了一套 **Vite + React 19 + TypeScript** 的现代工程化脚手架，用于本地高效迭代、联调和构建。该模式与 AI Studio 的无构建版本（React 18 + Importmap + HashRouter）存在显著差异，因此本规范用于指导在本地拉起完整工程、与后端联调、并与远程无构建版本保持同步。

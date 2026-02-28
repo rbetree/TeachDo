@@ -51,4 +51,4 @@ TeachDo 目前以前端 **Vite + Vue 3 + TypeScript** 为主工程形态，目�
 ## 7. 常见问题与处理
 1. **刷新后 404**：检查部署环境是否启用 `historyApiFallback`（回退到 `index.html`）
 2. **后端不可用**：确认 `vite.config.ts` 的 `server.proxy['/api'].target` 是否正确、后端 `/healthz` 是否可访问；如绕过 `/api` 直连后端再检查 CORS
-3. **本地存储不兼容**：若调整 `CourseGroup/CourseUnit` 结构，需提供兼容/迁移逻辑，或提醒清空 localStorage
+3. **本地存储不兼容**：若调整 `TeachingMaterial` / `appStore` 持久化结构，需提供兼容/迁移逻辑（或提升存储版本），否则提醒清空 localStorage/IndexedDB

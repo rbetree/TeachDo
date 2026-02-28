@@ -1,6 +1,6 @@
 # TeachDo 开发计划（当前）
 
-> 更新：2026-02-26  
+> 更新：2026-02-28  
 > 上一版计划已归档：`doc/dev/history/PLAN_ROADMAP_2026-02-17.md`
 
 ## 1. 目标与成功标准
@@ -19,13 +19,14 @@
 ### 2.1 文件分类规则（前后端统一）
 - 参考资料（RAG）：`folderId=0`（personaldb 里上传的文件；通常 `file_id` 以 `upload:` 开头）
 - 课程产物（全文）：`folderId=1` 且 `file_id` 以 `gen:` 开头（例如 `gen:default_user:<materialId>:outline/slides/...`）
+- 全文上传（全文）：`folderId=2` 且 `file_id` 以 `full:` 开头（例如 `full:default_user:<materialId>:<epochMs>:<rand3>`）
 
-说明：实现上用 `file_id.startswith("gen:")` 作为“全文注入”的判定规则（不依赖前端传额外字段）。
+说明：实现上用 `file_id` 前缀 `gen:` / `full:` 作为“全文注入”的判定规则（不依赖前端传额外字段）。
 
 ### 2.2 选择状态存储（不引入新 schema）
 继续复用 `TeachingMaterial.kbFileIds` 存储“当前课程选中的文件ID”：
-- 左侧只增删“参考资料ID（非 gen:）”
-- 右侧只增删“产物ID（gen:）”
+- 左侧只增删“参考资料ID（非 `gen:`/`full:`）”
+- 右侧只增删“全文注入ID（`gen:`/`full:`）”
 
 好处：不改现有数据结构；所有 AI 请求天然能拿到“用户选中集合”。
 
@@ -38,11 +39,11 @@
 
 ## 3. 后端改动（`backend/main_api`）
 
-### 3.1 “gen: 全文注入”能力（对所有相关端点生效）
+### 3.1 “全文注入（gen:/full:）”能力（对所有相关端点生效）
 新增通用逻辑：
-1. `kb_file_ids` 归一化后，按 `gen:` 拆分：
-   - `full_ids = [id for id in kb_file_ids if id.startswith("gen:")]`
-   - `rag_ids = [id for id in kb_file_ids if not id.startswith("gen:")]`
+1. `kb_file_ids` 归一化后，按 `gen:`/`full:` 拆分：
+   - `full_ids = [id for id in kb_file_ids if id.startswith("gen:") or id.startswith("full:")]`
+   - `rag_ids = [id for id in kb_file_ids if not (id.startswith("gen:") or id.startswith("full:"))]`
 2. 若 personaldb 可用：
    - 对 `rag_ids`：走现有 `/search` 取片段（RAG）
    - 对 `full_ids`：调用 personaldb `GET /files/{user_id}/{file_id}/content` 取全文（加长度上限，例如单文件 40k chars，总计 120k chars；超限截断并在上下文里标注“已截断”）
@@ -92,7 +93,7 @@ DOCX 自动入库：
 
 ### 4.2 左侧“参考资料库（RAG）”——只展示导入文件
 - 复用现有 `KnowledgeBaseView`，新增参数 `sourceFilter="uploaded"`（或等价），仅展示 `folderId=0`
-- 选择逻辑仅统计/清理“参考资料ID（非 gen:）”，避免把右侧产物计入“已选参考资料”
+- 选择逻辑仅统计/清理“参考资料ID（非 `gen:`/`full:`）”，避免把右侧全文注入文件计入“已选参考资料”
 - 文案口径统一：
   - 标题：`参考资料`
   - 副标题：`用于检索（RAG），只会把相关片段放入上下文`
@@ -112,7 +113,14 @@ DOCX 自动入库：
    - 文案口径：
      - 标题：`课程产出`
      - 副标题：`勾选后将全文加入上下文（不检索）`
-2. 导出文件（DOCX/PPTX，来自后端 artifacts）
+2. 全文上传文件（来自 KB 的 full: 文件）
+   - 数据源：`store.kbFiles` 里 `folderId=2` 且 `file_id` 前缀匹配 `full:<user>:<materialId>:`  
+     （用于“把整份参考资料全文注入上下文”，不走检索）
+   - 操作：
+     - 上传：复用 `kbUpload`，传 `folderId=2` + 自定义 `file_id=full:...`
+     - 勾选：把该 `full:` file_id 加入 `TeachingMaterial.kbFileIds`（作为“全文注入”来源）
+     - 下载/删除：沿用 `kbExportFile` / `kbDeleteFile`
+3. 导出文件（DOCX/PPTX，来自后端 artifacts）
    - 新增 `artifactService`（`frontend/src/services/ai/artifactService.ts`）对接后端：
      - `listArtifacts(userId, materialId)`
      - `uploadArtifact(userId, materialId, kind, file)`
@@ -195,4 +203,3 @@ cp env_template.txt .env && python start.py
 - `user_id` 继续使用前端现有 `KB_USER_ID=default_user`
 - personaldb 已启用（用于参考资料 RAG 与 gen: 文本产物的全文读取）；若 personaldb 不可用：参考 RAG 与全文注入都会降级为“无知识库增强”
 - artifacts 落盘目录默认 `var/artifacts`，不纳入 git（仓库惯例目录）
-

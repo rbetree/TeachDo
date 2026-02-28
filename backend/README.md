@@ -1,38 +1,29 @@
-# PPT生成的后端的代码
+# TeachDo 后端（FastAPI 多服务）
 
-# 安装
-pip install -r requirements.txt
+TeachDo 后端由 `main_api`（网关）+ 多个下游服务组成，推荐通过脚本统一启动与管理。
 
-# 运行
-## 模拟接口（快速测试)
-mock_api #模拟返回，只需要运行pyhton mock_main.py 即可，方便测试
+## 推荐入口
 
-## 更详细的启动说明
-[启动说明.md](%E5%90%AF%E5%8A%A8%E8%AF%B4%E6%98%8E.md)
+- 一键启动（含前端）：见根目录 `README.md`（`python start.py`）
+- 仅启动后端：
+  ```bash
+  cd backend
+  pip install -r requirements.txt
+  python start_backend.py
+  ```
 
-## 运行和前端通信的API
-```
-cd main_api/
-python main.py
-# 测试
-python test_main.py
-```
+## 文档入口
 
-## 运行大纲生成
-```
-cd simpleOutline
-python main_api.py
-# 测试
-python a2a_client.py
-```
+- 后端启动说明（偏操作）：`启动说明.md`
+- 后端文档导航（索引）：`../doc/backend/README.md`
+- API 参考（维护版）：`../doc/backend/backend_api_reference.md`
 
-## 运行PPT生成
-```mermaid
-cd slide_agent
-python main_api.py
-# 测试
-python a2a_client.py
-```
+## 服务与端口（默认）
+
+- `main_api`：6800（对前端唯一入口）
+- `simpleOutline`：10001（大纲 Agent）
+- `slide_agent`：10011（内容 Agent）
+- `personaldb`：9100（知识库）
 
 
 

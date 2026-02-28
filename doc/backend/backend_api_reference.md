@@ -1,282 +1,239 @@
-# 后端 API 参考（以当前实现为准）
+# 后端 API 参考（维护版，以代码为准）
 
-> 本文档以源码为准：
-> - `backend/main_api/main.py`
-> - `backend/personaldb/main.py`
->
-> 说明：前端通常通过 `/api/` 代理访问 `main_api`，因此文档会同时给出「直连后端」与「通过前端代理」两种写法。
+> 最后更新：2026-02-28  
+> 源码入口：`backend/main_api/main.py`（main_api） / `backend/personaldb/main.py`（personaldb）  
+> 说明：前端默认通过 `/api` 代理访问 `main_api`。下文以「通过前端代理」写法为主，并在需要时补充「直连端口」写法。
 
 ---
 
-## 0. Base URL
+## 0) Base URL
 
-### main_api（FastAPI 网关）
+### main_api（FastAPI 网关，端口 6800）
 
-- 直连后端：`http://127.0.0.1:6800`
+- 直连：`http://127.0.0.1:6800`
 - 通过前端代理（Vite/Nginx）：`http://127.0.0.1:5174/api`（或同域 `/api`）
 
-### personaldb（知识库）
+### personaldb（知识库，端口 9100）
 
 - 直连：`http://127.0.0.1:9100`
 
 ---
 
-## 1. main_api（端口 6800）
+## 1) SSE（text/event-stream）约定
 
-### 1.1 `POST /tools/aippt_outline`（主题生成大纲，SSE）
+TeachDo 的流式端点统一使用 SSE：
 
-用途：输入主题，流式返回 Markdown 大纲（SSE）。
-
-请求（JSON）：
-
-```json
-{
-  "content": "2025 科技前沿动态",
-  "language": "chinese",
-  "model": "任意字符串（兼容字段）",
-  "stream": true
-}
-```
-
-要点：
-- `stream` 必须为 `true`（后端会断言）。
-- `model` 当前实现未参与路由层逻辑，但由于前端请求里包含该字段，仍然保留为必填字段。
-
-响应：
-- `Content-Type: text/event-stream`
-- 每条消息形如 `data: ...\n\n`
-- 结束会发送：`data: [DONE]\n\n`
-
-cURL（直连 6800）：
-
-```bash
-curl -N -X POST 'http://127.0.0.1:6800/tools/aippt_outline' \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: text/event-stream' \
-  -d '{"content":"2025 科技前沿动态","language":"chinese","model":"unused","stream":true}'
-```
+- 响应头：`Content-Type: text/event-stream`
+- 数据帧：`data: ...\n\n`
+- 结束帧：`data: [DONE]\n\n`
 
 ---
 
-### 1.2 `POST /tools/aippt_outline_unified`（推荐：主题 + 可选文件，SSE）
+## 2) main_api（端口 6800）
 
-用途：统一的大纲生成接口，支持：
-- 主题模式：只传 `content`
-- 混合模式：`content + file`（以文件为主，主题作为补充上下文）
+### 2.1 健康检查
 
-请求（`multipart/form-data`）字段：
-- `content`：必填（主题）
-- `file`：可选（上传文件）
+- `GET /healthz` → `{"ok": true}`
+
+### 2.2 模板与静态资源
+
+- `GET /templates` → `{"data":[{"id","name","cover"}]}`
+- `GET /data/{filename}` → 返回文件（模板 JSON、封面图等）
+
+> 运行时静态资源目录：`backend/main_api/template/`（`start.py` 会以 `backend/main_api` 作为进程工作目录）。
+
+### 2.3 大纲生成
+
+#### `POST /tools/aippt_outline_unified`（推荐，SSE Markdown）
+
+请求：`multipart/form-data`（字段）
+
+- `content`：必填（主题/上下文文本）
 - `language`：可选，默认 `chinese`
 - `user_id`：可选，默认 `default_user`
-- `folder_id`：可选，默认 `0`
-- `file_type`：可选（未填时会尝试从文件名推断）
+- `kb_file_ids`：可选，可重复传多次（限定 RAG/全文注入的文件集合）
+- `file`：可选（上传文件；会先走 personaldb `/upload/` 解析后拼入 prompt）
 
-要点：
-- 若提供 `file`，`main_api` 会先调用 `personaldb POST /upload/` 做解析与向量化，再把 `markdown_content` 拼到 prompt 里。
-- 该接口不会把 `fileId` 直接返回给调用方；如需查看入库文件，可再调用 `GET /files/{user_id}` 查询。
+响应：SSE Markdown（最终 `data: [DONE]`）
 
-响应：同 `POST /tools/aippt_outline`（SSE，最后 `data: [DONE]`）。
+#### `POST /tools/aippt_outline`（legacy，SSE Markdown）
 
-cURL（通过前端代理 `/api`）：
+用途：历史兼容接口（仅主题），请求体为 JSON（需 `stream=true`）。
 
-```bash
-	curl -N -X POST 'http://127.0.0.1:5174/api/tools/aippt_outline_unified' \
-	  -H 'Accept: text/event-stream' \
-	  -F 'content=AI 在医疗的应用' \
-  -F 'language=chinese' \
-  -F 'user_id=123' \
-  -F 'file=@/path/to/doc.pdf'
-```
+#### `POST /tools/aippt_outline_from_file`（legacy，SSE Markdown）
 
----
+用途：历史兼容接口（文件/URL），请求为 `multipart/form-data`。
 
-### 1.3 `POST /tools/aippt_outline_from_file`（文件/URL 生成大纲，SSE）
+### 2.4 PPT 内容生成
 
-用途：只基于文件内容生成大纲（legacy 接口）；如需「主题 + 文件」，优先用 `POST /tools/aippt_outline_unified`。
+#### `POST /tools/aippt`（SSE，每条 data 为 JSON 字符串）
 
-请求（`multipart/form-data`）字段：
-- `user_id`：必填
-- `file`：可选（上传文件）
-- `url`：可选（文件 URL）
-- `folder_id`：可选，默认 `0`
-- `file_type`：可选
-- `language`：可选，默认 `chinese`
+请求：JSON（字段）
 
-约束：
-- `file` 与 `url` 互斥，且至少提供一个。
+- `content`：必填（Markdown 大纲）
+- `language`：可选，默认 `zh`
+- `sessionId`：可选（前端默认用教学资料 id；也可用固定用户 id）
+- `generateFromWebSearch`：可选，默认 `true`
+- `generateFromUploadedFile`：可选，默认 `false`
+- `kb_folder_ids`：可选（仅对 RAG 生效的 folder 过滤）
+- `kb_file_ids`：可选（更精确的文件过滤；同时用于全文注入/检索增强）
 
-响应：SSE（最后 `data: [DONE]`）。
+响应：SSE 数据流。每个 `data:` 典型为：
 
----
+- Slide Schema：`{"type":"cover"|"contents"|"content"|"transition"|"reference"|"end", ...}`
+- 错误：`{"type":"error","text":"..."}`
+- 结束：`[DONE]`
 
-### 1.4 `POST /tools/aippt`（根据大纲生成逐页内容，SSE）
+### 2.5 教案生成与导出
 
-用途：输入 Markdown 大纲，流式返回逐页的 Slide Schema（通常是一段 JSON 字符串）。
+#### `POST /tools/lesson_plan`（SSE，JSON events）
 
-请求（JSON，实际读取字段）：
+请求：JSON（字段）
 
-```json
-{
-  "content": "# 标题\\n\\n## 章节\\n### 小节\\n- 要点",
-  "language": "zh",
-  "sessionId": "user_123",
-  "generateFromUploadedFile": false,
-  "generateFromWebSearch": true
-}
-```
+- `title/subject/description/objectives`：教学资料信息
+- `outlineContent`：必填（Markdown 大纲）
+- `language`：可选，默认 `zh`
+- `sessionId`：可选
+- `user_id`：可选，默认 `default_user`
+- `kb_file_ids`：可选（上下文增强）
+- `templateId`：可选（教案导出版式选择）
 
-要点：
-- 当前实现只读取上面这些字段。
-- 前端请求里可能会附带 `model/style/stream/template` 等字段；在默认 Pydantic 行为下，这些字段会被忽略，不影响结果。
+响应：SSE 数据流。每个 `data:` 典型为：
 
-响应：
-- `Content-Type: text/event-stream`
-- 心跳：约每 10 秒发送一次注释行 `: keep-alive\n\n`
-- 数据：`data: <payload>\n\n`
-  - `payload` 通常为一段 JSON 字符串（可由前端再 `JSON.parse`）
-- 结束：`data: [DONE]\n\n`
+- 分节：`{"type":"section","section":"objectives|materials|procedure|homework","data":...}`
+- 最终：`{"type":"final","data":{...LessonPlan...}}`
+- 错误：`{"type":"error","text":"..."}`
+- 结束：`[DONE]`
 
-cURL（直连 6800）：
+#### `GET /lesson/templates`
 
-```bash
-curl -N -X POST 'http://127.0.0.1:6800/tools/aippt' \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: text/event-stream' \
-  -d '{"content":"# 标题\\n\\n## 章节\\n### 小节\\n- 要点","language":"zh","generateFromUploadedFile":false,"generateFromWebSearch":true,"sessionId":"123"}'
-```
+响应：`{"data":[{"id","name","description"}]}`
 
----
+#### `POST /lesson/export/docx`（附件下载）
 
-### 1.5 `GET /templates`（模板列表）
+请求：JSON（字段）
 
-响应示例：
-
-```json
-{
-  "data": [
-    { "name": "红色通用", "id": "template_1", "cover": "/api/data/template_1.jpg" }
-  ]
-}
-```
-
-要点：
-- `cover` 字段目前**硬编码带 `/api/` 前缀**，用于前端同源访问。
-- 如果你直接访问 `http://127.0.0.1:6800`（不经过 `/api` 代理），请求图片时需要将 `/api` 前缀去掉，即访问 `/data/template_1.jpg`。
-
----
-
-### 1.6 `GET /data/{filename}`（模板静态资源）
-
-用途：读取 `backend/main_api/template/` 下的静态文件（模板 JSON、封面图等）。
-
-示例：
-- `GET /data/template_1.json`
-- `GET /data/template_1.jpg`
-
----
-
-### 1.7 `GET /files/{user_id}`（列出用户入库文件，代理 personaldb）
-
-用途：`main_api` 代理调用 `personaldb GET /files/{user_id}`。
-
-响应：文件列表（数组），元素包含：
-- `file_id`
-- `file_name`
-- `file_type`
-- `url`
-- `folder_id`
-- `user_id`
-
----
-
-### 1.8 `GET /proxy?url=...`（透明代理外部资源）
-
-用途：代理外部资源（主要用于图片等二进制内容），解决前端跨域与导出时的外链访问问题。
-
-要点：
-- 支持转发 `Range` / `User-Agent` 等部分请求头
-- 以流式方式返回上游 bytes
-
----
-
-### 1.9 `GET /healthz`（健康检查）
+- `lessonPlan`：必填（结构化教案）
+- `style`：必填（LessonStyle）
+- `language`：可选，默认 `zh`
+- `templateId`：可选
+- `persist`：可选（`true` 时保存到 artifacts）
+- `userId/materialId`：可选（persist 时用于归档路径；前端默认传 `default_user` + 当前 materialId）
 
 响应：
 
-```json
-{ "ok": true }
-```
+- `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+- `Content-Disposition: attachment; filename*=UTF-8''...`
+- 可选：`X-TeachDo-Artifact-Id: <artifact_id>`
+
+### 2.6 助教问答
+
+#### `POST /tools/assistant_chat`（SSE 文本 delta）
+
+请求：JSON（字段）
+
+- `messages`：必填（数组：`{role:"user"|"assistant", content:string}`）
+- `user_id`：可选，默认 `default_user`
+- `kb_file_ids`：可选（上下文增强）
+- `material`：可选（教学资料摘要字段）
+- `language`：可选，默认 `zh`
+
+响应：SSE 文本 delta（多条 `data:`），并以 `data: [DONE]` 结束。
+
+> 错误可能以结构化 JSON 形式返回：`{"type":"error","text":"..."}`。
+
+### 2.7 知识库（KB，BFF）
+
+> 本组接口统一返回 wrapper：成功为 `{"ok": true, "data": ...}`；失败为 `{"ok": false, "error": {"code","message"}}`。
+
+#### `POST /kb/upload`（上传并向量化）
+
+请求：`multipart/form-data`
+
+- `user_id`：必填（前端默认 `default_user`）
+- `folder_id`：可选，默认 `0`（0=上传素材；1=生成产物；2=全文上传）
+- `file_id`：可选（不传则后端自动生成 `upload:{user_id}:{epochMs}:{rand3}`）
+- `file_type`：可选（不传则尝试从文件名推断）
+- `file`：必填
+
+#### `GET /kb/files/{user_id}`（列出文件）
+
+可选 query：`folder_id`
+
+#### `GET /kb/files/{user_id}/{file_id}/export`（导出文件内容）
+
+用途：按 file_id 聚合返回全文内容（Markdown/纯文本），以附件下载形式返回。
+
+#### `POST /kb/vectorize/text`（纯文本入库）
+
+请求：JSON（字段）
+
+- `user_id/file_id/file_name/content`：必填
+- `file_type`：可选，默认 `md`
+- `folder_id`：可选，默认 `1`
+- 可观测性元数据（可选）：`created_at/source_type/source_material_id/source_material_title`
+
+#### `DELETE /kb/files/{user_id}/{file_id}`（删除向量）
+
+### 2.8 导出产物（Artifacts）
+
+> 本组接口同样使用 `{"ok": true, "data": ...}` wrapper。
+
+- `GET /artifacts/{user_id}/{material_id}`：列表
+- `POST /artifacts/{user_id}/{material_id}`：上传（`multipart/form-data`：`kind`=`pptx|docx`，`file`）
+- `GET /artifacts/{user_id}/{material_id}/{artifact_id}`：下载（附件）
+- `DELETE /artifacts/{user_id}/{material_id}/{artifact_id}`：删除
+
+### 2.9 代理外部资源
+
+- `GET /proxy?url=...`：透明代理二进制资源（导出/外链图片场景按需使用）
 
 ---
 
-## 2. personaldb（端口 9100）
+## 3) personaldb（端口 9100）
 
-### 2.1 `POST /upload/`（上传并解析/向量化）
+> 说明：前端不应直连 personaldb；建议统一通过 main_api 的 KB BFF（`/kb/*`）访问。
+
+### 3.1 健康检查
+
+- `GET /healthz`
+
+### 3.2 `POST /upload/`（上传并解析/向量化）
 
 支持 `multipart/form-data` / `application/x-www-form-urlencoded` / `application/json`。
 
-字段（注意命名为驼峰）：
-- `userId`：必填
-- `fileId`：必填
+字段（驼峰）：
+
+- `userId`：必填（字符串/数字均可；建议用 `default_user`）
+- `fileId`：必填（字符串/数字均可）
 - `folderId`：可选，默认 `0`
 - `fileType`：可选
 - `url`：可选（与 `file` 互斥）
 - `file`：可选（与 `url` 互斥）
+- 可观测性元数据（可选）：`createdAt/sourceType/sourceMaterialId/sourceMaterialTitle`
 
-成功响应包含（示例字段）：
-- `id`（即 `fileId`）
-- `file_name`
-- `userId`
-- `fileType`
-- `url`
-- `folderId`
-- `embedding_result`
-- `markdown_content`
+### 3.3 `POST /search`（语义检索）
 
----
+请求：JSON
 
-### 2.2 `POST /search`（语义检索）
+- `userId`：必填
+- `query`：必填
+- `keyword`：可选
+- `topk`：可选，默认 `3`
+- `fileIds`：可选（仅在给定文件集合内检索）
 
-请求（JSON）：
+### 3.4 `POST /vectorize/text`（纯文本向量化并落库）
 
-```json
-{
-  "userId": 123,
-  "query": "深度学习的应用",
-  "keyword": "",
-  "topk": 3
-}
-```
+请求：JSON（字段）
 
-响应：Chroma `query` 的结果结构（典型包含 `ids/documents/metadatas/distances` 等字段）。
+- `content/fileId/fileName`：必填
+- `userId`：可选
+- `fileType/url/folderId`：可选
+- 可观测性元数据（可选）：`createdAt/sourceType/sourceMaterialId/sourceMaterialTitle`
 
----
+### 3.5 文件列表/导出/删除
 
-### 2.3 `POST /vectorize/text`（纯文本向量化并落库）
+- `GET /files/{user_id}`：列出该用户文件（数组）
+- `GET /files/{user_id}/{file_id}/content`：导出该文件的聚合全文（用于 BFF 导出/全文注入）
+- `DELETE /files/{user_id}/{file_id}`：删除该文件对应的向量数据
 
-请求（JSON，必填字段最少为 `content/fileId/fileName`）：
-
-```json
-{
-  "content": "要向量化的文本",
-  "fileId": 1001,
-  "fileName": "note.txt",
-  "userId": 123
-}
-```
-
----
-
-### 2.4 `GET /files/{user_id}`（列出用户文件）
-
-响应：文件列表（数组），元素字段同上。
-
----
-
-## 3. 相关文档
-
-- 部署与运行：`doc/backend/backend_deployment.md`、`doc/DockerDeploy.md`
-- 环境变量：`doc/dev/ENV_GUIDE.md`
-- 模板制作：`doc/Template.md`
-- 历史抓包记录：`doc/legacy/API_OUTLINE.md`、`doc/legacy/API_CONTENT.md` 等

@@ -11,7 +11,7 @@
 
 ## 1) Base URL 与代理（为什么前端统一用 `/api`）
 
-前端在 `frontend/src/services/aiService.ts` 中固定：
+前端在 `frontend/src/services/apiClient.ts` 中固定：
 
 - `BASE_API = '/api'`
 
@@ -33,23 +33,48 @@
 
 ### 2.2 大纲生成（SSE）
 
-- `generateOutline(course, unit, onStream?)` → `POST /api/tools/aippt_outline_unified`
+- `generateOutline(material, onStream?)` → `POST /api/tools/aippt_outline_unified`
   - `multipart/form-data`
   - `Accept: text/event-stream`
+  - 备注：会透传 `kb_file_ids`（来自 `TeachingMaterial.kbFileIds`）
 
-### 2.3 内容生成（SSE）
+### 2.3 教案生成/导出
+
+- `streamLessonPlan({ material, templateId?, onEvent? })` → `POST /api/tools/lesson_plan`（SSE）
+  - `Content-Type: application/json`
+  - `Accept: text/event-stream`
+- `getLessonTemplates()` → `GET /api/lesson/templates`
+- `exportLessonDocx({ lessonPlan, style, templateId?, persist?, userId?, materialId? })` → `POST /api/lesson/export/docx`
+  - `Content-Type: application/json`
+  - 响应：二进制附件（DOCX）；可读取 `x-teachdo-artifact-id`（若后端启用持久化）
+
+### 2.4 PPT 内容生成（SSE）
 
 - `streamAipptSlides(payload)` → `POST /api/tools/aippt`
   - `Content-Type: application/json`
   - `Accept: text/event-stream`
-  - 说明：历史遗留的 `generatePPT()` 已清理，统一使用 `streamAipptSlides()`（调用方在前端完成状态回写）
+  - 备注：支持透传 `kb_folder_ids` / `kb_file_ids`
 
-### 2.4 知识库（KB）
+### 2.5 助教问答（SSE）
+
+- `streamAssistantReply({ messages, material?, kbFileIds?, onDelta? })` → `POST /api/tools/assistant_chat`
+  - `Content-Type: application/json`
+  - `Accept: text/event-stream`
+
+### 2.6 知识库（KB，BFF）
 
 - `kbUpload({ userId, file, folderId? })` → `POST /api/kb/upload`（`multipart/form-data`）
 - `kbListFiles({ userId, folderId? })` → `GET /api/kb/files/{userId}`（可选 query：`folder_id`）
 - `kbDeleteFile({ userId, fileId })` → `DELETE /api/kb/files/{userId}/{fileId}`
+- `kbExportFile({ userId, fileId })` → `GET /api/kb/files/{userId}/{fileId}/export`（附件下载）
 - `vectorizeTextToKb({ userId, fileId, folderId, fileName, content })` → `POST /api/kb/vectorize/text`
+
+### 2.7 导出产物（Artifacts）
+
+- `listArtifacts({ userId, materialId })` → `GET /api/artifacts/{userId}/{materialId}`
+- `uploadArtifact({ userId, materialId, kind, file })` → `POST /api/artifacts/{userId}/{materialId}`（`multipart/form-data`）
+- `downloadArtifact({ userId, materialId, artifactId })` → `GET /api/artifacts/{userId}/{materialId}/{artifactId}`（附件下载）
+- `deleteArtifact({ userId, materialId, artifactId })` → `DELETE /api/artifacts/{userId}/{materialId}/{artifactId}`
 
 ---
 
@@ -63,7 +88,7 @@
 
 项目里的典型实现位置：
 - `frontend/src/utils/sse.ts`
-- `frontend/src/services/aiService.ts`
+- `frontend/src/services/ai/*.ts`（各领域服务内读流并上抛事件/增量）
 
 ---
 

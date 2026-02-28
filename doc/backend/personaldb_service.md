@@ -2,7 +2,7 @@
 
 ## 服务概述
 
-[`personaldb`](../../backend/personaldb/main.py#L1) 是 AI2PPT 项目的知识库服务，负责文档上传、格式转换、向量化存储和智能检索。
+[`personaldb`](../../backend/personaldb/main.py#L1) 是 TeachDo 的知识库服务（历史沿袭自 AI2PPT），负责文档上传、格式转换、向量化存储和智能检索。
 
 **监听端口**: `9100`
 

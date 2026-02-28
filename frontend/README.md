@@ -11,14 +11,15 @@ TeachDo 是一套面向教师的智能备课平台，当前仓库提供 **Vite +
 
 ## 📖 参考文档
 - [teachdo_local_dev.md](./teachdo_local_dev.md)：本地开发流程、依赖管理与部署规范
-- [docs/vue_migration_plan.md](./docs/vue_migration_plan.md)：Vue 迁移阶段里程碑、完成度与待办
+- [../doc/dev/PLAN.md](../doc/dev/PLAN.md)：当前开发计划（入口）
+- [../doc/dev/FRONTEND_API_CALLS.md](../doc/dev/FRONTEND_API_CALLS.md)：前端 API 调用与封装（services 层）
 
 ---
 
 ## 📌 项目现状
 - ✅ 2025-12-10 完成 V1.1～V1.6：Vue 脚手架、Tailwind、Pinia、Router、i18n/Toast 已全部落地，`npm run lint && npm run typecheck && npm run build` 可稳定通过。
 - ✅ 已移除登录/认证模块：当前默认免登录进入工作台，路由仅保留课程有效性校验与工作流能力。
-- ⏳ V2.4～V3.6（课程工作台、AI 大纲/教案/PPT/助教）正在迁移，Vue 版本需严格对照 React 交互与样式，端到端 checklist 记录在 `docs/vue_migration_plan.md`。
+- ⏳ 教学资料工作台（AI 大纲/教案/PPT/助教）仍在迭代：以 `../doc/dev/PLAN.md` 为准（过程性记录可参考 `../doc/dev/DEVELOPMENT_PLAN.md`）。
 - 📌 React 旧仓库仅供参考，所有增量需求、Bug 修复与联调任务均以 Vue 工程为准；若需对照可通过 `git worktree` 拉取 `main` tag 版本。
 
 ---
