@@ -33,7 +33,10 @@ export function usePptGeneration(params: UsePptGenerationParams) {
   const kbFileIdsForRequest = computed(() => {
     const ids = Array.isArray(selectedKbFileIds.value) ? selectedKbFileIds.value : [];
     const normalized = ids.map((id) => id.trim()).filter(Boolean);
-    return Array.from(new Set(normalized));
+    const unique = Array.from(new Set(normalized));
+    // 大纲本身已通过 outlineContent 传入生成请求；若再勾选 gen:*:outline 会造成上下文重复注入。
+    const outlineFileId = `gen:${KB_USER_ID}:${params.currentMaterial.value.id}:outline`;
+    return unique.filter((id) => id !== outlineFileId);
   });
 
   const selectedTemplate = computed(() => templates.value.find((item) => item.id === selectedTemplateId.value) || null);

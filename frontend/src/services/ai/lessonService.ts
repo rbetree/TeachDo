@@ -91,6 +91,11 @@ export async function streamLessonPlan(input: {
   const outlineContent = material.outlineContent?.trim();
   if (!outlineContent) throw new ApiError('unknown', 'Outline is required to generate lesson plan.');
 
+  const outlineFileId = `gen:${KB_USER_ID}:${material.id}:outline`;
+  const kbFileIds = Array.from(new Set((material.kbFileIds ?? []).map((id) => id.trim()).filter(Boolean))).filter(
+    (id) => id !== outlineFileId,
+  );
+
   const payload = {
     title,
     subject: material.subject || '',
@@ -100,7 +105,7 @@ export async function streamLessonPlan(input: {
     language: input.language ?? 'zh',
     sessionId: material.id,
     user_id: KB_USER_ID,
-    kb_file_ids: Array.from(new Set((material.kbFileIds ?? []).map((id) => id.trim()).filter(Boolean))),
+    kb_file_ids: kbFileIds,
     templateId: (input.templateId || material.selectedLessonTemplateId || '').trim() || undefined,
   };
 
