@@ -137,6 +137,15 @@ const parseGenFileId = (fileId: string) => {
   return { user, materialId, kind };
 };
 
+const isLockedGeneratedOutput = (file: KBFile | null | undefined): boolean => {
+  const id = (file?.id || '').trim();
+  if (!id.startsWith('gen:')) return false;
+  const parsed = parseGenFileId(id);
+  if (!parsed) return true;
+  // 课程产出与内容页绑定：仅当课程仍存在时锁定；若课程已删除但 KB 残留，则允许手动清理。
+  return store.materials.some((m) => m.id === parsed.materialId);
+};
+
 const inferArtifactKindFromGenKind = (genKind: string): ArtifactKind | null => {
   const kind = (genKind || '').trim().toLowerCase();
   if (!kind) return null;
@@ -294,6 +303,10 @@ const purgeKbFileReferences = (fileId: string) => {
 const handleDeleteKbFile = async (file: KBFile) => {
   const id = (file?.id || '').trim();
   if (!id) return;
+  if (isLockedGeneratedOutput(file)) {
+    toast.info(t('kb.toast.locked_output'));
+    return;
+  }
   if (!confirm(t('kb.confirm.delete'))) return;
 
   // 本地错误条目：直接移除
@@ -693,21 +706,21 @@ defineExpose({
                 <LucideIcon name="file-down" :size="16" />
               </button>
 
-	              <button
-	                v-if="card.kbFile"
-	                type="button"
-	                class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
-	                :aria-label="t('kb.action.delete')"
-	                :title="t('kb.action.delete')"
-	                :disabled="card.kbFile.status === 'uploading' || card.kbFile.status === 'processing' || deletingKbFileId === card.kbFile.id"
-	                @click="handleDeleteKbFile(card.kbFile)"
-	              >
-	                <LucideIcon name="trash-2" :size="16" />
-	              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+		              <button
+		                v-if="card.kbFile"
+		                type="button"
+		                class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+		                :aria-label="isLockedGeneratedOutput(card.kbFile) ? t('kb.action.locked') : t('kb.action.delete')"
+		                :title="isLockedGeneratedOutput(card.kbFile) ? t('kb.tooltip.locked_output') : t('kb.action.delete')"
+		                :disabled="card.kbFile.status === 'uploading' || card.kbFile.status === 'processing' || deletingKbFileId === card.kbFile.id"
+		                @click="handleDeleteKbFile(card.kbFile)"
+		              >
+		                <LucideIcon :name="isLockedGeneratedOutput(card.kbFile) ? 'lock' : 'trash-2'" :size="16" />
+		              </button>
+	            </div>
+	          </div>
+	        </div>
+	      </div>
     </div>
   </div>
 </template>
