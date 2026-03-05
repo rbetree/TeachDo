@@ -5,6 +5,10 @@ export type UiSettingsConfig = {
   outlineBaseUrl: string;
   outlineModel: string;
   outlineApiKey: string;
+  lessonType: string;
+  lessonBaseUrl: string;
+  lessonModel: string;
+  lessonApiKey: string;
   pptWriterType: string;
   pptWriterBaseUrl: string;
   pptWriterModel: string;
@@ -43,6 +47,7 @@ export type UiSettingsConfig = {
 
 export type UiSettingsSecrets = {
   outlineApiKey: boolean;
+  lessonApiKey: boolean;
   pptWriterApiKey: boolean;
   pptCheckerApiKey: boolean;
   embeddingApiKey: boolean;
