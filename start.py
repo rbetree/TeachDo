@@ -293,20 +293,48 @@ class ProductionStarter:
         self.user_timeout_s = timeout_s
         self.parallel_start = parallel_start
 
+        # 先加载 settings.json（若存在），再加载 .env；从而实现 settings 覆盖 .env
+        try:
+            from backend.common.settings_store import load_and_apply_settings
+
+            load_and_apply_settings(overwrite=False, repo_root=self.project_root)
+        except Exception:
+            pass
+
         # 加载环境配置
         env_file = self.project_root / ".env"
         if env_file.exists():
             load_dotenv(env_file)
         else:
-            print("WARNING: 未找到环境配置文件，请检查项目根目录下是否存在 .env 文件，如果没有，从 env_template.txt 拷贝一份")
-            sys.exit(1)
+            # 允许无 .env 启动：用户可通过前端“设置”页写入 var/settings.json
+            print("WARNING: 未找到 .env，将使用默认配置启动（可在“设置”页保存配置后重启服务生效）")
+
+        # 日志目录可由 TEACHDO_LOG_DIR 覆盖（默认 logs）
+        configured_logs_dir = (os.environ.get("TEACHDO_LOG_DIR") or "logs").strip() or "logs"
+        logs_dir_path = Path(configured_logs_dir).expanduser()
+        if not logs_dir_path.is_absolute():
+            logs_dir_path = self.project_root / logs_dir_path
+        self.logs_dir = logs_dir_path
 
         self.bind_host = _normalize_host(os.environ.get("HOST", "127.0.0.1"))
         self.access_host = _access_host_for_bind_host(self.bind_host)
 
-        personaldb_port = int(os.environ.get("PERSONALDB_PORT") or os.environ.get("PERSONAL_DB_PORT") or "9100")
-        outline_port = int(os.environ.get("OUTLINE_API_PORT", "10001"))
-        content_port = int(os.environ.get("CONTENT_API_PORT", "10011"))
+        personaldb_port = int(
+            os.environ.get("PERSONALDB_PORT")
+            or os.environ.get("PERSONAL_DB_PORT")
+            or (urlsplit(os.environ.get("PERSONAL_DB", "")).port if os.environ.get("PERSONAL_DB") else None)
+            or "9100"
+        )
+        outline_port = int(
+            os.environ.get("OUTLINE_API_PORT")
+            or (urlsplit(os.environ.get("OUTLINE_API", "")).port if os.environ.get("OUTLINE_API") else None)
+            or "10001"
+        )
+        content_port = int(
+            os.environ.get("CONTENT_API_PORT")
+            or (urlsplit(os.environ.get("CONTENT_API", "")).port if os.environ.get("CONTENT_API") else None)
+            or "10011"
+        )
         main_api_port = int(os.environ.get("MAIN_API_PORT", "6800"))
 
         # 按依赖顺序启动：personaldb -> outline -> slide_agent -> main_api

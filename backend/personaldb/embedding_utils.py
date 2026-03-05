@@ -783,7 +783,7 @@ class EmbeddingModel(object):
     def __init__(self):
         """
         环境变量：
-        - EMBEDDING_TYPE: openai | ollama
+        - EMBEDDING_TYPE: openai | ollama | vllm | xinference | local_openai
         - EMBEDDING_MODEL:    各提供方的模型名
         - 通用：EMBEDDING_DIM (可选，部分提供方不支持自定义维度)
         - 通用：EMBEDDING_API_KEY / EMBEDDING_BASE_URL
@@ -794,7 +794,9 @@ class EmbeddingModel(object):
         provider = os.getenv("EMBEDDING_TYPE")
         if not provider:
             raise Exception("必须设置 EMBEDDING_TYPE")
-        self.provider = provider.lower()
+        provider_norm = provider.lower()
+        # vllm/xinference/local_openai 统一视为 OpenAI 兼容协议
+        self.provider = "openai" if provider_norm in {"openai", "vllm", "xinference", "local_openai"} else provider_norm
         self.dimensions = int(os.getenv("EMBEDDING_DIM", "0")) or None
 
         if self.provider == "openai":

@@ -55,14 +55,10 @@ def after_tool_callback(
 class OutlineAgent(LlmAgent):
     def __init__(self, **kwargs):
         # 使用统一配置（OUTLINE_*），不再兼容旧的 MODEL_PROVIDER / LLM_MODEL
-        outline_model = os.getenv("OUTLINE_MODEL")
-        outline_type = os.getenv("OUTLINE_TYPE")
-        if not outline_model or not outline_type:
-            raise RuntimeError(
-                "大纲模型未配置，请在环境变量中设置 OUTLINE_TYPE/OUTLINE_MODEL"
-            )
-        outline_api_key = os.getenv("OUTLINE_API_KEY")
-        outline_base_url = os.getenv("OUTLINE_BASE_URL")
+        outline_model = (os.getenv("OUTLINE_MODEL") or "").strip() or "qwen-turbo-latest"
+        outline_type = (os.getenv("OUTLINE_TYPE") or "").strip().lower() or "openai"
+        outline_api_key = (os.getenv("OUTLINE_API_KEY") or "").strip()
+        outline_base_url = (os.getenv("OUTLINE_BASE_URL") or "").strip()
 
         super().__init__(
             name="outline_agent",

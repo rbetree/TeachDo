@@ -40,15 +40,14 @@ def create_model(model: str, provider: str, api_key: Optional[str] = None, base_
 
     if provider == "google":
         # google 的模型在 ADK 里直接用名称；底层 SDK 仍然依赖 GOOGLE_API_KEY。
-        key = api_key or os.environ.get("GOOGLE_API_KEY")
-        assert key, "GOOGLE_API_KEY is not set，或未通过 OUTLINE_API_KEY 提供"
+        key = (api_key or os.environ.get("GOOGLE_API_KEY") or "").strip()
+        # 未配置 key 时不在启动阶段强制失败，留给运行期报错并提示用户在“设置”页完善配置。
         if api_key and not os.environ.get("GOOGLE_API_KEY"):
             os.environ["GOOGLE_API_KEY"] = api_key
         return model
 
     if provider == "claude":
-        key = api_key or os.environ.get("CLAUDE_API_KEY")
-        assert key, "CLAUDE_API_KEY is not set，或未通过 OUTLINE_API_KEY / PPT_WRITER_API_KEY 提供"
+        key = (api_key or os.environ.get("CLAUDE_API_KEY") or "").strip()
         if not model.startswith("anthropic/"):
             model = "anthropic/" + model
         return LiteLlm(
@@ -57,9 +56,9 @@ def create_model(model: str, provider: str, api_key: Optional[str] = None, base_
             num_tries=3,
         )
 
-    if provider == "openai":
-        key = api_key or os.environ.get("OPENAI_API_KEY")
-        assert key, "OPENAI_API_KEY is not set，或未通过统一 API_KEY 提供"
+    openai_compatible = {"openai", "ollama", "vllm", "local_openai", "xinference"}
+    if provider in openai_compatible:
+        key = (api_key or os.environ.get("OPENAI_API_KEY") or "").strip()
         model = _ensure_openai_prefix(model)
         api_base = base_url or os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
         return LiteLlm(model=model, api_key=key, api_base=api_base, num_retries=3)

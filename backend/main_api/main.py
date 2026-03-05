@@ -4,6 +4,7 @@ import io
 import random
 import re
 import os
+import sys
 from pathlib import Path
 from dotenv import dotenv_values
 from fastapi import FastAPI, UploadFile, File
@@ -56,12 +57,26 @@ def _find_repo_root(start: Path) -> Path:
 def _load_env_files() -> None:
     """
     统一环境变量加载优先级（不覆盖系统环境变量）：
+    0) var/settings.json（由“设置”页写入，可覆盖 .env）
     1) 项目根目录 `.env`
     2) 当前服务目录 `.env`（可选覆盖）
     """
     merged: dict[str, str] = {}
 
     repo_root = _find_repo_root(Path(__file__).resolve())
+    # 允许在 `backend/main_api` 目录下直接运行（python main.py）：确保可导入 backend.*
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    # 先加载 settings.json（若存在），再加载 .env；从而实现 settings 覆盖 .env
+    try:
+        from backend.common.settings_store import load_and_apply_settings
+
+        load_and_apply_settings(overwrite=False, repo_root=repo_root)
+    except Exception:
+        # settings.json 读取失败不应影响服务启动
+        pass
+
     root_env = repo_root / ".env"
     if root_env.exists():
         merged.update({k: v for k, v in dotenv_values(root_env).items() if v is not None})
@@ -77,9 +92,28 @@ def _load_env_files() -> None:
 
 _load_env_files()
 
-OUTLINE_API = os.environ.get("OUTLINE_API", f"http://{os.environ.get('HOST', '127.0.0.1')}:{os.environ.get('OUTLINE_API_PORT', '10001')}")
-CONTENT_API = os.environ.get("CONTENT_API", f"http://{os.environ.get('HOST', '127.0.0.1')}:{os.environ.get('CONTENT_API_PORT', '10011')}")
+
+def _get_outline_api() -> str:
+    return os.environ.get(
+        "OUTLINE_API",
+        f"http://{os.environ.get('HOST', '127.0.0.1')}:{os.environ.get('OUTLINE_API_PORT', '10001')}",
+    )
+
+
+def _get_content_api() -> str:
+    return os.environ.get(
+        "CONTENT_API",
+        f"http://{os.environ.get('HOST', '127.0.0.1')}:{os.environ.get('CONTENT_API_PORT', '10011')}",
+    )
 app = FastAPI()
+
+# settings API（允许在前端“设置”页写入 var/settings.json）
+try:
+    from backend.main_api.settings_api import register_settings_routes
+
+    register_settings_routes(app)
+except Exception:  # pragma: no cover - 单服务打包/裁剪场景允许缺失
+    pass
 
 # Allow CORS for the frontend development server
 app.add_middleware(
@@ -356,8 +390,9 @@ def _try_get_lesson_llm_settings() -> dict[str, str] | None:
 
     if not llm_type or not llm_model or not llm_api_key:
         return None
-    if llm_type != "openai":
-        raise RuntimeError(f"当前 Lesson 仅支持 openai 协议，检测到 LESSON_TYPE/OUTLINE_TYPE={llm_type}")
+    openai_compatible = {"openai", "ollama", "vllm", "local_openai", "xinference"}
+    if llm_type not in openai_compatible:
+        raise RuntimeError(f"当前 Lesson 仅支持 openai 兼容协议，检测到 LESSON_TYPE/OUTLINE_TYPE={llm_type}")
     return {"type": llm_type, "model": llm_model, "api_key": llm_api_key, "base_url": llm_base_url}
 
 
@@ -783,7 +818,7 @@ async def iter_outline_text_chunks(prompt: str, language: str = "chinese"):
     - 只关心 chunk_data["type"] == "text" 的部分
     - 统一日志与空文本过滤
     """
-    outline_wrapper = A2AOutlineClientWrapper(session_id=uuid.uuid4().hex, agent_url=OUTLINE_API)
+    outline_wrapper = A2AOutlineClientWrapper(session_id=uuid.uuid4().hex, agent_url=_get_outline_api())
     async for chunk_data in outline_wrapper.generate(prompt, language=language):
         logger.info(f"生成大纲输出的chunk_data: {chunk_data}")
         chunk_type = chunk_data.get("type")
@@ -1734,8 +1769,9 @@ def _get_assistant_llm_settings() -> dict[str, str]:
 
     if not llm_type or not llm_model:
         raise RuntimeError("助教模型未配置，请设置 ASSISTANT_TYPE/ASSISTANT_MODEL（或复用 OUTLINE_* 配置）")
-    if llm_type != "openai":
-        raise RuntimeError(f"当前助教仅支持 openai 协议，检测到 ASSISTANT_TYPE/OUTLINE_TYPE={llm_type}")
+    openai_compatible = {"openai", "ollama", "vllm", "local_openai", "xinference"}
+    if llm_type not in openai_compatible:
+        raise RuntimeError(f"当前助教仅支持 openai 兼容协议，检测到 ASSISTANT_TYPE/OUTLINE_TYPE={llm_type}")
     if not llm_api_key:
         raise RuntimeError("缺少助教模型 API Key，请设置 ASSISTANT_API_KEY（或复用 OUTLINE_API_KEY）")
 
@@ -1857,7 +1893,7 @@ async def stream_content_response(
     result = markdown_content[match.start():] if match else markdown_content
     logger.info(f"用户输入的markdown大纲是：{result}")
 
-    content_wrapper = A2AContentClientWrapper(session_id=uuid.uuid4().hex, agent_url=CONTENT_API)
+    content_wrapper = A2AContentClientWrapper(session_id=uuid.uuid4().hex, agent_url=_get_content_api())
 
     search_engine = []
     if generateFromUploadedFile:

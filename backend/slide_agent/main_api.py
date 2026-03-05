@@ -10,12 +10,25 @@ from slide_agent.runtime_paths import find_repo_root
 def _load_env_files() -> None:
     """
     统一环境变量加载优先级（不覆盖系统环境变量）：
+    0) var/settings.json（由“设置”页写入，可覆盖 .env）
     1) 项目根目录 `.env`
     2) 当前服务目录 `.env`（可选覆盖）
     """
     merged: dict[str, str] = {}
 
     repo_root = find_repo_root(Path(__file__).resolve())
+    # 允许在 `backend/slide_agent` 目录下直接运行：确保可导入 backend.*
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    # 先加载 settings.json，再加载 .env；从而实现 settings 覆盖 .env
+    try:
+        from backend.common.settings_store import load_and_apply_settings
+
+        load_and_apply_settings(overwrite=False, repo_root=repo_root)
+    except Exception:
+        pass
+
     root_env = repo_root / ".env"
     if root_env.exists():
         merged.update({k: v for k, v in dotenv_values(root_env).items() if v is not None})

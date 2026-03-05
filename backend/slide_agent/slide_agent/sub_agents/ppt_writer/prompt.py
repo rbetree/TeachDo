@@ -73,7 +73,13 @@ TRANSITION_PAGE_PROMPT = """
 """
 
 # 不带图表的prompt，如果对于智力比较差的模型，可以不要带图表，助手下面的CONTENT_PAGE_PROMPT，然后启用这个
-if os.environ.get("USE_CHART"):
+def _truthy_env(name: str) -> bool:
+    v = (os.environ.get(name) or "").strip().lower()
+    return v in {"1", "true", "yes", "y", "on"}
+
+
+# USE_CHART 允许设置为 false/0 来禁用图表生成
+if _truthy_env("USE_CHART"):
     # 带图表的prompt
     CONTENT_PAGE_PROMPT = """
     内容页（type: "content"）
