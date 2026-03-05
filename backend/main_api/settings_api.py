@@ -30,6 +30,12 @@ class UiSettingsPayload(BaseModel):
     outlineModel: str | None = None
     outlineApiKey: str | None = Field(default=None, description="留空表示不修改")
 
+    # Lesson（可选：覆盖 OUTLINE_*；留空表示复用 Outline）
+    lessonType: str | None = None
+    lessonBaseUrl: str | None = None
+    lessonModel: str | None = None
+    lessonApiKey: str | None = Field(default=None, description="留空表示不修改")
+
     pptWriterType: str | None = None
     pptWriterBaseUrl: str | None = None
     pptWriterModel: str | None = None
@@ -81,6 +87,10 @@ _UI_TO_ENV: dict[str, str] = {
     "outlineBaseUrl": "OUTLINE_BASE_URL",
     "outlineModel": "OUTLINE_MODEL",
     "outlineApiKey": "OUTLINE_API_KEY",
+    "lessonType": "LESSON_TYPE",
+    "lessonBaseUrl": "LESSON_BASE_URL",
+    "lessonModel": "LESSON_MODEL",
+    "lessonApiKey": "LESSON_API_KEY",
     "pptWriterType": "PPT_WRITER_TYPE",
     "pptWriterBaseUrl": "PPT_WRITER_BASE_URL",
     "pptWriterModel": "PPT_WRITER_MODEL",
@@ -235,6 +245,7 @@ def _apply_ports_link_service_urls(
 def _mask_secrets_flags(effective_env: dict[str, str]) -> dict[str, bool]:
     return {
         "outlineApiKey": bool((effective_env.get("OUTLINE_API_KEY") or "").strip()),
+        "lessonApiKey": bool((effective_env.get("LESSON_API_KEY") or "").strip()),
         "pptWriterApiKey": bool((effective_env.get("PPT_WRITER_API_KEY") or "").strip()),
         "pptCheckerApiKey": bool((effective_env.get("PPT_CHECKER_API_KEY") or "").strip()),
         "embeddingApiKey": bool((effective_env.get("EMBEDDING_API_KEY") or "").strip()),
@@ -249,6 +260,10 @@ def _build_ui_config(effective_env: dict[str, str]) -> dict[str, Any]:
         "outlineBaseUrl": effective_env.get("OUTLINE_BASE_URL", DEFAULT_SETTINGS_ENV["OUTLINE_BASE_URL"]),
         "outlineModel": effective_env.get("OUTLINE_MODEL", DEFAULT_SETTINGS_ENV["OUTLINE_MODEL"]),
         "outlineApiKey": "",  # 不回传 secret
+        "lessonType": effective_env.get("LESSON_TYPE", DEFAULT_SETTINGS_ENV["LESSON_TYPE"]),
+        "lessonBaseUrl": effective_env.get("LESSON_BASE_URL", DEFAULT_SETTINGS_ENV["LESSON_BASE_URL"]),
+        "lessonModel": effective_env.get("LESSON_MODEL", DEFAULT_SETTINGS_ENV["LESSON_MODEL"]),
+        "lessonApiKey": "",
         "pptWriterType": effective_env.get("PPT_WRITER_TYPE", DEFAULT_SETTINGS_ENV["PPT_WRITER_TYPE"]),
         "pptWriterBaseUrl": effective_env.get("PPT_WRITER_BASE_URL", DEFAULT_SETTINGS_ENV["PPT_WRITER_BASE_URL"]),
         "pptWriterModel": effective_env.get("PPT_WRITER_MODEL", DEFAULT_SETTINGS_ENV["PPT_WRITER_MODEL"]),

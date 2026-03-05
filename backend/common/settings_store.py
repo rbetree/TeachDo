@@ -30,6 +30,11 @@ ALLOWED_SETTINGS_ENV_KEYS: set[str] = {
     "OUTLINE_BASE_URL",
     "OUTLINE_API_KEY",
     "OUTLINE_MODEL",
+    # Lesson (可选：覆盖 OUTLINE_*；留空表示复用 OUTLINE 配置)
+    "LESSON_TYPE",
+    "LESSON_BASE_URL",
+    "LESSON_API_KEY",
+    "LESSON_MODEL",
     # PPT writer / checker
     "PPT_WRITER_TYPE",
     "PPT_WRITER_BASE_URL",
@@ -78,6 +83,7 @@ ALLOWED_SETTINGS_ENV_KEYS: set[str] = {
 
 SECRET_ENV_KEYS: set[str] = {
     "OUTLINE_API_KEY",
+    "LESSON_API_KEY",
     "PPT_WRITER_API_KEY",
     "PPT_CHECKER_API_KEY",
     "EMBEDDING_API_KEY",
@@ -91,6 +97,11 @@ DEFAULT_SETTINGS_ENV: dict[str, Any] = {
     "OUTLINE_BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "OUTLINE_API_KEY": "",
     "OUTLINE_MODEL": "qwen-turbo-latest",
+    # Lesson 默认复用 Outline（留空表示不覆盖）
+    "LESSON_TYPE": "",
+    "LESSON_BASE_URL": "",
+    "LESSON_API_KEY": "",
+    "LESSON_MODEL": "",
     "PPT_WRITER_TYPE": "openai",
     "PPT_WRITER_BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "PPT_WRITER_API_KEY": "",

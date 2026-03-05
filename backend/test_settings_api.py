@@ -123,6 +123,32 @@ def test_settings_put_writes_secret_when_provided(client: TestClient, settings_f
     assert stored["OUTLINE_API_KEY"] == "sk-test"
 
 
+def test_settings_put_lesson_fields_persist_and_secret_flag(client: TestClient, settings_file: Path):
+    resp = client.put(
+        "/settings",
+        json={
+            "lessonType": "openai",
+            "lessonBaseUrl": "https://example.com/v1",
+            "lessonModel": "lesson-model",
+            "lessonApiKey": "sk-lesson",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["data"]["config"]["lessonType"] == "openai"
+    assert body["data"]["config"]["lessonBaseUrl"] == "https://example.com/v1"
+    assert body["data"]["config"]["lessonModel"] == "lesson-model"
+    assert body["data"]["config"]["lessonApiKey"] == ""
+    assert body["data"]["secrets"]["lessonApiKey"] is True
+
+    stored = json.loads(settings_file.read_text(encoding="utf-8"))
+    assert stored["LESSON_TYPE"] == "openai"
+    assert stored["LESSON_BASE_URL"] == "https://example.com/v1"
+    assert stored["LESSON_MODEL"] == "lesson-model"
+    assert stored["LESSON_API_KEY"] == "sk-lesson"
+
+
 def test_settings_put_full_coverage_fields_persist(client: TestClient, settings_file: Path):
     resp = client.put(
         "/settings",
