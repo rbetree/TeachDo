@@ -37,15 +37,37 @@ export interface MaterialLargeRecord {
   updatedAt: number;
 }
 
+export interface LessonDocxPreviewRecord {
+  /**
+   * 预览缓存主键：由 materialId + templateId + locale 组合而成。
+   * 说明：为了控制空间占用，这里按“同一份教学资料 + 同一套模板 + 语言”只保留一份最新预览。
+   */
+  cacheKey: string;
+  materialId: string;
+  templateId: string;
+  locale: string;
+  planHash: string;
+  styleHash: string;
+  buffer: ArrayBuffer;
+  byteLength: number;
+  updatedAt: number;
+}
+
 class TeachDoAppDb extends Dexie {
   appLarge!: EntityTable<AppLargeRecord, 'id'>;
   materialLarge!: EntityTable<MaterialLargeRecord, 'materialId'>;
+  lessonDocxPreview!: EntityTable<LessonDocxPreviewRecord, 'cacheKey'>;
 
   constructor() {
     super(DB_NAME);
     this.version(1).stores({
       appLarge: 'id, updatedAt',
       materialLarge: 'materialId, updatedAt',
+    });
+    this.version(2).stores({
+      appLarge: 'id, updatedAt',
+      materialLarge: 'materialId, updatedAt',
+      lessonDocxPreview: 'cacheKey, materialId, updatedAt',
     });
   }
 }
@@ -132,6 +154,13 @@ export async function deleteLegacyIndexedDb(): Promise<void> {
   }
 }
 
+export function makeLessonDocxPreviewKey(input: { materialId: string; templateId: string; locale: string }): string {
+  const materialId = String(input.materialId || '').trim();
+  const templateId = String(input.templateId || '').trim();
+  const locale = String(input.locale || '').trim() || 'zh';
+  return `lessonDocxPreview:${materialId}:${templateId}:${locale}`;
+}
+
 export async function saveAppLarge(input: { kbFiles: KBFile[] }): Promise<boolean> {
   const db = getDb();
   if (!db) return false;
@@ -213,6 +242,67 @@ export async function deleteMaterialLarge(materialId: string): Promise<boolean> 
     return true;
   } catch (e) {
     console.warn('[TeachDoAppDb] 删除 materialLarge 失败', e);
+    return false;
+  }
+}
+
+export async function saveLessonDocxPreview(input: {
+  materialId: string;
+  templateId: string;
+  locale: string;
+  planHash: string;
+  styleHash: string;
+  buffer: ArrayBuffer;
+}): Promise<boolean> {
+  const db = getDb();
+  if (!db) return false;
+  try {
+    const cacheKey = makeLessonDocxPreviewKey(input);
+    const buffer = input.buffer;
+    await db.lessonDocxPreview.put({
+      cacheKey,
+      materialId: String(input.materialId || '').trim(),
+      templateId: String(input.templateId || '').trim(),
+      locale: String(input.locale || '').trim() || 'zh',
+      planHash: String(input.planHash || '').trim(),
+      styleHash: String(input.styleHash || '').trim(),
+      buffer,
+      byteLength: buffer?.byteLength || 0,
+      updatedAt: Date.now(),
+    });
+    return true;
+  } catch (e) {
+    console.warn('[TeachDoAppDb] 保存 lessonDocxPreview 失败', e);
+    return false;
+  }
+}
+
+export async function loadLessonDocxPreview(input: {
+  materialId: string;
+  templateId: string;
+  locale: string;
+}): Promise<LessonDocxPreviewRecord | null> {
+  const db = getDb();
+  if (!db) return null;
+  try {
+    const cacheKey = makeLessonDocxPreviewKey(input);
+    return (await db.lessonDocxPreview.get(cacheKey)) ?? null;
+  } catch (e) {
+    console.warn('[TeachDoAppDb] 读取 lessonDocxPreview 失败', e);
+    return null;
+  }
+}
+
+export async function deleteLessonDocxPreviewByMaterialId(materialId: string): Promise<boolean> {
+  const db = getDb();
+  if (!db) return false;
+  try {
+    const id = String(materialId || '').trim();
+    if (!id) return true;
+    await db.lessonDocxPreview.where('materialId').equals(id).delete();
+    return true;
+  } catch (e) {
+    console.warn('[TeachDoAppDb] 删除 lessonDocxPreview 失败', e);
     return false;
   }
 }

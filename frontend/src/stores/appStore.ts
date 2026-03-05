@@ -1,7 +1,15 @@
 import { defineStore, type Pinia } from 'pinia';
 import type { ChatMessage, KBFile, Language, TeachingMaterial } from '#root/types';
 import { setLocale } from '@/i18n';
-import { deleteLegacyIndexedDb, deleteMaterialLarge, loadAppLarge, loadMaterialLarge, saveAppLarge, saveMaterialLarge } from '@/utils/appStoreIdb';
+import {
+  deleteLegacyIndexedDb,
+  deleteLessonDocxPreviewByMaterialId,
+  deleteMaterialLarge,
+  loadAppLarge,
+  loadMaterialLarge,
+  saveAppLarge,
+  saveMaterialLarge,
+} from '@/utils/appStoreIdb';
 
 export const KB_USER_ID = 'default_user' as const;
 
@@ -248,6 +256,7 @@ export const useAppStore = defineStore('app', {
       }
 
       void deleteMaterialLarge(materialId);
+      void deleteLessonDocxPreviewByMaterialId(materialId);
       return true;
     },
     setKbFiles(files: KBFile[]) {
