@@ -167,3 +167,26 @@
 .dark .prose strong {
   @apply text-slate-200;
 }
+
+/* Word 预览（docx-preview / docxjs） */
+.td-docx-preview .td-docx-wrapper {
+  background: transparent;
+  padding: 18px 12px;
+  padding-bottom: 18px;
+  display: flex;
+  flex-flow: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.td-docx-preview .td-docx-wrapper > section.td-docx {
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  margin-bottom: 0;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.dark .td-docx-preview .td-docx-wrapper > section.td-docx {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
