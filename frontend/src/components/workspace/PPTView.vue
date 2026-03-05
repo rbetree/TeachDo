@@ -207,16 +207,16 @@ const handleRegenerate = async () => {
 
           <template v-else>
             <button
-              v-if="showEditButton"
-              type="button"
-              :disabled="loading"
-	              class="toolbar-item bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
-	              @mouseenter="prefetchPptEditor"
-	              @focus="prefetchPptEditor"
-	              @touchstart.passive="prefetchPptEditor({ eagerRuntime: true })"
-	              @click="goToEditor"
-	            >
-              <LucideIcon name="edit-3" class="w-4 h-4" />
+		              v-if="showEditButton"
+		              type="button"
+		              :disabled="loading"
+		              class="toolbar-item bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
+		              @mouseenter="prefetchPptEditor()"
+		              @focus="prefetchPptEditor()"
+		              @touchstart.passive="prefetchPptEditor({ eagerRuntime: true })"
+		              @click="goToEditor"
+		            >
+	              <LucideIcon name="edit-3" class="w-4 h-4" />
               <span>{{ t('ppt.edit') }}</span>
             </button>
             <button
