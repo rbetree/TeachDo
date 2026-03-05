@@ -80,6 +80,46 @@ const goToEditor = () => {
   });
 };
 
+let editorShellPrefetchPromise: Promise<unknown> | null = null;
+let editorRuntimePrefetchPromise: Promise<unknown> | null = null;
+let runtimePrefetchScheduled = false;
+
+const scheduleRuntimePrefetch = () => {
+  if (editorRuntimePrefetchPromise || runtimePrefetchScheduled) return;
+  runtimePrefetchScheduled = true;
+
+  const ric = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: { timeout: number }) => number);
+  if (typeof ric === 'function') {
+    ric(
+      () => {
+        editorRuntimePrefetchPromise = import('@/views/pptEditor/PPTEditorRuntime.vue').catch(() => null);
+      },
+      { timeout: 1500 },
+    );
+    return;
+  }
+
+  window.setTimeout(() => {
+    editorRuntimePrefetchPromise = import('@/views/pptEditor/PPTEditorRuntime.vue').catch(() => null);
+  }, 800);
+};
+
+const prefetchPptEditor = (input: { eagerRuntime?: boolean } = {}) => {
+  if (!editorShellPrefetchPromise) {
+    // 预热路由壳：让“点击后跳转”更快发生（即使运行时仍需加载）。
+    editorShellPrefetchPromise = import('@/views/PPTEditorView.vue').catch(() => null);
+  }
+
+  if (input.eagerRuntime) {
+    if (!editorRuntimePrefetchPromise) {
+      editorRuntimePrefetchPromise = import('@/views/pptEditor/PPTEditorRuntime.vue').catch(() => null);
+    }
+    return;
+  }
+
+  scheduleRuntimePrefetch();
+};
+
 const goToTemplateSelect = () => {
   viewState.value = 'SELECT_TEMPLATE';
 };
@@ -170,9 +210,12 @@ const handleRegenerate = async () => {
               v-if="showEditButton"
               type="button"
               :disabled="loading"
-              class="toolbar-item bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
-              @click="goToEditor"
-            >
+	              class="toolbar-item bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
+	              @mouseenter="prefetchPptEditor"
+	              @focus="prefetchPptEditor"
+	              @touchstart.passive="prefetchPptEditor({ eagerRuntime: true })"
+	              @click="goToEditor"
+	            >
               <LucideIcon name="edit-3" class="w-4 h-4" />
               <span>{{ t('ppt.edit') }}</span>
             </button>
