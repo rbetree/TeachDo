@@ -62,6 +62,7 @@ def test_settings_put_updates_file_without_writing_empty_secrets(client: TestCli
         "outlineApi": "http://127.0.0.1:10001",
         "contentApi": "http://127.0.0.1:10011",
         "personalDb": "http://127.0.0.1:9100",
+        "personalDbPort": "9100",
         "httpProxy": "",
         "httpsProxy": "",
         "useChart": False,
@@ -106,6 +107,7 @@ def test_settings_put_writes_secret_when_provided(client: TestClient, settings_f
             "outlineApi": "http://127.0.0.1:10001",
             "contentApi": "http://127.0.0.1:10011",
             "personalDb": "http://127.0.0.1:9100",
+            "personalDbPort": "9100",
             "httpProxy": "",
             "httpsProxy": "",
             "useChart": True,
@@ -149,6 +151,7 @@ def test_settings_put_full_coverage_fields_persist(client: TestClient, settings_
             "outlineApi": "http://127.0.0.1:10001",
             "contentApi": "http://127.0.0.1:10011",
             "personalDb": "http://127.0.0.1:9100",
+            "personalDbPort": "9101",
             "httpProxy": "",
             "httpsProxy": "",
             "pexelsApiKey": "pexels-xxx",
@@ -188,7 +191,12 @@ def test_settings_put_full_coverage_fields_persist(client: TestClient, settings_
     assert stored["MAIN_API_PORT"] == 6801
     assert stored["OUTLINE_API_PORT"] == 10002
     assert stored["CONTENT_API_PORT"] == 10012
+    assert stored["PERSONAL_DB_PORT"] == 9101
     assert stored["FRONTEND_PORT"] == 5175
+    # 端口联动：当 URL 仍为本地基址且未显式修改时，会自动同步到新的端口
+    assert stored["OUTLINE_API"] == "http://127.0.0.1:10002"
+    assert stored["CONTENT_API"] == "http://127.0.0.1:10012"
+    assert stored["PERSONAL_DB"] == "http://127.0.0.1:9101"
     assert stored["TEACHDO_CACHE_DIR"] == "var/cache2"
     assert stored["TEACHDO_TMP_DIR"] == "var/tmp2"
     assert stored["TEACHDO_LOG_DIR"] == "logs2"

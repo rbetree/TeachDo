@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref, watch } from 'vue';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { toast } from '@/utils/toast';
 import { useAppStore } from '@/stores/appStore';
@@ -11,6 +11,42 @@ const store = useAppStore();
 const loading = ref(false);
 const showKeys = reactive<Record<string, boolean>>({});
 const { t } = useI18n();
+
+const accessHostForBindHost = (bindHost: string): string => {
+  const raw = (bindHost || '').trim();
+  if (!raw) return '127.0.0.1';
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      return new URL(raw).hostname || raw;
+    } catch {
+      return raw;
+    }
+  }
+  const lower = raw.toLowerCase();
+  if (lower === '0.0.0.0' || lower === '::' || lower === 'localhost') return '127.0.0.1';
+  return raw;
+};
+
+const normalizeBaseUrlForCompare = (value: string): string => {
+  const raw = (value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    const port = url.port ? `:${url.port}` : '';
+    return `${url.protocol}//${url.hostname}${port}`;
+  } catch {
+    return raw.replace(/\/+$/, '');
+  }
+};
+
+const sameServiceBaseUrl = (a: string, b: string): boolean =>
+  normalizeBaseUrlForCompare(a) === normalizeBaseUrlForCompare(b);
+
+const buildLocalServiceUrl = (bindHost: string, portRaw: string): string => {
+  const port = Number.parseInt(String(portRaw || '').trim(), 10);
+  if (!Number.isFinite(port) || port <= 0 || port > 65535) return '';
+  return `http://${accessHostForBindHost(bindHost)}:${port}`;
+};
 
 const config = reactive<UiSettingsConfig>({
   outlineType: 'openai',
@@ -35,6 +71,7 @@ const config = reactive<UiSettingsConfig>({
   outlineApi: 'http://127.0.0.1:10001',
   contentApi: 'http://127.0.0.1:10011',
   personalDb: 'http://127.0.0.1:9100',
+  personalDbPort: '9100',
   httpProxy: '',
   httpsProxy: '',
   pexelsApiKey: '',
@@ -70,6 +107,46 @@ const applyRemoteSettings = (data: { config: UiSettingsConfig; secrets: UiSettin
   config.embeddingApiKey = '';
   config.pexelsApiKey = '';
 };
+
+// 端口与服务 URL 联动（仅当 URL 仍为“本地基址”时才会自动同步，避免覆盖用户手动配置的远端 URL）
+watch(
+  () => [config.host, config.outlineApiPort] as const,
+  ([newHost, newPort], [oldHost, oldPort]) => {
+    const oldAuto = buildLocalServiceUrl(oldHost, oldPort);
+    if (!oldAuto) return;
+    if (!sameServiceBaseUrl(config.outlineApi, oldAuto)) return;
+
+    const nextAuto = buildLocalServiceUrl(newHost, newPort);
+    if (!nextAuto) return;
+    config.outlineApi = nextAuto;
+  },
+);
+
+watch(
+  () => [config.host, config.contentApiPort] as const,
+  ([newHost, newPort], [oldHost, oldPort]) => {
+    const oldAuto = buildLocalServiceUrl(oldHost, oldPort);
+    if (!oldAuto) return;
+    if (!sameServiceBaseUrl(config.contentApi, oldAuto)) return;
+
+    const nextAuto = buildLocalServiceUrl(newHost, newPort);
+    if (!nextAuto) return;
+    config.contentApi = nextAuto;
+  },
+);
+
+watch(
+  () => [config.host, config.personalDbPort] as const,
+  ([newHost, newPort], [oldHost, oldPort]) => {
+    const oldAuto = buildLocalServiceUrl(oldHost, oldPort);
+    if (!oldAuto) return;
+    if (!sameServiceBaseUrl(config.personalDb, oldAuto)) return;
+
+    const nextAuto = buildLocalServiceUrl(newHost, newPort);
+    if (!nextAuto) return;
+    config.personalDb = nextAuto;
+  },
+);
 
 onMounted(async () => {
   try {
@@ -479,6 +556,10 @@ const handleReset = async () => {
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.contentApiPort') }}</span>
                   <input v-model="config.contentApiPort" type="number" class="td-input" />
+                </label>
+                <label class="space-y-1 text-sm">
+                  <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.personalDbPort') }}</span>
+                  <input v-model="config.personalDbPort" type="number" class="td-input" />
                 </label>
                 <label class="space-y-1 text-sm">
                   <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.frontendPort') }}</span>

@@ -11,7 +11,8 @@ export default defineConfig(() => ({
     port: 5174,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:6800',
+        // 端口可由 start.py / Settings 页通过 MAIN_API_PORT 注入，避免“端口改了但 proxy 没改”的漂移。
+        target: `http://127.0.0.1:${process.env.MAIN_API_PORT || '6800'}`,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

@@ -23,6 +23,7 @@ export type UiSettingsConfig = {
   outlineApi: string;
   contentApi: string;
   personalDb: string;
+  personalDbPort: string;
   httpProxy: string;
   httpsProxy: string;
   pexelsApiKey: string;

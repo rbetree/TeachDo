@@ -5,10 +5,12 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from urllib.parse import urlsplit
 
 from backend.common.settings_store import (
     DEFAULT_SETTINGS_ENV,
     SECRET_ENV_KEYS,
+    access_host_for_bind_host,
     apply_settings_to_environ,
     merged_effective_env,
     read_settings_env,
@@ -70,6 +72,7 @@ class UiSettingsPayload(BaseModel):
     mainApiPort: str | None = None
     outlineApiPort: str | None = None
     contentApiPort: str | None = None
+    personalDbPort: str | None = None
     frontendPort: str | None = None
 
 
@@ -110,8 +113,123 @@ _UI_TO_ENV: dict[str, str] = {
     "mainApiPort": "MAIN_API_PORT",
     "outlineApiPort": "OUTLINE_API_PORT",
     "contentApiPort": "CONTENT_API_PORT",
+    "personalDbPort": "PERSONAL_DB_PORT",
     "frontendPort": "FRONTEND_PORT",
 }
+
+
+def _coerce_int(value: Any, *, default: int) -> int:
+    try:
+        v = int(str(value).strip())
+        return v
+    except Exception:
+        return int(default)
+
+
+def _normalize_loopback(host: str) -> str:
+    """
+    将 localhost / 0.0.0.0 / 127.0.0.1 等视为同一类，便于做“本地联动”判断。
+    """
+    h = (host or "").strip().lower()
+    if h in {"localhost", "127.0.0.1", "0.0.0.0", "::1", "::"}:
+        return "127.0.0.1"
+    return h
+
+
+def _is_simple_base_url(url: str) -> bool:
+    """
+    仅当 URL 形如 http(s)://host[:port][/]
+    - 不包含额外 path/query/fragment
+    - 用于判断“是否是本地服务基址”，避免把用户自定义路径误判为可自动联动
+    """
+    raw = (url or "").strip()
+    if not raw:
+        return False
+    parts = urlsplit(raw)
+    if not parts.scheme or not parts.hostname:
+        return False
+    if parts.scheme.lower() not in {"http", "https"}:
+        return False
+    if (parts.path or "") not in {"", "/"}:
+        return False
+    if parts.query or parts.fragment:
+        return False
+    return True
+
+
+def _normalize_base_url_for_compare(url: str) -> str:
+    raw = (url or "").strip()
+    if not raw:
+        return ""
+    try:
+        parts = urlsplit(raw)
+        if not parts.scheme or not parts.hostname:
+            return raw.rstrip("/")
+        scheme = parts.scheme.lower()
+        host = parts.hostname
+        port = parts.port
+        if port:
+            return f"{scheme}://{host}:{port}"
+        return f"{scheme}://{host}"
+    except Exception:
+        return raw.rstrip("/")
+
+
+def _build_local_service_url(bind_host: str, port: int) -> str:
+    access_host = access_host_for_bind_host(bind_host)
+    return f"http://{access_host}:{int(port)}"
+
+
+def _apply_ports_link_service_urls(
+    existing_effective: dict[str, Any],
+    updates: dict[str, Any],
+) -> None:
+    """
+    端口与服务 URL 联动，尽量消除“端口改了但 URL 没改”的漂移。
+
+    策略（偏保守）：
+    - 仅对“看起来是本地基址”的 URL（http(s)://host:port[/]）做自动联动
+    - 仅当用户本次请求未显式修改对应 URL 时，才会用 host/port 派生的 URL 覆盖
+    """
+    old_host = str(existing_effective.get("HOST", DEFAULT_SETTINGS_ENV["HOST"]))
+    old_outline_port = _coerce_int(existing_effective.get("OUTLINE_API_PORT"), default=int(DEFAULT_SETTINGS_ENV["OUTLINE_API_PORT"]))
+    old_content_port = _coerce_int(existing_effective.get("CONTENT_API_PORT"), default=int(DEFAULT_SETTINGS_ENV["CONTENT_API_PORT"]))
+    old_personal_port = _coerce_int(existing_effective.get("PERSONAL_DB_PORT"), default=int(DEFAULT_SETTINGS_ENV.get("PERSONAL_DB_PORT", 9100)))
+
+    new_host = str(updates.get("HOST", old_host))
+    new_outline_port = _coerce_int(updates.get("OUTLINE_API_PORT", old_outline_port), default=old_outline_port)
+    new_content_port = _coerce_int(updates.get("CONTENT_API_PORT", old_content_port), default=old_content_port)
+    new_personal_port = _coerce_int(updates.get("PERSONAL_DB_PORT", old_personal_port), default=old_personal_port)
+
+    # 仅对 host 归一化后的“本地环回”做联动判断（避免把远端 URL 误同步）
+    old_access_host_norm = _normalize_loopback(access_host_for_bind_host(old_host))
+    new_outline_url = _build_local_service_url(new_host, new_outline_port)
+    new_content_url = _build_local_service_url(new_host, new_content_port)
+    new_personal_url = _build_local_service_url(new_host, new_personal_port)
+
+    def should_autosync_url(env_url_key: str) -> bool:
+        existing_url = str(existing_effective.get(env_url_key, "") or "")
+        if not _is_simple_base_url(existing_url):
+            return False
+        existing_host = urlsplit(existing_url).hostname or ""
+        existing_host_norm = _normalize_loopback(existing_host)
+        # 允许“旧配置仍是 127.0.0.1/localhost”被视为本地基址，从而在用户切换 HOST 时自动纠偏。
+        if existing_host_norm not in {old_access_host_norm, "127.0.0.1"}:
+            return False
+
+        # 若用户本次显式修改了该 URL，则不覆盖（允许手动 override）
+        if env_url_key in updates:
+            incoming = str(updates.get(env_url_key, "") or "")
+            if _normalize_base_url_for_compare(incoming) != _normalize_base_url_for_compare(existing_url):
+                return False
+        return True
+
+    if should_autosync_url("OUTLINE_API"):
+        updates["OUTLINE_API"] = new_outline_url
+    if should_autosync_url("CONTENT_API"):
+        updates["CONTENT_API"] = new_content_url
+    if should_autosync_url("PERSONAL_DB"):
+        updates["PERSONAL_DB"] = new_personal_url
 
 
 def _mask_secrets_flags(effective_env: dict[str, str]) -> dict[str, bool]:
@@ -163,6 +281,7 @@ def _build_ui_config(effective_env: dict[str, str]) -> dict[str, Any]:
         "mainApiPort": effective_env.get("MAIN_API_PORT", str(DEFAULT_SETTINGS_ENV["MAIN_API_PORT"])),
         "outlineApiPort": effective_env.get("OUTLINE_API_PORT", str(DEFAULT_SETTINGS_ENV["OUTLINE_API_PORT"])),
         "contentApiPort": effective_env.get("CONTENT_API_PORT", str(DEFAULT_SETTINGS_ENV["CONTENT_API_PORT"])),
+        "personalDbPort": effective_env.get("PERSONAL_DB_PORT", str(DEFAULT_SETTINGS_ENV.get("PERSONAL_DB_PORT", 9100))),
         "frontendPort": effective_env.get("FRONTEND_PORT", str(DEFAULT_SETTINGS_ENV["FRONTEND_PORT"])),
     }
 
@@ -191,7 +310,7 @@ def update_settings(payload: UiSettingsPayload):
     updates: dict[str, Any] = {}
 
     bool_keys: set[str] = {"USE_CHART", "OUTLINE_STREAMING", "CONTENT_STREAMING", "USE_MINERU"}
-    int_keys: set[str] = {"MAIN_API_PORT", "OUTLINE_API_PORT", "CONTENT_API_PORT", "FRONTEND_PORT"}
+    int_keys: set[str] = {"MAIN_API_PORT", "OUTLINE_API_PORT", "CONTENT_API_PORT", "PERSONAL_DB_PORT", "FRONTEND_PORT"}
     embedding_int_keys: set[str] = {"EMBEDDING_MAX_RETRIES", "EMBEDDING_DIM"}
     embedding_float_keys: set[str] = {"EMBEDDING_TIMEOUT_S"}
 
@@ -257,6 +376,11 @@ def update_settings(payload: UiSettingsPayload):
 
         # 非 secret：允许空字符串（例如 base_url 置空以使用默认 openai）
         updates[env_key] = str(ui_value).strip() if ui_value is not None else ""
+
+    # 端口 <-> URL 联动（只在用户未显式改 URL 时自动同步）
+    existing_effective: dict[str, Any] = dict(DEFAULT_SETTINGS_ENV)
+    existing_effective.update(existing)
+    _apply_ports_link_service_urls(existing_effective, updates)
 
     merged = dict(existing)
     merged.update(updates)

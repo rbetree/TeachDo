@@ -62,6 +62,8 @@ ALLOWED_SETTINGS_ENV_KEYS: set[str] = {
     "OUTLINE_API",
     "CONTENT_API",
     "PERSONAL_DB",
+    # Service ports (used by start.py and some services)
+    "PERSONAL_DB_PORT",
     # Bind host & ports (used by start.py)
     "HOST",
     "MAIN_API_PORT",
@@ -108,6 +110,7 @@ DEFAULT_SETTINGS_ENV: dict[str, Any] = {
     "OUTLINE_API": "http://127.0.0.1:10001",
     "CONTENT_API": "http://127.0.0.1:10011",
     "PERSONAL_DB": "http://127.0.0.1:9100",
+    "PERSONAL_DB_PORT": 9100,
     # 服务绑定地址与端口（start.py 使用）
     "HOST": "127.0.0.1",
     "MAIN_API_PORT": 6800,
@@ -274,3 +277,28 @@ def merged_effective_env(*, defaults: Mapping[str, Any] | None = None) -> dict[s
 def is_truthy_env(value: str | None) -> bool:
     v = (value or "").strip().lower()
     return v in {"1", "true", "yes", "y", "on"}
+
+
+def access_host_for_bind_host(bind_host: str) -> str:
+    """
+    将“监听用 host”（例如 0.0.0.0）转换为“访问用 host”（例如 127.0.0.1）。
+
+    说明：
+    - 0.0.0.0 / :: 用于服务绑定所有网卡，但不能作为客户端请求目标；
+    - 对于本机进程间调用（main_api -> outline/content/personaldb），应优先走 127.0.0.1。
+    """
+    host = (bind_host or "").strip()
+    if host.startswith(("http://", "https://")):
+        # 兼容用户误把 host 填成 URL 的情况
+        try:
+            from urllib.parse import urlsplit
+
+            parsed = urlsplit(host)
+            host = parsed.hostname or host
+        except Exception:
+            pass
+
+    host_lower = host.lower()
+    if host_lower in {"0.0.0.0", "::", "localhost"}:
+        return "127.0.0.1"
+    return host or "127.0.0.1"
