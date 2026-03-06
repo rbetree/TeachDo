@@ -261,6 +261,11 @@ def load_and_apply_settings(*, overwrite: bool = False, repo_root: Path | None =
     """
     读取 settings.json 并应用到 os.environ，返回读取到的配置。
     """
+    # pytest 隔离：默认不读取开发者本机的 `var/settings.json`，避免本地配置污染测试用例。
+    # 如需在测试中启用 settings.json，请显式设置 TEACHDO_SETTINGS_FILE 指向临时文件。
+    if os.environ.get("PYTEST_CURRENT_TEST") and not (os.environ.get("TEACHDO_SETTINGS_FILE") or "").strip():
+        return {}
+
     env = read_settings_env(settings_file_path(repo_root))
     apply_settings_to_environ(env, overwrite=overwrite)
     return env

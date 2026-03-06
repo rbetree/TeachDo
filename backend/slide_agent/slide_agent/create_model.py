@@ -10,12 +10,9 @@ from typing import Optional
 
 import litellm
 from google.adk.models.lite_llm import LiteLlm
-from dotenv import load_dotenv
 
 # 开启LLM的debug模式
 litellm._turn_on_debug()
-
-load_dotenv()
 
 
 def _ensure_openai_prefix(model: str) -> str:

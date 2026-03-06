@@ -6,7 +6,6 @@ import re
 import os
 import sys
 from pathlib import Path
-from dotenv import dotenv_values
 from fastapi import FastAPI, UploadFile, File
 import time
 import logging
@@ -54,43 +53,14 @@ def _find_repo_root(start: Path) -> Path:
     return fallback_service_root or Path.cwd()
 
 
-def _load_env_files() -> None:
-    """
-    统一环境变量加载优先级（不覆盖系统环境变量）：
-    0) var/settings.json（由“设置”页写入，可覆盖 .env）
-    1) 项目根目录 `.env`
-    2) 当前服务目录 `.env`（可选覆盖）
-    """
-    merged: dict[str, str] = {}
+_repo_root = _find_repo_root(Path(__file__).resolve())
+# 允许在 `backend/main_api` 目录下直接运行（例如 `python main.py`）：确保可导入 backend.*
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
 
-    repo_root = _find_repo_root(Path(__file__).resolve())
-    # 允许在 `backend/main_api` 目录下直接运行（python main.py）：确保可导入 backend.*
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
+from backend.common.env_loader import load_env_files
 
-    # 先加载 settings.json（若存在），再加载 .env；从而实现 settings 覆盖 .env
-    try:
-        from backend.common.settings_store import load_and_apply_settings
-
-        load_and_apply_settings(overwrite=False, repo_root=repo_root)
-    except Exception:
-        # settings.json 读取失败不应影响服务启动
-        pass
-
-    root_env = repo_root / ".env"
-    if root_env.exists():
-        merged.update({k: v for k, v in dotenv_values(root_env).items() if v is not None})
-
-    service_env = Path(__file__).resolve().parent / ".env"
-    if service_env.exists():
-        merged.update({k: v for k, v in dotenv_values(service_env).items() if v is not None})
-
-    for k, v in merged.items():
-        if k not in os.environ:
-            os.environ[k] = v
-
-
-_load_env_files()
+load_env_files(repo_root=_repo_root, service_dir=Path(__file__).resolve().parent)
 
 
 def _get_outline_api() -> str:

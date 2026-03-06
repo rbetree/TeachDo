@@ -21,38 +21,12 @@ import string
 import chromadb  #pip install chromadb
 from chromadb.config import Settings
 from openai import OpenAI
-from dotenv import dotenv_values
 
 try:
     # 兼容在 `backend/personaldb` 目录下直接运行
-    from runtime_paths import find_repo_root, get_cache_dir
+    from runtime_paths import get_cache_dir
 except ImportError:  # pragma: no cover - 兼容以包方式导入（用于单元测试等）
-    from backend.personaldb.runtime_paths import find_repo_root, get_cache_dir
-
-
-def _load_env_files() -> None:
-    """
-    统一环境变量加载优先级（不覆盖系统环境变量）：
-    1) 项目根目录 `.env`
-    2) 当前服务目录 `.env`（可选覆盖）
-    """
-    merged: dict[str, str] = {}
-
-    repo_root = find_repo_root(Path(__file__).resolve())
-    root_env = repo_root / ".env"
-    if root_env.exists():
-        merged.update({k: v for k, v in dotenv_values(root_env).items() if v is not None})
-
-    service_env = Path(__file__).resolve().parent / ".env"
-    if service_env.exists():
-        merged.update({k: v for k, v in dotenv_values(service_env).items() if v is not None})
-
-    for k, v in merged.items():
-        if k not in os.environ:
-            os.environ[k] = v
-
-
-_load_env_files()
+    from backend.personaldb.runtime_paths import get_cache_dir
 
 
 logger = logging.getLogger(__name__)

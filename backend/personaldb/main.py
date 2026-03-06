@@ -3,40 +3,56 @@
 # @Date  : 2025/8/12
 # @Desc  : 使用FastAPI实现API，接收JSON或RabbitMQ消息，下载七牛云文件，读取内容并生成embedding向量
 
-import os
-import json
-import requests
-import uvicorn
-import logging
 import asyncio
-import uuid
+import json
+import logging
+import os
 import sys
 import time
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request
-from pydantic import BaseModel, ValidationError
-from typing import List, Optional
+import uuid
 from pathlib import Path
-from dotenv import dotenv_values
+from typing import List, Optional
+from urllib.parse import urlparse
+
+import requests
+import uvicorn
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from pydantic import BaseModel, ValidationError
+
 try:
     # 兼容在 `backend/personaldb` 目录下直接运行（例如 `python main.py`）
     from runtime_paths import find_repo_root, get_tmp_dir
+except ImportError:  # pragma: no cover - 兼容以包方式导入（用于单元测试等）
+    from backend.personaldb.runtime_paths import find_repo_root, get_tmp_dir
+
+_repo_root = find_repo_root(Path(__file__).resolve())
+# 允许在 `backend/personaldb` 目录下直接运行：确保可导入 backend.*
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+
+from backend.common.env_loader import load_env_files
+
+# 注意：必须在 import embedding_utils 之前调用；
+# embedding_utils 里存在模块级缓存目录计算（依赖 TEACHDO_CACHE_DIR 等配置）。
+load_env_files(repo_root=_repo_root, service_dir=Path(__file__).resolve().parent)
+
+try:
     import embedding_utils
     from embedding_utils import cache_decorator
 except ImportError:  # pragma: no cover - 兼容以包方式导入（用于单元测试等）
-    from backend.personaldb.runtime_paths import find_repo_root, get_tmp_dir
     from backend.personaldb import embedding_utils
     from backend.personaldb.embedding_utils import cache_decorator
-from urllib.parse import urlparse
+
 try:
     from core.magic_pdf_converter import MagicPDFConverter
     from core.markitdown_converter import MarkItDownConverter
-    from core.chunkers.semantic_chunker import SemanticChunker
     from core.chunkers.fast_chunker import FastChunker
+    from core.chunkers.semantic_chunker import SemanticChunker
 except ImportError:  # pragma: no cover - 兼容以包方式导入（用于单元测试等）
     from backend.personaldb.core.magic_pdf_converter import MagicPDFConverter
     from backend.personaldb.core.markitdown_converter import MarkItDownConverter
-    from backend.personaldb.core.chunkers.semantic_chunker import SemanticChunker
     from backend.personaldb.core.chunkers.fast_chunker import FastChunker
+    from backend.personaldb.core.chunkers.semantic_chunker import SemanticChunker
 
 logger = logging.getLogger(__name__)
 
@@ -47,43 +63,6 @@ app = FastAPI()
 def healthz():
     return {"ok": True}
 
-
-def _load_env_files() -> None:
-    """
-    统一环境变量加载优先级（不覆盖系统环境变量）：
-    0) var/settings.json（由“设置”页写入，可覆盖 .env）
-    1) 项目根目录 `.env`
-    2) 当前服务目录 `.env`（可选覆盖）
-    """
-    merged: dict[str, str] = {}
-
-    repo_root = find_repo_root(Path(__file__).resolve())
-    # 允许在 `backend/personaldb` 目录下直接运行：确保可导入 backend.*
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
-    # 先加载 settings.json，再加载 .env；从而实现 settings 覆盖 .env
-    try:
-        from backend.common.settings_store import load_and_apply_settings
-
-        load_and_apply_settings(overwrite=False, repo_root=repo_root)
-    except Exception:
-        pass
-
-    root_env = repo_root / ".env"
-    if root_env.exists():
-        merged.update({k: v for k, v in dotenv_values(root_env).items() if v is not None})
-
-    service_env = Path(__file__).resolve().parent / ".env"
-    if service_env.exists():
-        merged.update({k: v for k, v in dotenv_values(service_env).items() if v is not None})
-
-    for k, v in merged.items():
-        if k not in os.environ:
-            os.environ[k] = v
-
-
-_load_env_files()
 
 # 创建临时下载目录（集中到 var/tmp）
 TEMP_DIR = str(get_tmp_dir("personaldb"))

@@ -1,12 +1,8 @@
 from google.adk.agents.sequential_agent import SequentialAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.genai import types  # 用于在回调里短路并给用户返回消息
-from dotenv import load_dotenv
 from .sub_agents.ppt_writer.agent import ppt_generator_loop_agent
 from .utils import parse_markdown_to_slides  # 复用你已有的解析函数
-
-# 在模块顶部加载环境变量
-load_dotenv('.env')
 
 def _get_markdown_from_context(callback_context: CallbackContext) -> str | None:
     """

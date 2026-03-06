@@ -12,9 +12,7 @@ from google.adk.tools.base_tool import BaseTool
 from typing import Dict, List, Any, AsyncGenerator, Optional, Union
 from create_model import create_model
 from tools import DocumentSearch
-from dotenv import load_dotenv
 import prompt
-load_dotenv()
 
 def before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest) -> Optional[LlmResponse]:
     # 1. 检查用户输入
