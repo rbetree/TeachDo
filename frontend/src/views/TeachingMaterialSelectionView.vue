@@ -93,7 +93,7 @@ const handleCreate = (material: TeachingMaterial) => {
   <section class="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-slate-100 dark:bg-slate-950 transition-colors duration-300 font-sans">
     <div class="absolute inset-0 opacity-40 pointer-events-none bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] dark:bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:20px_20px]"></div>
 
-    <div class="relative z-10 mx-auto max-w-6xl px-6 md:px-10 py-8 md:py-10">
+    <div class="relative z-10 td-page-container">
       <header class="flex items-center">
         <div class="flex items-center gap-4 min-w-0">
           <div class="w-12 h-12 rounded-2xl bg-indigo-600 dark:bg-slate-800 flex items-center justify-center shadow-lg shadow-indigo-500/20 dark:shadow-none">

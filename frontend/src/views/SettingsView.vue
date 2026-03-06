@@ -238,7 +238,7 @@ const handleReset = async () => {
 
 <template>
   <section class="min-h-[calc(100vh-4rem)] bg-slate-100 dark:bg-slate-950">
-    <div class="mx-auto max-w-6xl px-6 md:px-10 py-8 md:py-10 space-y-6">
+    <div class="td-page-container space-y-6">
       <header class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
