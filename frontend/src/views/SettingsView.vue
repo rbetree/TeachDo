@@ -549,23 +549,60 @@ const handleReset = async () => {
           </div>
         </div>
 
-        <div class="space-y-6">
-          <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-slate-50/70 dark:bg-slate-950/35">
-              <div class="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300">
-                <LucideIcon name="server" :size="18" />
-              </div>
+	        <div class="space-y-6">
+	          <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+	            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-slate-50/70 dark:bg-slate-950/35">
+	              <div class="p-2 rounded-lg bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-300">
+	                <LucideIcon name="network" :size="18" />
+	              </div>
 	              <div>
-	                <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.service') }}</p>
-	                <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.section.service_desc') }}</p>
+	                <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.network') }}</p>
+	                <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.section.network_desc') }}</p>
 	              </div>
 	            </div>
-            <div class="p-6 space-y-6">
-              <div class="space-y-3">
-                <div>
-                  <p class="text-sm font-extrabold text-slate-800 dark:text-white">{{ t('settings.group.endpoints') }}</p>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.group.endpoints_desc') }}</p>
-                </div>
+	            <div class="p-6 space-y-6">
+	              <div class="space-y-3">
+	                <div>
+	                  <p class="text-sm font-extrabold text-slate-800 dark:text-white">{{ t('settings.group.ports') }}</p>
+	                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.group.ports_desc') }}</p>
+	                </div>
+
+	                <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.ports.notice') }}</p>
+	                <div class="grid md:grid-cols-2 gap-4">
+	                  <label class="space-y-1 text-sm">
+	                    <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.host') }}</span>
+	                    <input v-model="config.host" class="td-input" />
+	                  </label>
+	                  <label class="space-y-1 text-sm">
+	                    <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.mainApiPort') }}</span>
+	                    <input v-model="config.mainApiPort" type="number" class="td-input" />
+	                  </label>
+	                  <label class="space-y-1 text-sm">
+	                    <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.outlineApiPort') }}</span>
+	                    <input v-model="config.outlineApiPort" type="number" class="td-input" />
+	                  </label>
+	                  <label class="space-y-1 text-sm">
+	                    <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.contentApiPort') }}</span>
+	                    <input v-model="config.contentApiPort" type="number" class="td-input" />
+	                  </label>
+	                  <label class="space-y-1 text-sm">
+	                    <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.personalDbPort') }}</span>
+	                    <input v-model="config.personalDbPort" type="number" class="td-input" />
+	                  </label>
+	                  <label class="space-y-1 text-sm">
+	                    <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.frontendPort') }}</span>
+	                    <input v-model="config.frontendPort" type="number" class="td-input" />
+	                  </label>
+	                </div>
+	              </div>
+
+	              <div class="h-px bg-slate-100 dark:bg-slate-800"></div>
+
+	              <div class="space-y-3">
+	                <div>
+	                  <p class="text-sm font-extrabold text-slate-800 dark:text-white">{{ t('settings.group.endpoints') }}</p>
+	                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.group.endpoints_desc') }}</p>
+	                </div>
 
                 <div class="grid md:grid-cols-2 gap-4">
                   <label class="space-y-1 text-sm">
@@ -599,29 +636,18 @@ const handleReset = async () => {
                   <label class="space-y-1 text-sm">
                     <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.httpsProxy') }}</span>
                     <input v-model="config.httpsProxy" class="td-input" />
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-slate-50/70 dark:bg-slate-950/35">
-              <div class="p-2 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300">
-                <LucideIcon name="file" :size="18" />
-              </div>
-	              <div>
-	                <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.runtime') }}</p>
-	                <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.section.runtime_desc') }}</p>
+	                  </label>
+	                </div>
 	              </div>
-	            </div>
-	            <div class="p-6 space-y-6">
+	
+	              <div class="h-px bg-slate-100 dark:bg-slate-800"></div>
+	
 	              <div class="space-y-3">
 	                <div>
 	                  <p class="text-sm font-extrabold text-slate-800 dark:text-white">{{ t('settings.group.behavior') }}</p>
 	                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.group.behavior_desc') }}</p>
 	                </div>
-
+	
 	                <div class="grid md:grid-cols-2 gap-4">
 	                  <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
 	                    <input
@@ -649,15 +675,15 @@ const handleReset = async () => {
 	                  </label>
 	                </div>
 	              </div>
-
+	
 	              <div class="h-px bg-slate-100 dark:bg-slate-800"></div>
-
+	
 	              <div class="space-y-3">
 	                <div>
 	                  <p class="text-sm font-extrabold text-slate-800 dark:text-white">{{ t('settings.group.assets') }}</p>
 	                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.group.assets_desc') }}</p>
 	                </div>
-
+	
 	                <div class="grid md:grid-cols-2 gap-4">
 	                  <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
 	                    <input
@@ -667,7 +693,7 @@ const handleReset = async () => {
 	                    />
 	                    {{ t('settings.form.useMineru') }}
 	                  </label>
-
+	
 	                  <label class="space-y-1 text-sm md:col-span-2">
 	                    <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.pexelsKey') }}</span>
 	                    <div class="flex gap-2">
@@ -691,15 +717,15 @@ const handleReset = async () => {
 	                  </label>
 	                </div>
 	              </div>
-
+	
 	              <div class="h-px bg-slate-100 dark:bg-slate-800"></div>
-
+	
 	              <div class="space-y-3">
 	                <div>
 	                  <p class="text-sm font-extrabold text-slate-800 dark:text-white">{{ t('settings.group.paths') }}</p>
 	                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.group.paths_desc') }}</p>
 	                </div>
-
+	
 	                <div class="grid md:grid-cols-2 gap-4">
 	                  <label class="space-y-1 text-sm">
 	                    <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.cacheDir') }}</span>
@@ -717,48 +743,7 @@ const handleReset = async () => {
 	              </div>
 	            </div>
 	          </div>
-
-          <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-slate-50/70 dark:bg-slate-950/35">
-              <div class="p-2 rounded-lg bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-300">
-                <LucideIcon name="network" :size="18" />
-              </div>
-              <div>
-                <p class="text-sm font-bold text-slate-800 dark:text-white">{{ t('settings.section.ports') }}</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.section.ports_desc') }}</p>
-              </div>
-            </div>
-            <div class="p-6 space-y-4">
-              <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('settings.ports.notice') }}</p>
-              <div class="grid md:grid-cols-2 gap-4">
-                <label class="space-y-1 text-sm">
-                  <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.host') }}</span>
-                  <input v-model="config.host" class="td-input" />
-                </label>
-                <label class="space-y-1 text-sm">
-                  <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.mainApiPort') }}</span>
-                  <input v-model="config.mainApiPort" type="number" class="td-input" />
-                </label>
-                <label class="space-y-1 text-sm">
-                  <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.outlineApiPort') }}</span>
-                  <input v-model="config.outlineApiPort" type="number" class="td-input" />
-                </label>
-                <label class="space-y-1 text-sm">
-                  <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.contentApiPort') }}</span>
-                  <input v-model="config.contentApiPort" type="number" class="td-input" />
-                </label>
-                <label class="space-y-1 text-sm">
-                  <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.personalDbPort') }}</span>
-                  <input v-model="config.personalDbPort" type="number" class="td-input" />
-                </label>
-                <label class="space-y-1 text-sm">
-                  <span class="text-slate-500 dark:text-slate-400">{{ t('settings.form.frontendPort') }}</span>
-                  <input v-model="config.frontendPort" type="number" class="td-input" />
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
+	        </div>
       </div>
     </div>
   </section>
