@@ -3,13 +3,13 @@ import '@icon-park/vue-next/styles/index.css';
 import 'prosemirror-view/style/prosemirror.css';
 import 'animate.css';
 
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/appStore';
 import { aiService } from '@/services/aiService';
 import { KB_USER_ID } from '@/stores/appStore';
+import { TEACHDO_EDITOR_BRIDGE_KEY } from '@editor/contexts/teachdoBridge';
 
 import EditorView from '@editor/views/Editor/index.vue';
 import ScreenView from '@editor/views/Screen/index.vue';
@@ -27,7 +27,6 @@ const emit = defineEmits<{
 
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
 const appStore = useAppStore();
 
 const editorMainStore = useMainStore();
@@ -210,6 +209,12 @@ const handleBackToWorkspace = async () => {
   await router.push({ name: 'material-tab', params: { materialId: materialId.value, tab: 'ppt' } });
 };
 
+// 将“返回工作台”的触发入口放到编辑器原生顶部（EditorHeader）中。
+provide(TEACHDO_EDITOR_BRIDGE_KEY, {
+  backToWorkspace: handleBackToWorkspace,
+  saving,
+});
+
 onBeforeRouteLeave(() => {
   if (!materialId.value) return true;
   if (exitPersisted.value) return true;
@@ -236,13 +241,6 @@ void deleteDiscardedDB().catch(() => null);
 
 <template>
   <section class="teachdo-editor-root">
-    <div class="teachdo-editor-actions">
-      <button type="button" class="teachdo-editor-btn" :disabled="saving" @click="handleBackToWorkspace">
-        <span v-if="saving">{{ t('editor.saving') }}</span>
-        <span v-else>{{ t('editor.back') }}</span>
-      </button>
-    </div>
-
     <ScreenView v-if="screening" />
     <EditorView v-else />
   </section>
@@ -294,37 +292,4 @@ void deleteDiscardedDB().catch(() => null);
   --z-tooltip: 1100;
   --z-notification: 1150;
 }
-
-.teachdo-editor-actions {
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  z-index: 2000;
-}
-
-.teachdo-editor-btn {
-  appearance: none;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  color: rgba(15, 23, 42, 0.9);
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-weight: 800;
-  font-size: 13px;
-  cursor: pointer;
-  transition: transform 0.15s ease, background-color 0.15s ease;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.95);
-    transform: translateY(-1px);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-  }
-}
 </style>
-

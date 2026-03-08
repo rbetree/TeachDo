@@ -1,6 +1,17 @@
 <template>
   <div class="editor-header">
     <div class="left">
+      <button
+        class="menu-item back-to-workspace"
+        type="button"
+        :disabled="teachdoSaving"
+        v-tooltip="t('editor.back')"
+        @click="handleBackToWorkspace"
+      >
+        <IconArrowCircleLeft class="icon" />
+        <span class="back-label">{{ teachdoSaving ? t('editor.saving') : t('editor.back') }}</span>
+      </button>
+
       <Popover trigger="click" placement="bottom-start" v-model:value="mainMenuVisible">
         <template #content>
           <div class="main-menu">
@@ -139,8 +150,9 @@
 </template>
 
 <script lang="ts" setup>
-import { nextTick, ref, useTemplateRef } from 'vue'
+import { computed, inject, nextTick, ref, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@editor/store'
 import useScreening from '@editor/hooks/useScreening'
@@ -162,8 +174,10 @@ import Divider from '@editor/components/Divider.vue'
 
 // 关键：统一走 AIPPTGenerator（本地生成，不依赖后端）
 import useAIPPT from '@editor/hooks/useAIPPT'
+import { TEACHDO_EDITOR_BRIDGE_KEY } from '@editor/contexts/teachdoBridge'
 
 const router = useRouter()
+const { t } = useI18n()
 const mainStore = useMainStore()
 const slidesStore = useSlidesStore()
 const { title } = storeToRefs(slidesStore)
@@ -172,6 +186,26 @@ const { importSpecificFile, importPPTXFile, importJSON, exporting } = useImport(
 const { resetSlides } = useSlideHandler()
 const { AIPPTGenerator } = useAIPPT()
 const { addHistorySnapshot } = useHistorySnapshot()
+
+// TeachDo 外层桥接（可选）：用于把“返回工作台”放进编辑器原生顶部。
+const teachdoBridge = inject(TEACHDO_EDITOR_BRIDGE_KEY, null)
+const teachdoSaving = computed(() => teachdoBridge?.saving.value ?? false)
+
+const handleBackToWorkspace = async () => {
+  if (teachdoSaving.value) return
+  try {
+    if (teachdoBridge) {
+      await teachdoBridge.backToWorkspace()
+      return
+    }
+    // editor-runtime 独立运行时的兜底（TeachDo 场景会走 bridge）
+    await router.push('/')
+  }
+  catch (err) {
+    console.error(err)
+    message.error('返回工作台失败')
+  }
+}
 
 const mainMenuVisible = ref(false)
 const hotkeyDrawerVisible = ref(false)
@@ -429,6 +463,9 @@ const renderAIPPTNow = async () => {
 }
 
 .menu-item {
+  appearance: none;
+  border: none;
+  background: transparent;
   height: 30px;
   display: flex;
   justify-content: center;
@@ -437,6 +474,7 @@ const renderAIPPTNow = async () => {
   padding: 0 10px;
   border-radius: 2px;
   cursor: pointer;
+  color: inherit;
 
   .icon {
     font-size: 18px;
@@ -445,6 +483,30 @@ const renderAIPPTNow = async () => {
 
   &:hover {
     background-color: #f1f1f1;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &:disabled:hover {
+    background-color: transparent;
+  }
+}
+
+.back-to-workspace {
+  gap: 6px;
+
+  .back-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #666666;
+    white-space: nowrap;
+  }
+
+  &:hover .back-label {
+    color: #111111;
   }
 }
 

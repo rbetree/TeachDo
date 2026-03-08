@@ -1,10 +1,6 @@
 <template>
   <nav class="navbar">
-    <div class="navbar-left">
-      <button class="logo-btn" type="button" @click="goHome">
-        <span class="logo-text">TeachDo</span>
-      </button>
-    </div>
+    <div class="navbar-left"></div>
 
     <div v-if="!hideLinks" class="navbar-center">
       <RouterLink
@@ -86,7 +82,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute, useRouter, RouterLink } from 'vue-router'
+import { useRoute, RouterLink } from 'vue-router'
 import { useTheme } from '@editor/hooks/useTheme'
 
 interface Props {
@@ -100,16 +96,9 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const route = useRoute()
-const router = useRouter()
 const { currentTheme, toggleTheme } = useTheme()
 
 const currentPath = computed(() => route.path)
-
-const goHome = () => {
-  if (route.path !== '/') {
-    router.push('/')
-  }
-}
 </script>
 
 <style scoped lang="scss">
@@ -133,20 +122,6 @@ const goHome = () => {
 
 .navbar-center {
   gap: 2rem;
-}
-
-.logo-btn {
-  border: none;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-}
-
-.logo-text {
-  font-weight: 700;
-  font-size: 1.2rem;
-  letter-spacing: -0.03em;
-  color: var(--text-primary);
 }
 
 .nav-link {

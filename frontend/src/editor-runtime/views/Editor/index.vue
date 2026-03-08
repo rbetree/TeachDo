@@ -1,8 +1,5 @@
 <template>
   <div class="editor-wrapper">
-    <!-- 全局导航栏 (编辑器内隐藏导航链接，保留主题开关与头像) -->
-    <Navbar :hide-links="true" />
-    
     <!-- 原编辑器完整结构（使用独立浅色主题） -->
     <div class="pptist-editor editor-container-light-theme">
       <EditorHeader class="layout-header" />
@@ -48,7 +45,6 @@ import { useMainStore } from '@editor/store'
 import useGlobalHotkey from '@editor/hooks/useGlobalHotkey'
 import usePasteEvent from '@editor/hooks/usePasteEvent'
 
-import Navbar from '@editor/components/common/Navbar.vue'
 import EditorHeader from './EditorHeader/index.vue'
 import Canvas from './Canvas/index.vue'
 import CanvasTool from './CanvasTool/index.vue'
