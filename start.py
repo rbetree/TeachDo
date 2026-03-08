@@ -20,7 +20,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlsplit
 
 import glob
@@ -197,6 +197,26 @@ def _access_host_for_bind_host(bind_host: str) -> str:
     if bind_host in {"0.0.0.0", "::", "localhost"}:
         return "127.0.0.1"
     return bind_host or "127.0.0.1"
+
+def _is_wsl() -> bool:
+    """
+    判断是否运行在 WSL 环境。
+
+    用途：WSL（尤其是 mirrored networking）下可能存在“Windows 侧预留/排除端口”，
+    表现为 Linux 侧 bind() 报 EADDRINUSE，但 ss/netstat/fuser 又查不到任何监听进程。
+    """
+    try:
+        osrelease = Path("/proc/sys/kernel/osrelease").read_text(encoding="utf-8", errors="ignore").lower()
+        if "microsoft" in osrelease:
+            return True
+    except Exception:
+        pass
+
+    try:
+        version = Path("/proc/version").read_text(encoding="utf-8", errors="ignore").lower()
+        return "microsoft" in version
+    except Exception:
+        return False
 
 
 def _http_get_status(url: str, *, timeout_s: float = 2.0) -> Optional[int]:
@@ -635,35 +655,69 @@ TeachDo 生产环境启动器
 
     def check_ports(self):
         """检查端口占用"""
+        import errno
         import socket
 
-        all_ports = [service['port'] for service in self.services.values()]
-        all_ports.append(self.frontend_port)
+        backend_ports = {int(service["port"]) for service in self.services.values()}
+        # 前端 dev server 与后端可能绑定不同 host，需要按各自 bind host 检查
+        targets: List[Tuple[str, int]] = [(str(self.bind_host), p) for p in sorted(backend_ports)]
+        targets.append((str(self.frontend_host), int(self.frontend_port)))
 
-        def _is_port_open(port: int) -> bool:
+        def _can_bind(host: str, port: int) -> bool:
             try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.settimeout(0.5)
-                    # 用 127.0.0.1 探测更稳定（避免 localhost 在某些环境下解析到 IPv6 导致误判）。
-                    return s.connect_ex((self.access_host, int(port))) == 0
+                infos = socket.getaddrinfo(host, int(port), type=socket.SOCK_STREAM)
             except Exception:
                 return False
 
-        def _occupied(ports: List[int]) -> List[int]:
-            return [int(p) for p in ports if _is_port_open(int(p))]
+            for family, socktype, proto, _canonname, sockaddr in infos:
+                s = None
+                try:
+                    s = socket.socket(family, socktype, proto)
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    s.bind(sockaddr)
+                    return True
+                except OSError as e:
+                    # 仅当端口占用时视为不可用；其他异常也按不可用处理
+                    if getattr(e, "errno", None) == errno.EADDRINUSE:
+                        continue
+                    continue
+                except Exception:
+                    continue
+                finally:
+                    try:
+                        if s is not None:
+                            s.close()
+                    except Exception:
+                        pass
 
-        occupied_ports = _occupied(all_ports)
+            return False
+
+        def _occupied_ports(pairs: list[tuple[str, int]]) -> list[int]:
+            occupied: list[int] = []
+            for host, port in pairs:
+                if not _can_bind(host, int(port)):
+                    occupied.append(int(port))
+            return occupied
+
+        occupied_ports = _occupied_ports(targets)
 
         if occupied_ports:
             self._print_warn(f"发现端口占用: {occupied_ports}，尝试清理占用端口")
             killed = self.kill_processes_on_ports(occupied_ports)
-            still = _occupied(occupied_ports)
+            still = _occupied_ports([pair for pair in targets if int(pair[1]) in set(occupied_ports)])
             if still:
                 self._print_error(f"端口仍被占用: {still}（已尝试终止 {killed} 个进程）")
                 for port in still:
                     self._print_error(
                         f"请手动释放端口 {port}，例如：`lsof -nP -iTCP:{port} -sTCP:LISTEN` 或 `fuser -n tcp {port}`"
                     )
+                    if _is_wsl():
+                        self._print_error(
+                            "若上述命令均查不到占用进程且 Windows 侧也没有监听，"
+                            "可能是 Windows 预留/排除端口导致 WSL 无法 bind；"
+                            "请在 Windows 运行 `netsh interface ipv4 show excludedportrange protocol=tcp`，"
+                            "或改用其它端口（同步调整 .env 中对应 *_PORT 与 *_API）。"
+                        )
                 sys.exit(1)
 
     def kill_processes_on_ports(self, ports: List[int]):
@@ -805,6 +859,11 @@ TeachDo 生产环境启动器
             pids = sorted(_pids_listening_on_port(port))
             if not pids:
                 self._print_warn(f"无法定位占用端口 {port} 的进程（可能权限不足或工具不可用）")
+                if _is_wsl():
+                    self._print_warn(
+                        "检测到 WSL 环境：若 `ss/fuser` 查不到监听进程且 Windows 侧也无监听，"
+                        "很可能是 Windows 预留/排除端口导致 WSL 无法 bind。"
+                    )
                 continue
 
             self._print_warn(f"端口 {port} 占用进程: {', '.join(str(p) for p in pids)}，尝试终止")
