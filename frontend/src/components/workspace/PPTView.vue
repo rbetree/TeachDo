@@ -8,6 +8,7 @@ import WorkspaceNeedOutlineState from '@/components/workspace/WorkspaceNeedOutli
 import PptPreviewPanel from '@/components/workspace/ppt/PptPreviewPanel.vue';
 import PptTemplateSelector from '@/components/workspace/ppt/PptTemplateSelector.vue';
 import { usePptGeneration } from '@/components/workspace/ppt/usePptGeneration';
+import { prefetchEditorRuntimePluginModules } from '@/utils/editorRuntime';
 
 interface Props {
   currentMaterial: TeachingMaterial;
@@ -92,6 +93,7 @@ const scheduleRuntimePrefetch = () => {
   if (typeof ric === 'function') {
     ric(
       () => {
+        void prefetchEditorRuntimePluginModules();
         editorRuntimePrefetchPromise = import('@/views/pptEditor/PPTEditorRuntime.vue').catch(() => null);
       },
       { timeout: 1500 },
@@ -100,6 +102,7 @@ const scheduleRuntimePrefetch = () => {
   }
 
   window.setTimeout(() => {
+    void prefetchEditorRuntimePluginModules();
     editorRuntimePrefetchPromise = import('@/views/pptEditor/PPTEditorRuntime.vue').catch(() => null);
   }, 800);
 };
@@ -114,6 +117,7 @@ const prefetchPptEditor = (input: { eagerRuntime?: boolean } = {}) => {
     if (!editorRuntimePrefetchPromise) {
       editorRuntimePrefetchPromise = import('@/views/pptEditor/PPTEditorRuntime.vue').catch(() => null);
     }
+    void prefetchEditorRuntimePluginModules();
     return;
   }
 

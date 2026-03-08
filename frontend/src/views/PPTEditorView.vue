@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, type Component } from 'vue';
+import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref, shallowRef, type Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import LucideIcon from '@/components/common/LucideIcon.vue';
+import { ensureEditorRuntimePlugins } from '@/utils/editorRuntime';
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const vueApp = getCurrentInstance()?.appContext.app;
 
 const normalizeParam = (value: unknown): string | null => {
   if (Array.isArray(value)) return value.length ? value[0] ?? null : null;
@@ -18,21 +20,38 @@ const materialId = computed(() => normalizeParam(route.params.materialId));
 const runtimeComponent = shallowRef<Component | null>(null);
 const runtimeError = ref<string | null>(null);
 const editorReady = ref(false);
+let loadTimer: number | null = null;
+let aborted = false;
 
 const loadRuntime = async () => {
   runtimeError.value = null;
   editorReady.value = false;
+  runtimeComponent.value = null;
   try {
+    if (!vueApp) throw new Error('Vue app context not available');
+    await ensureEditorRuntimePlugins(vueApp);
+    if (aborted) return;
     const mod = await import('@/views/pptEditor/PPTEditorRuntime.vue');
+    if (aborted) return;
     runtimeComponent.value = mod.default as unknown as Component;
   } catch (e) {
+    if (aborted) return;
     runtimeComponent.value = null;
     runtimeError.value = e instanceof Error && e.message ? e.message : String(e || '');
   }
 };
 
 onMounted(() => {
-  void loadRuntime();
+  // 让“加载页”优先渲染/绘制，再启动编辑器运行时加载，避免主线程阻塞导致用户先看到“卡住”
+  loadTimer = window.setTimeout(() => void loadRuntime(), 0);
+});
+
+onBeforeUnmount(() => {
+  aborted = true;
+  if (loadTimer) {
+    window.clearTimeout(loadTimer);
+    loadTimer = null;
+  }
 });
 
 const handleBack = async () => {
