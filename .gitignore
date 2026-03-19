@@ -78,6 +78,10 @@ logs
 # 运行期数据（缓存/临时文件，默认不提交）
 /var/
 
+# Codex 本地临时目录（默认不提交）
+/temp/
+
 # 临时脚本（本地用，不提交）
 /scripts/align_opening_report_ppt.py
 /.venv
+/skills
