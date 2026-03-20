@@ -20,7 +20,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlsplit
 
 import glob
@@ -261,6 +261,36 @@ def wait_for_http_ready(
             return True
         time.sleep(max(0.1, float(interval_s)))
     return False
+
+
+def check_tcp_port_bindable(host: str, port: int) -> Tuple[bool, Optional[int]]:
+    """
+    检查 `host:port` 是否可被当前进程绑定（TCP LISTEN）。
+
+    与“connect 探测端口是否有服务”不同，这里直接以 bind 成功与否判断端口是否可用：
+    - 能覆盖“端口被占用但 127.0.0.1 连接不上”的场景（例如进程绑定在 127.0.0.2 / 外网 IP 上）
+    - 更贴近实际启动时的行为（uvicorn 会在 bind 时失败）
+
+    返回：
+    - (True, None)：可绑定
+    - (False, errno)：不可绑定（errno 可能为空）
+    """
+    import socket
+
+    host = _normalize_host(host)
+    # 用 127.0.0.1 替代 localhost，避免在部分环境下解析到 IPv6 导致误判/漂移。
+    if host in {"", "localhost"}:
+        host = "127.0.0.1"
+
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    try:
+        with socket.socket(family, socket.SOCK_STREAM) as s:
+            s.bind((host, int(port)))
+        return True, None
+    except OSError as e:
+        return False, getattr(e, "errno", None)
+    except Exception:
+        return False, None
 
 
 def _tail_last_lines(path: Path, *, max_lines: int = 80) -> List[str]:
@@ -635,32 +665,48 @@ TeachDo 生产环境启动器
 
     def check_ports(self):
         """检查端口占用"""
-        import socket
+        import errno
 
-        all_ports = [service['port'] for service in self.services.values()]
-        all_ports.append(self.frontend_port)
+        targets: List[Tuple[str, int, str]] = []
+        # 后端服务：使用 self.bind_host（实际启动时也会用它绑定）
+        for config in self.services.values():
+            targets.append((self.bind_host, int(config["port"]), str(config.get("name", ""))))
+        # 前端：固定用 127.0.0.1 启动（vite dev），不要用 access_host 误判
+        targets.append((self.frontend_host, int(self.frontend_port), "前端"))
 
-        def _is_port_open(port: int) -> bool:
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.settimeout(0.5)
-                    # 用 127.0.0.1 探测更稳定（避免 localhost 在某些环境下解析到 IPv6 导致误判）。
-                    return s.connect_ex((self.access_host, int(port))) == 0
-            except Exception:
-                return False
+        def _occupied_targets() -> List[Tuple[str, int, str, Optional[int]]]:
+            occupied: List[Tuple[str, int, str, Optional[int]]] = []
+            for host, port, name in targets:
+                ok, err = check_tcp_port_bindable(host, port)
+                if ok:
+                    continue
+                occupied.append((host, int(port), name, err))
+            return occupied
 
-        def _occupied(ports: List[int]) -> List[int]:
-            return [int(p) for p in ports if _is_port_open(int(p))]
+        occupied = _occupied_targets()
+        occupied_ports = sorted({p for _h, p, _n, _e in occupied})
 
-        occupied_ports = _occupied(all_ports)
+        # 绑定地址不可用/权限不足：属于配置或环境问题，提前失败并给出清晰提示。
+        bind_errors = [(h, p, n, e) for (h, p, n, e) in occupied if e in {errno.EADDRNOTAVAIL, errno.EACCES}]
+        if bind_errors:
+            for host, port, name, err in bind_errors:
+                if err == errno.EACCES:
+                    self._print_error(f"{name} 无权限监听 {host}:{port}（EACCES）")
+                else:
+                    self._print_error(f"{name} 绑定地址不可用：{host}:{port}（EADDRNOTAVAIL）")
+            sys.exit(1)
 
         if occupied_ports:
             self._print_warn(f"发现端口占用: {occupied_ports}，尝试清理占用端口")
             killed = self.kill_processes_on_ports(occupied_ports)
-            still = _occupied(occupied_ports)
-            if still:
-                self._print_error(f"端口仍被占用: {still}（已尝试终止 {killed} 个进程）")
-                for port in still:
+            still_occupied = _occupied_targets()
+            still_ports = sorted({p for _h, p, _n, _e in still_occupied})
+            if still_ports:
+                self._print_error(f"端口仍被占用: {still_ports}（已尝试终止 {killed} 个进程）")
+                for host, port, name, err in still_occupied:
+                    if err == errno.EADDRINUSE:
+                        self._print_error(f"{name} 需要监听 {host}:{port}，但端口仍被占用")
+                for port in still_ports:
                     self._print_error(
                         f"请手动释放端口 {port}，例如：`lsof -nP -iTCP:{port} -sTCP:LISTEN` 或 `fuser -n tcp {port}`"
                     )
