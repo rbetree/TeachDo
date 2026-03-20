@@ -27,9 +27,9 @@ cp env_template.txt .env
 - 向量嵌入模型：`EMBEDDING_TYPE` / `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY` / `EMBEDDING_MODEL`
 
 > `*_TYPE` 表示协议类型：
-> - LLM（大纲/写作/校对）：当前实现主要支持 `openai` / `google` / `claude`。  
+> - LLM（大纲/写作/校对）：目前主要支持 `openai` / `google` / `claude`。  
 >   其他厂商/自托管服务（如 DeepSeek、DashScope、Ollama、vLLM、Xinference 等）一般通过 **`openai + *_BASE_URL`** 的 OpenAI 兼容方式接入。
-> - Embedding（向量嵌入）：`EMBEDDING_TYPE` 当前支持 `openai` / `ollama`；其他提供方如有 OpenAI 兼容 embeddings 接口，也推荐使用 `openai + EMBEDDING_BASE_URL`。
+> - Embedding（向量嵌入）：`EMBEDDING_TYPE` 目前支持 `openai` / `ollama`；其他提供方如有 OpenAI 兼容 embeddings 接口，也推荐使用 `openai + EMBEDDING_BASE_URL`。
 
 ### 3.2 服务地址
 

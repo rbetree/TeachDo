@@ -876,6 +876,7 @@ async def aippt_outline(request: AipptRequest):
     )
 
 
+@app.post("/tools/outline")
 @app.post("/tools/aippt_outline_unified")
 async def aippt_outline_unified(
     content: str = Form(None),           # 主题文本（可选）
@@ -1011,6 +1012,7 @@ async def aippt_outline_unified(
     )
 
 
+@app.post("/tools/outline_from_file")
 @app.post("/tools/aippt_outline_from_file")
 async def aippt_outline_from_file(
     user_id: int|str = Form(...),
@@ -1900,7 +1902,7 @@ async def stream_content_response(
                 payload = json.dumps(chunk_data, ensure_ascii=False)
                 yield _encode_sse_data(payload)
     except asyncio.CancelledError:
-        logger.info("客户端已断开 /tools/aippt SSE 连接，提前结束流")
+        logger.info("客户端已断开 PPT 内容 SSE 连接，提前结束流")
         raise
     except Exception as e:
         logger.error("内容生成流异常: %s", e, exc_info=True)
@@ -1950,6 +1952,7 @@ def _build_course_outputs_injection_markdown(full_context: str, *, language: str
     return f"{_COURSE_OUTPUTS_MARKER}\n{title}\n\n{full_context.strip()}".strip()
 
 
+@app.post("/tools/ppt")
 @app.post("/tools/aippt")
 async def aippt_content(request: AipptContentRequest):
     personaldb_url = _get_personaldb_url()

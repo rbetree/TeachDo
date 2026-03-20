@@ -114,23 +114,23 @@
       @change="onPickTemplate"
     />
 
-    <!-- AIPPT JSON 输入抽屉 -->
+    <!-- 幻灯片 JSON 输入抽屉 -->
     <Drawer
       :width="560"
       v-model:visible="aipptDrawerVisible"
       placement="right"
     >
-      <template #title>渲染 AIPPT</template>
+      <template #title>渲染幻灯片 JSON</template>
       <div class="aippt-form">
         <div class="tips">
           已选择模板：<strong>{{ templateFileName || '尚未选择' }}</strong>
         </div>
         <div class="field">
-          <div class="label">AIPPT JSON</div>
+          <div class="label">幻灯片 JSON</div>
           <textarea
             v-model="aipptInput"
             class="aippt-textarea"
-            placeholder='在此粘贴 AIPPT.json 内容（如 {"cover": {...}, "contents":[...], "content":[...], "end":[...]}）'
+            placeholder='在此粘贴幻灯片 JSON 内容（如 {"cover": {...}, "contents":[...], "content":[...], "end":[...]}）'
           ></textarea>
         </div>
         <div class="btns">
@@ -144,8 +144,8 @@
 
     <!-- 原有：导入 Loading -->
     <FullscreenSpin :loading="exporting" tip="正在导入..." />
-    <!-- 新增：AIPPT 渲染 Loading -->
-    <FullscreenSpin :loading="aipptLoading" tip="正在渲染 AIPPT..." />
+    <!-- 新增：本地渲染 Loading -->
+    <FullscreenSpin :loading="aipptLoading" tip="正在渲染幻灯片 JSON..." />
   </div>
 </template>
 
@@ -172,7 +172,7 @@ import Popover from '@editor/components/Popover.vue'
 import PopoverMenuItem from '@editor/components/PopoverMenuItem.vue'
 import Divider from '@editor/components/Divider.vue'
 
-// 关键：统一走 AIPPTGenerator（本地生成，不依赖后端）
+// 关键：统一走本地生成器（不依赖后端）
 import useAIPPT from '@editor/hooks/useAIPPT'
 import { TEACHDO_EDITOR_BRIDGE_KEY } from '@editor/contexts/teachdoBridge'
 
@@ -213,7 +213,7 @@ const editingTitle = ref(false)
 const titleValue = ref('')
 const titleInputRef = useTemplateRef<InstanceType<typeof Input>>('titleInputRef')
 
-// —— 本地渲染（测试 AIPPT）相关状态 ——
+// —— 本地渲染（测试幻灯片 JSON）相关状态 ——
 const tmplPicker = useTemplateRef<HTMLInputElement>('tmplPicker')
 const aipptDrawerVisible = ref(false)
 const aipptInput = ref('')
@@ -273,7 +273,7 @@ const onPickTemplate = async (e: Event) => {
     selectedTemplateFile.value = JSON.parse(text)
     aipptInput.value = ''
     aipptDrawerVisible.value = true
-    message.success('模板已载入，请粘贴 AIPPT JSON')
+    message.success('模板已载入，请粘贴幻灯片 JSON')
   }
   catch (err) {
     console.error(err)
@@ -284,7 +284,7 @@ const onPickTemplate = async (e: Event) => {
   }
 }
 
-// ====== 工具函数：模板类型探测 / AIPPT 规范化 / 类型同义词映射 ======
+// ====== 工具函数：模板类型探测 / 数据规范化 / 类型同义词映射 ======
 const sniffTypesFromTemplate = (tpl: any): string[] => {
   const out = new Set<string>()
   const walk = (n: any) => {
@@ -300,7 +300,7 @@ const sniffTypesFromTemplate = (tpl: any): string[] => {
   return Array.from(out)
 }
 
-// 将"简易 AIPPT JSON"转换为标准的 AIPPTSlide[]（每页带 type）
+// 将“简易幻灯片 JSON”转换为标准的 AIPPTSlide[]（每页带 type）
 interface AIPPTSlideLike { type: string; [k: string]: any }
 const normalizeToAipptSlides = (a: any): AIPPTSlide[] => {
   const slides: AIPPTSlide[] = []
@@ -384,7 +384,7 @@ const renderAIPPTNow = async () => {
     raw = JSON.parse(aipptInput.value || '{}') 
   }
   catch {
-    return message.error('AIPPT JSON 解析失败，请检查格式') 
+    return message.error('幻灯片 JSON 解析失败，请检查格式') 
   }
 
   try {
@@ -408,12 +408,12 @@ const renderAIPPTNow = async () => {
     if (Array.isArray(raw)) {
       // 输入数据已经是 AIPPTSlide[] 格式，直接使用
       normalized = raw
-      console.log('使用数组格式的 AIPPT 数据:', normalized)
+      console.log('使用数组格式的幻灯片数据:', normalized)
     }
     else {
       // 输入数据是对象格式，需要转换
       normalized = normalizeToAipptSlides(raw)
-      console.log('转换对象格式的 AIPPT 数据:', normalized)
+      console.log('转换对象格式的幻灯片数据:', normalized)
     }
 
     const aSlides = remapTypesToTemplate(normalized, supported)
@@ -435,7 +435,7 @@ const renderAIPPTNow = async () => {
   }
   catch (err: any) {
     console.error(err)
-    message.error('渲染失败：' + (err?.message || '请检查模板类型标注与 AIPPT 结构是否匹配'))
+    message.error('渲染失败：' + (err?.message || '请检查模板类型标注与幻灯片 JSON 结构是否匹配'))
   }
   finally {
     aipptLoading.value = false
@@ -626,7 +626,7 @@ const renderAIPPTNow = async () => {
   }
 }
 
-/* AIPPT 抽屉样式 */
+/* 幻灯片 JSON 抽屉样式 */
 .aippt-form {
   padding: 12px;
   .tips { font-size: 12px; color: #666666; margin-bottom: 10px; }

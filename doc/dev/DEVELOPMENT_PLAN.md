@@ -1,11 +1,14 @@
-# AI PPT Assistant 前端重构开发计划
+# TeachDo 前端重构开发计划（历史过程记录）
 
-> **项目目标**: 参考 `archive/frontend-prototype/` 原型对现有前端进行重构，保留所有现有功能并升级 UI/UX 设计
+> **项目目标**: 参考已归档的原型/阶段资料对现有前端进行重构，保留所有现有功能并升级 UI/UX 设计（注意：原型文件不随当前仓库分发）
+>
+> **状态**：历史过程记录（非维护版）。本文用于回溯当时的重构拆解与阶段交付，不再保证与现行代码一一对应。
 >
 > **定位说明**：
 > - 本文件为“前端重构计划 + 过程记录”，用于回溯任务拆解与阶段交付；
-> - 若只关心当前实现/对接：以 `doc/dev/FRONTEND_GUIDE.md`、`doc/dev/FRONTEND_API_CALLS.md`、`doc/backend/backend_api_reference.md` 为准；
-> - 原型与阶段报告位于 `archive/`（不作为维护版信息源）。
+> - 若只关心现行实现/对接：以 `doc/dev/FRONTEND_GUIDE.md`、`doc/dev/FRONTEND_API_CALLS.md`、`doc/backend/backend_api_reference.md` 为准；
+> - 现行路由/页面入口以 `frontend/src/router/index.ts` 为准（概览可看 `doc/dev/FRONTEND_UNUSED_PAGES_AUDIT.md`）；
+> - 原型与阶段报告已归档（不随当前仓库分发；也不作为维护版信息源）。
 
 ## 📋 项目概述
 
@@ -23,7 +26,7 @@
 
 ### 页面路由映射
 
-页面原型文件来自 `archive/frontend-prototype/` 目录
+页面原型文件来自历史归档（当前仓库不包含完整原型目录）。下表为历史原型/旧版路由示意，用于对照当时的步骤拆解。
 
 | 路由 | 文件 | 功能 | 步骤 |
 |------|------|------|------|
@@ -33,9 +36,9 @@
 | `/editor` | - | 演示文稿编辑页（**保持不变**） | 步骤4 |
 | `/app/:id?` | share.html | 分享/从ID生成入口（非主流程） | - |
 
-> **注意**: 上述路由为Vue Router路由路径,对应的Vue组件位于 `frontend/src/views/` 目录
+> **注意**: 上述路由/文件为历史原型或旧版结构示意，不代表现行 TeachDo 路由。现行路由与入口以 `frontend/src/router/index.ts` 为准（概览见 `doc/dev/FRONTEND_UNUSED_PAGES_AUDIT.md`）。
 
-> 备注：`loading.html` 仅为原型页面。当前实现中“生成中/加载态”以组件形式存在于 Outline/PPT 等页面内，不再作为独立路由。
+> 备注：`loading.html` 仅为原型页面。现行代码中“生成中/加载态”以组件形式存在于相关页面/模块内，不再作为独立路由。
 
 ---
 
@@ -121,7 +124,7 @@
 **质量指标**:
 - TypeScript覆盖率: 100%
 - 组件可复用性: 高
-- 原型符合度: 100%（完全符合 `archive/frontend-prototype/` 设计）
+- 原型符合度: 100%（对齐当时的已归档原型设计）
 - 响应式设计: 完整支持 320px-2560px
 - 可访问性: 支持 aria 属性、焦点样式、键盘导航
 - 动画性能: 使用 CSS transform/opacity，性能优化
@@ -166,7 +169,7 @@
   - 集成Spinner组件
   - 主要文本和描述文本
   - 可选进度条显示(0-100%)
-  - 完美匹配 `archive/frontend-prototype/loading.html` 设计
+  - 完美匹配当时的已归档原型 loading 页面设计
 - ✅ [`Card.vue`](../../frontend/src/components/common/Card.vue) - 221行，卡片组件
   - 3种变体(default/bordered/shadow)
   - 可悬停、可点击、可选择状态
@@ -191,7 +194,7 @@
 **质量指标**:
 - TypeScript覆盖率: 100%
 - 组件可复用性: 高
-- 原型符合度: 100%（完全符合 `archive/frontend-prototype/` 设计）
+- 原型符合度: 100%（对齐当时的已归档原型设计）
 - 响应式设计: 完整支持 320px-2560px
 - 可访问性:
   - Modal: 支持 Teleport、ARIA属性、ESC关闭、焦点管理
@@ -204,7 +207,7 @@
 **代码审查评分**: 9.5/10 ⭐⭐⭐⭐⭐
 
 **优势**:
-1. 完美复刻 `archive/frontend-prototype/` 的设计风格
+1. 完美复刻当时的已归档原型设计风格
 2. Modal使用Teleport挂载到body，避免z-index问题
 3. Card组件完美支持模板选择场景
 4. Loading组件支持进度条，满足SSE流式响应场景
@@ -236,7 +239,8 @@
 | V2.1.4 | 确保所有现有主页文本内容已迁移 | V2.1.2 | ✅ 已完成 |
 
 **交付物清单**:
-- ✅ [`frontend/src/views/Home.vue`](../../frontend/src/views/Home.vue) - 333行，全新主页组件
+- ✅ Home.vue（历史入口页，原路径：`frontend/src/views/Home.vue`；现行入口：`frontend/src/views/TeachingMaterialSelectionView.vue`）
+  - 333行，全新主页组件
   - Hero区域：3rem渐变标题 + 清晰副标题
   - 模式切换器：主题生成/文档生成双模式
   - 主题输入：支持回车键快捷提交
@@ -246,30 +250,31 @@
   - 响应式设计：桌面3rem标题，移动端2rem
   - 使用PageLayout和Container组件
   
-- ✅ [`frontend/src/views/APP/index.vue`](../../frontend/src/views/APP/index.vue) - `/app/:id?` 入口：通过 `AIPPTByID` 按 id 生成 PPT（实验入口；`/tools/aippt_by_id` 已移除，当前不可用）
+- ✅ APP/index.vue（历史实验入口，原路径：`frontend/src/views/APP/index.vue`；现已不在现行代码中）
+  - `/app/:id?` 入口：通过 `AIPPTByID` 按 id 生成 PPT（实验入口；`/tools/aippt_by_id` 已移除，现已不可用）
   - 页面内选择模板：通过 `slideStore.fetchTemplates()` 获取 `/api/templates`
   - 读取后端逐行 JSON：区分 `status`（进度文案）与 slide 数据，并在首次收到 slide 后跳转 `/editor`
   - 展示“根据上传文件生成 / 使用网络搜索”选项（写入 `mainStore.generateFromUploadedFile/generateFromWebSearch` 状态）
   
-- ✅ `Loading` 组件：`frontend/src/components/common/Loading.vue`（当前无 `/loading` 独立路由）
+- ✅ `Loading` 组件：`frontend/src/components/common/Loading.vue`（现行无 `/loading` 独立路由）
   - 支持可选进度条展示（`showProgress/progress`）
   - 作为通用加载态组件在多个页面复用
-  - 视觉风格参考 `archive/frontend-prototype/loading.html`
+  - 视觉风格参考当时的已归档原型 loading 页面
   
 - ✅ [`frontend/src/router/index.ts`](../../frontend/src/router/index.ts) - 路由配置更新
-  - `/` → Home.vue（主页）
-  - `/about` → About.vue（说明/诊断）
-  - `/outline` → Outline/index.vue（大纲编辑页）
-  - `/ppt` → PPT/index.vue（模板选择页）
-  - `/editor` → Editor（编辑器）
-  - `/app/:id?` → APP/index.vue（实验入口）
+  - `/` → TeachingMaterialSelectionView（教学资料选择页）
+  - `/material/:materialId` → TeachingMaterialWorkspaceView（工作台；会自动归一化到 outline tab）
+  - `/material/:materialId/:tab` → TeachingMaterialWorkspaceView（outline/lesson/ppt/assistant）
+  - `/material/:materialId/ppt/editor` → PPTEditorView（独立 PPT 编辑器）
+  - `/about` → AboutView
+  - `/settings` → SettingsView
 
 - ✅ 总计：约553行新代码 + 路由配置更新
 
 **质量指标**:
 - TypeScript覆盖率: 100%
 - 组件可复用性: 高（复用PageLayout、Container、Card、Loading）
-- 原型符合度: 100%（完全符合 `archive/frontend-prototype/` 设计）
+- 原型符合度: 100%（对齐当时的已归档原型设计）
 - 响应式设计: 完整支持 320px-2560px
 - 动画性能: 使用CSS transform/opacity，性能优化
 - 浏览器兼容性: Chrome/Firefox/Safari/Edge 现代版本
@@ -277,7 +282,7 @@
 **代码审查评分**: 9.5/10 ⭐⭐⭐⭐⭐
 
 **优势**:
-1. 完美复刻 `archive/frontend-prototype/index.html` 的设计风格
+1. 完美复刻当时的已归档原型首页设计风格
 2. Hero区域渐变标题效果出色，视觉冲击力强
 3. 模式切换器UX流畅，状态管理清晰
 4. 文档上传支持拖拽，交互友好
@@ -286,7 +291,7 @@
 7. 路由配置清晰合理
 
 **备注**：
-- 本节为阶段性记录；当前实现与路由配置以 `frontend/src/views/Home.vue`、`frontend/src/router/index.ts` 为准。
+- 本节为阶段性记录；现行路由配置以 `frontend/src/router/index.ts` 为准。
 
 ### 集合 2.2: 主题/文档模式切换器 ✅
 
@@ -303,7 +308,7 @@
 | V2.2.5 | 准备数据传递和页面导航（实际API调用在Outline页面） | V2.2.2, V2.2.3 | ✅ 已完成 |
 
 **交付物清单**:
-- ✅ [`Home.vue`](../../frontend/src/views/Home.vue) - 已升级至563行
+- ✅ Home.vue（历史入口页，原路径：`frontend/src/views/Home.vue`；现行入口：`frontend/src/views/TeachingMaterialSelectionView.vue`） - 已升级至563行
   - **模式切换器**：平滑切换主题生成/文档生成模式
   - **主题输入**：
     - 支持回车键快捷提交
@@ -333,7 +338,7 @@
 **质量指标**:
 - TypeScript覆盖率: 100%
 - 文件验证准确率: 100%（类型+大小双重验证）
-- 原型符合度: 100%（完全符合 `archive/frontend-prototype/index.html` 设计）
+- 原型符合度: 100%（对齐当时的已归档原型首页设计）
 - 用户体验:
   - 实时文件验证，错误即时反馈
   - 文件选中后可预览信息并清除
@@ -370,7 +375,7 @@
 | V2.3.5 | 完整功能回归测试（对比旧版本） | V2.3.1, V2.3.2 | ✅ 已完成 |
 
 **交付物清单**:
-- ✅ [`Home.vue`](../../frontend/src/views/Home.vue) - 升级至710+行
+- ✅ Home.vue（历史入口页，原路径：`frontend/src/views/Home.vue`；现行入口：`frontend/src/views/TeachingMaterialSelectionView.vue`） - 升级至710+行
   - **Modal错误对话框**: 集成Modal组件，显示详细错误信息
   - **增强的输入验证**: 主题长度验证（4-200字符）、完整的文件验证
   - **加载状态管理**: Spinner集成、动态按钮文本、禁用状态
@@ -412,7 +417,7 @@
 >
 > **影响范围**: 阻塞阶段3大纲页重构，因为无法在功能不完整的基础上继续重构。
 >
-> **参考文档**: 详见 [`archive/PHASE2.5_ARCHITECTURE_AUDIT.md`](../../archive/PHASE2.5_ARCHITECTURE_AUDIT.md)
+> **参考文档**: PHASE2.5_ARCHITECTURE_AUDIT.md（历史交付物，未随仓库提交）
 >
 > **完成日期**: 2025-11-29
 >
@@ -436,7 +441,7 @@
 **完成日期**: 2025-11-29
 
 **交付物清单**:
-- ✅ [`Home.vue`](../../frontend/src/views/Home.vue) - 已升级至931行
+- ✅ Home.vue（历史入口页，原路径：`frontend/src/views/Home.vue`；现行入口：`frontend/src/views/TeachingMaterialSelectionView.vue`） - 已升级至931行
   - **HTML结构** (行69-94): 完整的气泡容器、滚动轨道、气泡列表
   - **数据定义** (行184-196): 10个预设主题的响应式数组
   - **交互函数** (行385-390): `setTopicFromBubble()` 实现点击填充和用户提示
@@ -447,7 +452,7 @@
 - ✅ 气泡无限循环滚动动画流畅（30秒完整循环，使用GPU加速）
 - ✅ 点击气泡自动填充输入框（带 message.success 用户反馈）
 - ✅ 移动端触摸交互正常（最小触摸目标40px桌面/36px移动）
-- ✅ 与新页面的视觉效果一致（完全复刻 `archive/frontend-prototype/` 设计）
+- ✅ 与新页面的视觉效果一致（完全复刻当时的已归档原型设计）
 - ✅ 渐变遮罩边缘淡出效果
 - ✅ 悬停时渐变背景和缩放动画
 - ✅ 禁用文本选择和系统高亮
@@ -517,7 +522,7 @@
 | V2.5.4.5 | 确保 Outline 页面仅保留 `step === 'outline'` 编辑功能 | V2.5.4.4 | ✅ 已完成 |
 
 **交付物清单**:
-- ✅ [`Outline/index.vue`](../../frontend/src/views/Outline/index.vue) - 从 962 行精简至 579 行（减少 383 行，40%代码减少）
+- ✅ Outline/index.vue（历史大纲页，原路径：`frontend/src/views/Outline/index.vue`；现行大纲入口位于工作台 tab 内） - 从 962 行精简至 579 行（减少 383 行，40%代码减少）
 - ✅ **移除的内容**:
   - **HTML模板** (~76行): 完整的 `<div v-if="step === 'setup'">` 输入阶段UI
   - **快速气泡** (~18行 HTML + ~113行 CSS): 气泡容器、滚动轨道、动画
@@ -536,7 +541,7 @@
 - ✅ Outline 页面不再显示输入表单（完全移除 `step === 'setup'` 分支）
 - ✅ 从 Home 页面跳转后正确接收参数（代码行92-96已实现）
 - ✅ API 调用使用正确的 language 和 model（代码行132-136已实现）
-- ✅ 大纲编辑功能完全正常（OutlineEditor 组件完整保留）
+- ✅ 大纲编辑功能完全正常（历史验证）
 - ✅ SSE 流式响应处理完整（decoder + reader + 递归 readStream）
 - ✅ 错误处理健全（try-catch + 友好的 message 提示）
 - ✅ 职责分离明确（仅负责：接收参数 → 生成大纲 → 编辑大纲 → 导航到下一步）
@@ -615,7 +620,7 @@ readStream()
 | V2.5.5.6 | 创建功能对比表（新旧实现100%功能等价） | V2.5.5.5 | ✅ 已完成 |
 
 **交付物清单**:
-- ✅ [`PHASE2.5.5_DATA_FLOW_VERIFICATION.md`](../../archive/PHASE2.5.5_DATA_FLOW_VERIFICATION.md) - 322行完整验证报告
+- ✅ PHASE2.5.5_DATA_FLOW_VERIFICATION.md（历史交付物，未随仓库提交） - 322行完整验证报告
   - 执行摘要：关键发现和修复记录
   - 主题生成模式数据流验证 (100%通过)
   - 文档生成模式数据流验证 (发现并修复1个关键问题)
@@ -625,12 +630,12 @@ readStream()
   - 完整功能对比表
   - 技术改进点记录
   - 8个测试用例建议
-- ✅ [`Home.vue`](../../frontend/src/views/Home.vue) - 修复文档上传功能
+- ✅ Home.vue（历史入口页，原路径：`frontend/src/views/Home.vue`；现行入口：`frontend/src/views/TeachingMaterialSelectionView.vue`） - 修复文档上传功能
   - 导入 `api` 服务和 `useAIPPT` Hook
   - 实现完整的 `AIPPT_Outline_From_File` API调用
   - 实现SSE流式响应处理
   - 通过 `query.topic` 传递生成的大纲
-- ✅ [`Outline/index.vue`](../../frontend/src/views/Outline/index.vue) - 适配文档上传模式
+- ✅ Outline/index.vue（历史大纲页，原路径：`frontend/src/views/Outline/index.vue`；现行大纲入口位于工作台 tab 内） - 适配文档上传模式
   - 区分 `fromFile` 模式，直接显示大纲
   - 主题模式调用API生成
 
@@ -680,23 +685,23 @@ readStream()
 | V3.1.4 | 更新步骤进度条状态（步骤2高亮） | V1.2.2 | ✅ 已完成 |
 
 **交付物清单**:
-- ✅ [`frontend/src/views/Outline/index.vue`](../../frontend/src/views/Outline/index.vue) - 从582行精简至327行（减少44%）
+- ✅ Outline/index.vue（历史大纲页，原路径：`frontend/src/views/Outline/index.vue`；现行大纲入口位于工作台 tab 内） - 从582行精简至327行（减少44%）
   - **新架构**: 使用 PageLayout + Container 替代自定义布局
-  - **组件复用**: 集成5个设计系统组件（PageLayout, Container, Button, Loading, OutlineEditor）
+  - **组件复用**: 集成设计系统组件（PageLayout, Container, Button, Loading 等）
   - **CSS优化**: 从383行减至130行，完全使用CSS变量替代硬编码
   - **页面结构**:
     - 页面头部：标题 "编辑大纲" + 副标题 "AI 已根据您的主题生成初步大纲"
-    - 大纲编辑区：生成中显示 Loading 组件 + 预览文本，完成后显示 OutlineEditor
+    - 大纲编辑区：生成中显示 Loading 组件 + 预览文本，完成后显示大纲编辑组件
     - 操作栏：返回按钮 + 下一步按钮（仅在编辑完成后显示）
   - **步骤进度**: 通过 `currentStep={2}` prop 自动高亮步骤2
   - **功能保留**: 100%保留所有现有功能
     - 路由参数接收：language, model, topic, fromFile
     - AI大纲生成：完整的SSE流式响应处理
-    - OutlineEditor集成：完整的树形编辑器
+    - 大纲编辑器集成：完整的树形编辑器
     - 页面导航：goBack(), goPPT()
   - **响应式设计**: 移动端字体缩小、按钮垂直堆叠
   - **主题兼容**: 自动支持浅色/深色主题切换
-- ✅ [`PHASE3.1_COMPLETION_REPORT.md`](../../archive/PHASE3.1_COMPLETION_REPORT.md) - 205行完成报告
+- ✅ PHASE3.1_COMPLETION_REPORT.md（历史交付物，未随仓库提交） - 205行完成报告
   - 执行摘要
   - 任务完成清单
   - 代码质量指标
@@ -710,7 +715,7 @@ readStream()
 - CSS精简度: 66%（383行→130行）
 - 组件复用: 从1个增至5个
 - 硬编码消除: 30+处颜色硬编码全部替换为CSS变量
-- 原型符合度: 100%（完全符合 `archive/frontend-prototype/outline.html` 设计）
+- 原型符合度: 100%（对齐当时的已归档原型大纲页设计）
 - 响应式设计: 完整支持 320px-2560px
 - 功能保留: 100%（0功能回退）
 - 浏览器兼容性: Chrome/Firefox/Safari/Edge 现代版本
@@ -726,7 +731,7 @@ readStream()
 6. Loading状态展示优雅，用户体验良好
 
 **改进空间**:
-1. 可考虑为OutlineEditor添加骨架屏加载状态
+1. 可考虑为大纲编辑器添加骨架屏加载状态
 2. 可添加大纲预览模式切换（树形/列表）
 3. 可考虑添加大纲导出功能（JSON/Markdown）
 
@@ -745,7 +750,7 @@ readStream()
 | V3.2.5 | 集成现有保存和数据传递逻辑 | V3.2.4 | ✅ 已完成 |
 
 **交付物清单**:
-- ✅ [`PHASE3.2_OUTLINE_EDITOR_AUDIT.md`](../../archive/PHASE3.2_OUTLINE_EDITOR_AUDIT.md) - 356行组件审计报告
+- ✅ PHASE3.2_OUTLINE_EDITOR_AUDIT.md（历史交付物，未随仓库提交） - 组件审计报告
   - **18个核心功能点**完整记录（Markdown双向转换、4级层级系统、内联编辑等）
   - **6个右键菜单项**详细说明（添加同级/下级、删除、移动、折叠）
   - **数据结构定义**: `OutlineItem {id, content, lv, title?}`
@@ -753,7 +758,7 @@ readStream()
   - **样式迁移计划**: 8处 SCSS 变量 → CSS Variables 替换方案
   - **已知问题**: 拖拽/折叠功能未实现（计划在集合3.3中完成）
 
-- ✅ [`OutlineEditor.vue`](../../frontend/src/components/OutlineEditor.vue) - 352行组件（98行样式修改）
+- ✅ OutlineEditor（历史交付物）：组件在当前仓库中已清理（全仓未引用）
   - **8处 CSS Variable 替换**:
     1. `$themeColor` → `var(--primary-color)` (3处)
     2. `rgba($themeColor, .08)` → `var(--primary-light)` (2处)
@@ -763,14 +768,14 @@ readStream()
   - **深色主题兼容**: 通过CSS变量自动适配深色模式
   - **功能保留**: 100%保留所有编辑功能（无任何回退）
 
-- ✅ [`PHASE3.2.4_TESTING_VERIFICATION.md`](../../archive/PHASE3.2.4_TESTING_VERIFICATION.md) - 137行功能测试报告
+- ✅ PHASE3.2.4_TESTING_VERIFICATION.md（历史交付物，未随仓库提交） - 功能测试报告
   - **8个核心功能验证**: Markdown转换、层级限制、内联编辑、右键菜单、空节点删除等
   - **Markdown解析测试**: 支持4级标题(`#` ~ `####`)、正文文本
   - **Markdown生成测试**: 从`OutlineItem[]`正确生成Markdown字符串
   - **数据流验证**: Props接收 → 编辑 → Emit更新
   - **主题协调验证**: CSS变量正确应用，深色模式自动切换
 
-- ✅ [`PHASE3.2.5_DATA_FLOW_VERIFICATION.md`](../../archive/PHASE3.2.5_DATA_FLOW_VERIFICATION.md) - 154行数据流验证报告
+- ✅ PHASE3.2.5_DATA_FLOW_VERIFICATION.md（历史交付物，未随仓库提交） - 数据流验证报告
   - **Outline → PPT → Editor 完整数据流分析**
   - **3个关键传递点**代码验证:
     1. `Outline/index.vue` → `router.push('/ppt')` + `sessionStorage`
@@ -779,7 +784,7 @@ readStream()
   - **5项验收标准**全部通过
   - **数据格式**: Markdown → `OutlineItem[]` → Slides JSON
 
-- ✅ [`PHASE3.2_COMPLETION_REPORT.md`](../../archive/PHASE3.2_COMPLETION_REPORT.md) - 169行完成报告
+- ✅ PHASE3.2_COMPLETION_REPORT.md（历史交付物，未随仓库提交） - 完成报告
   - 执行摘要
   - 所有5个子任务完成清单
   - 质量指标和代码审查评分
@@ -787,20 +792,20 @@ readStream()
   - 下一步工作指引
 
 - ✅ **文档总量**: 822行技术文档（审计356行 + 测试137行 + 数据流154行 + 完成报告169行 + README更新6行）
-- ✅ **代码修改**: 98行样式迁移（OutlineEditor.vue）
+- ✅ **代码修改**: 98行样式迁移（OutlineEditor，历史交付物）
 
 **质量指标**:
 - TypeScript覆盖率: 100%
 - 功能保留率: 100%（18个功能点全部保留）
 - 样式迁移率: 100%（8处变量全部替换）
-- 原型符合度: 100%（完全符合 `archive/frontend-prototype/` 设计系统）
+- 原型符合度: 100%（对齐当时的已归档原型设计系统）
 - 深色主题兼容: 100%（自动通过CSS变量适配）
 - 代码审查评分: 9.7/10 ⭐⭐⭐⭐⭐
 
 **各任务评分**:
 - V3.2.1 (功能识别): 10/10 ⭐⭐⭐⭐⭐ - 356行详尽审计报告
 - V3.2.2 (样式容器): 10/10 ⭐⭐⭐⭐⭐ - 已在V3.1完成，使用PageLayout包裹
-- V3.2.3 (主题协调): 9.5/10 ⭐⭐⭐⭐⭐ - 8处CSS变量完美替换（需验证`--primary-light`定义）
+- V3.2.3 (主题协调): 9.5/10 ⭐⭐⭐⭐⭐ - 8处CSS变量替换（`--primary-light` 已在 design-tokens 定义）
 - V3.2.4 (功能测试): 9/10 ⭐⭐⭐⭐⭐ - 代码审查验证通过（缺实际浏览器测试）
 - V3.2.5 (数据传递): 10/10 ⭐⭐⭐⭐⭐ - 完整数据流验证，3个传递点确认
 
@@ -815,10 +820,7 @@ readStream()
 6. ✅ 类型安全：完整的TypeScript接口定义
 
 **已知问题**:
-1. ⚠️ **CSS Variable存在性**: 使用了`var(--primary-light)`但未验证是否在design-tokens.scss中定义
-   - 原审计建议: `rgba(var(--primary-color-rgb), 0.08)`
-   - 实际使用: `var(--primary-light)`
-   - 后续: 需要验证或创建该变量定义
+1. ✅ **CSS Variable存在性**: `--primary-light` 已在 `frontend/src/editor-runtime/assets/styles/design-tokens.scss` 中定义（浅/深主题各一份）
 
 2. ⚠️ **缺少实际测试**: 仅进行了代码审查，未在浏览器中实际运行
    - 缺失: 浏览器环境测试
@@ -830,16 +832,15 @@ readStream()
    - 计划: 在集合3.3中实现
 
 **改进空间**:
-1. 在design-tokens.scss中添加`--primary-light`变量定义
-2. 补充实际浏览器环境测试（开发服务器运行）
-3. 验证深色主题切换的实际效果
-4. 在集合3.3中实现拖拽排序和折叠功能
-5. 考虑为OutlineEditor添加单元测试覆盖
+1. 补充实际浏览器环境测试（开发服务器运行）
+2. 验证深色主题切换的实际效果
+3. 在集合3.3中实现拖拽排序和折叠功能
+4. 考虑为大纲编辑器添加单元测试覆盖
 
 **下一步建议**:
 1. ✅ 可以标记集合3.2为已完成
 2. 进入集合3.3：大纲页面增强功能（加载动画、自动保存、移动端适配）
-3. 或者优先验证`--primary-light`变量并补充浏览器测试
+3. 或者优先补充浏览器测试并验证深色主题切换效果
 4. 或者直接进入阶段4：模板选择页重构
 
 ### 集合 3.3: 大纲页面增强功能
@@ -871,7 +872,7 @@ readStream()
 | V4.1.4 | 添加操作按钮栏（返回 + 生成按钮） | V1.1.4 | ✅ 已完成 |
 
 **交付物清单**:
-- ✅ [`frontend/src/views/PPT/index.vue`](../../frontend/src/views/PPT/index.vue) - 从454行精简至342行（减少25%）
+- ✅ PPT/index.vue（历史模板选择页，原路径：`frontend/src/views/PPT/index.vue`；现行入口位于工作台 PPT tab） - 从454行精简至342行（减少25%）
   - **新架构**: 使用 PageLayout + Container 替代自定义背景和布局
   - **组件复用**: 集成4个设计系统组件（PageLayout, Container, Card, Button）
   - **CSS优化**: 大幅精简样式代码，使用CSS变量替代硬编码
@@ -895,7 +896,7 @@ readStream()
 - 代码精简度: 25%（454行→342行）
 - 组件复用: 从0个增至4个设计系统组件
 - 硬编码消除: 大量颜色硬编码替换为CSS变量
-- 原型符合度: 100%（完全符合 `archive/frontend-prototype/template.html` 设计）
+- 原型符合度: 100%（对齐当时的已归档原型模板页设计）
 - 响应式设计: 完整支持 320px-2560px
 - 功能保留: 100%（0功能回退）
 - 浏览器兼容性: Chrome/Firefox/Safari/Edge 现代版本
@@ -979,7 +980,7 @@ readStream()
 | V7.1.6 | 确认编辑器的所有样式ui原始都未变更 | - | ✅ 已完成 |
 
 **交付物清单**:
-- ✅ [`PHASE7.1_EDITOR_INTEGRATION_VERIFICATION.md`](../../archive/PHASE7.1_EDITOR_INTEGRATION_VERIFICATION.md) - 296行完整验证报告
+- ✅ PHASE7.1_EDITOR_INTEGRATION_VERIFICATION.md（历史交付物，未随仓库提交） - 296行完整验证报告
   - **技术栈记录**: Vue 3.5.17, ProseMirror (11个核心包), pptxgenjs 3.12.0, ECharts 5.5.1
   - **路由验证**: `/editor` 路径，直接导入（非懒加载），与其他页面的懒加载策略不同
   - **数据传递验证**: sessionStorage + Pinia Store (slidesStore, mainStore)
@@ -1034,20 +1035,20 @@ readStream()
 **最终方案**: **方案B - 编辑器独立主题** (经过实际测试验证)
 
 **交付物清单**:
-- ✅ [`PHASE7.2_THEME_COMPATIBILITY_AUDIT.md`](../../archive/PHASE7.2_THEME_COMPATIBILITY_AUDIT.md) - 340行审查报告
+- ✅ PHASE7.2_THEME_COMPATIBILITY_AUDIT.md（历史交付物，未随仓库提交） - 340行审查报告
   - 发现3个关键问题（硬编码CSS变量、Canvas背景色、EditorHeader样式）
   - 提供2套修复方案（完全集成 vs 独立主题）
   - 详细的变量值对比表和影响分析
-- ✅ [`PHASE7.2_EMERGENCY_FIX.md`](../../archive/PHASE7.2_EMERGENCY_FIX.md) - 294行紧急修复报告
+- ✅ PHASE7.2_EMERGENCY_FIX.md（历史交付物，未随仓库提交） - 294行紧急修复报告
   - 发现方案A导致深色主题下编辑器不可用
   - 1分钟内完成紧急修复
   - 采用方案B：编辑器独立主题
   - 详细的方案对比和设计决策说明
-- ✅ [`frontend/src/views/Editor/index.vue`](../../frontend/src/views/Editor/index.vue) - 编辑器独立主题隔离
+- ✅ Editor/index.vue（历史编辑器页，原路径：`frontend/src/views/Editor/index.vue`；现行 PPT 编辑器入口为 `frontend/src/views/PPTEditorView.vue`） - 编辑器独立主题隔离
   - 保留10个CSS变量定义（强制浅色主题）
   - 添加详细注释说明设计决策
   - 添加 `color` 属性确保文字颜色正确
-- ✅ [`frontend/src/views/Editor/Canvas/index.vue`](../../frontend/src/views/Editor/Canvas/index.vue) - 修复背景色
+- ✅ Editor/Canvas/index.vue（历史编辑器子页，原路径：`frontend/src/views/Editor/Canvas/index.vue`） - 修复背景色
   - 移除未定义的 `$lightGray` SCSS变量
   - 使用固定值 `#F1F5F9`
 - ✅ [`frontend/src/assets/styles/design-tokens.scss`](../../frontend/src/assets/styles/design-tokens.scss) - 补充2个CSS变量
@@ -1228,9 +1229,8 @@ she
 ## 📚 参考资源
 
 ### 设计参考
-- [原型文件](../../archive/frontend-prototype/README.md): 完整设计规范和页面说明
-- [样式文件](../../archive/frontend-prototype/styles.css): CSS Variables 和组件样式
-- [脚本文件](../../archive/frontend-prototype/scripts.js): 交互逻辑参考
+- 原型文件/样式/脚本：已随历史原型归档（当前仓库不包含完整 `frontend-prototype` 目录）
+- 现存对比稿：`doc/dev/prototypes/`（仅作为参考，不作为事实来源）
 
 ### 现有功能参考
 - `frontend/`: 现有前端代码库

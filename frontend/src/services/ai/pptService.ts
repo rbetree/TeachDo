@@ -50,10 +50,10 @@ export async function getTemplateFileData(templateId: string): Promise<any> {
 }
 
 /**
- * POST /tools/aippt (SSE, JSON per slide)
+ * POST /tools/ppt (SSE, JSON per slide)
  * 返回 AIPPTSlide[]；并可通过 onSlide 增量回调。
  */
-export async function streamAipptSlides(input: {
+export async function streamPptSlides(input: {
   content: string;
   sessionId: string;
   language?: string;
@@ -80,7 +80,7 @@ export async function streamAipptSlides(input: {
   };
 
   const response = await requestRaw(
-    '/tools/aippt',
+    '/tools/ppt',
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -144,3 +144,8 @@ export async function streamAipptSlides(input: {
 
   return slides;
 }
+
+/**
+ * @deprecated 历史命名（沿袭自旧接口 /tools/aippt），请使用 `streamPptSlides`。
+ */
+export const streamAipptSlides = streamPptSlides;

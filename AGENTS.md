@@ -1,20 +1,20 @@
 # TeachDo Agent Context
 
-TeachDo 是面向教师的智能备课平台，主链路为 Outline -> PPT 生成 -> 编辑器导出。
+TeachDo 是面向教师的智能备课平台，主链路为 Outline -> 教案/PPT 生成 -> 编辑器导出。
 
 ## Essential Commands
 
-- 一键启动（推荐）：`cp env_template.txt .env && python start.py`
-- 后端全服务：`cd backend && pip install -r requirements.txt && python start_backend.py`
+- 一键启动（推荐）：`cp env_template.txt .env && python3 start.py`
+- 后端全服务：`cd backend && pip install -r requirements.txt && python3 start_backend.py`
 - TeachDo 前端开发：`cd frontend && npm i && npm run dev`
 - 前端质量校验：`cd frontend && npm run typecheck && npm run lint && npm run build`
-- 后端测试：`pytest backend -q`
-- 接口冒烟：`python scripts/verify_endpoints.py`
+- 后端测试：`venv/bin/pytest backend -q`（或激活 venv 后执行 `pytest backend -q`）
+- 接口冒烟：`python3 scripts/verify_endpoints.py`
 
 ## Repository Structure
 
 - `backend/`: FastAPI 多服务（`main_api`、`simpleOutline`、`slide_agent`、`personaldb`、`mock_api`）
-- `frontend/`: TeachDo 当前唯一前端入口（Vue 3 + Vite + TS）
+- `frontend/`: TeachDo 唯一前端入口（Vue 3 + Vite + TS）
 - `doc/`: 项目文档与开发计划
 - `scripts/`: 校验与辅助脚本
 - `template/`: PPT 模板资源

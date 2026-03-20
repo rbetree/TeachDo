@@ -150,7 +150,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
       const mapper = createAipptGenerator();
       mapper.reset();
 
-      await aiService.streamAipptSlides({
+      await aiService.streamPptSlides({
         content: material.outlineContent,
         sessionId: KB_USER_ID,
         language: 'zh',

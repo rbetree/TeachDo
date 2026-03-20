@@ -4,13 +4,13 @@ TeachDo 后端由 `main_api`（网关）+ 多个下游服务组成，推荐通�
 
 ## 推荐入口
 
-- 一键启动（含前端）：见根目录 `README.md`（`python start.py`）
+- 一键启动（含前端）：见根目录 `README.md`（`python3 start.py`）
 - 仅启动后端：
   ```bash
-  cd backend
-  pip install -r requirements.txt
-  python start_backend.py
-  ```
+	  cd backend
+	  pip install -r requirements.txt
+	  python3 start_backend.py
+	  ```
 
 ## 文档入口
 

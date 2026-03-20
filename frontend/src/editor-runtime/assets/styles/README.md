@@ -1,6 +1,6 @@
 # 设计系统文档
 
-本设计系统基于 `frontend-prototype` 原型实现,提供统一的视觉规范和可复用组件。
+本设计系统基于历史原型实现，提供统一的视觉规范和可复用组件。
 
 ## 📁 文件结构
 
@@ -346,6 +346,6 @@ setTheme('light')
 
 ## 📚 参考资源
 
-- 原型文件: `frontend-prototype/`
+- 原型文件：已随历史资料归档（不随仓库分发）
 - 开发计划: `doc/dev/DEVELOPMENT_PLAN.md`
 - 组件文档: `frontend/src/components/common/`

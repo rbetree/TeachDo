@@ -25,7 +25,7 @@
 - ✅ KB：触控目标 + 进度条动效 + 上传 dropzone 键盘可达：`frontend/src/components/workspace/KnowledgeBaseView.vue:586`
 - ✅ Dialog：统一 focus trap + backdrop 键盘等价：`frontend/src/utils/focusTrap.ts:9`
 - ✅ Settings：文案 i18n + Key 显隐按钮 A11y：`frontend/src/views/SettingsView.vue:48`
-- ✅ LessonPlan：建设中禁用态 + 提示：`frontend/src/components/workspace/LessonPlanView.vue:165`
+- ✅ LessonPlan：无大纲时明确引导；生成可取消（AbortController）+ 失败回滚：`frontend/src/components/workspace/LessonPlanView.vue:642`
 - ✅ 动效治理：移除 `transition-all`/`transition: all`（范围内）：`frontend/src/components/common/ToastContainer.vue:76`
 - ✅ 字体与暗色一致性：`frontend/index.html:7`、`frontend/src/style.css:33`
 
@@ -110,7 +110,7 @@
 - `frontend/src/views/SettingsView.vue:118` - Key 显隐按钮补 `aria-label/title/aria-pressed`
 
 ## frontend/src/components/workspace/LessonPlanView.vue
-- `frontend/src/components/workspace/LessonPlanView.vue:165` - “建设中”统一为禁用态按钮 + 明确提示（避免误点/误解）
+- `frontend/src/components/workspace/LessonPlanView.vue:642` - 无大纲时显示引导态（CTA 跳转 Outline），避免误把“不可生成”理解为故障
 
 ## frontend/src/components/common/ToastContainer.vue
 - `frontend/src/components/common/ToastContainer.vue:76` - 动效从 `transition: all` 改为仅 `opacity, transform`
@@ -257,7 +257,7 @@
 
 ---
 
-#### 8) LessonPlan：“建设中”统一为不可误解的禁用态
+#### 8) LessonPlan：无大纲时不可误解的引导态
 **状态**：✅ 已完成（2026-02-19）
 
 **改动文件**

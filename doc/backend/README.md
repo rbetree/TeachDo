@@ -7,7 +7,7 @@
 ## 1) 推荐阅读路径
 
 - 快速启动与配置：`../dev/ENV_GUIDE.md`、`./backend_deployment.md`、`../DockerDeploy.md`
-- API 对接（以当前实现为准）：`./backend_api_reference.md`
+- API 对接（以代码为准）：`./backend_api_reference.md`
 - 后端架构总览：`./backend_architecture.md`
 - 各服务实现细节：
   - `./main_api_service.md`
@@ -38,7 +38,7 @@
 
 - `../legacy/API_OUTLINE.md`、`../legacy/API_CONTENT.md`、`../legacy/API_TEMPLATE.md`、`../legacy/API_IMAGE.md`
 
-这些文件多为「抓包/记录」性质，可能包含无关请求头（Cookie 等）或与当前实现存在偏差；对接时请以 `./backend_api_reference.md` 为准。
+这些文件多为「抓包/记录」性质，可能包含无关请求头（Cookie 等）或与代码实现存在偏差；对接时请以 `./backend_api_reference.md` 为准。
 
 1. **善用搜索**：使用编辑器或浏览器的搜索功能快速定位信息
 2. **循序渐进**：从架构文档开始，逐步深入到具体服务

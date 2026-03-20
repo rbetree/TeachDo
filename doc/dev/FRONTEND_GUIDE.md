@@ -53,9 +53,9 @@ TeachDo 前端的路由结构以“教学资料（TeachingMaterial）”为核�
 
 前端调用后端的主要入口是 `frontend/src/services/aiService.ts`，按领域拆分：
 
-- Outline：`POST /tools/aippt_outline_unified`（SSE）
+- Outline：`POST /tools/outline`（SSE；兼容别名：`/tools/aippt_outline_unified`）
 - Lesson：`POST /tools/lesson_plan`（SSE）、`POST /lesson/export/docx`、`GET /lesson/templates`
-- PPT：`POST /tools/aippt`（SSE）、`GET /templates`、`GET /data/{id}.json`
+- PPT：`POST /tools/ppt`（SSE；兼容别名：`/tools/aippt`）、`GET /templates`、`GET /data/{id}.json`
 - Assistant：`POST /tools/assistant_chat`（SSE）
 - KB（BFF）：`/kb/*`（upload/list/export/vectorize/delete）
 - Artifacts：`/artifacts/*`（list/upload/download/delete）
@@ -68,9 +68,9 @@ TeachDo 前端的路由结构以“教学资料（TeachingMaterial）”为核�
 
 `TeachingMaterial.kbFileIds` 表示“当前教学资料被用户勾选、用于生成/问答的 KB 文件集合”。该集合会透传给：
 
-- 大纲（`/tools/aippt_outline_unified`）
+- 大纲（`/tools/outline`；兼容别名：`/tools/aippt_outline_unified`）
 - 教案（`/tools/lesson_plan`）
-- PPT（`/tools/aippt`）
+- PPT（`/tools/ppt`；兼容别名：`/tools/aippt`）
 - 助教（`/tools/assistant_chat`）
 
 ### 5.2 `file_id` 前缀约定（前后端共识）

@@ -5,7 +5,7 @@
 ![Bundler](https://img.shields.io/badge/Vite-7.x-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-TeachDo 是一套面向教师的智能备课平台，当前仓库提供 **Vite + Vue 3 + TypeScript** 的完整本地工程，支持真实路由、构建与部署流程。React 版本已打 tag 归档，如需对照请按照迁移计划说明查阅，日常开发全部基于本 Vue 仓库。
+TeachDo 是一套面向教师的智能备课平台，前端为 **Vite + Vue 3 + TypeScript** 工程，覆盖真实路由、构建与部署流程；日常开发以本目录为准。
 
 ---
 
@@ -19,8 +19,7 @@ TeachDo 是一套面向教师的智能备课平台，当前仓库提供 **Vite +
 ## 📌 项目现状
 - ✅ 2025-12-10 完成 V1.1～V1.6：Vue 脚手架、Tailwind、Pinia、Router、i18n/Toast 已全部落地，`npm run lint && npm run typecheck && npm run build` 可稳定通过。
 - ✅ 已移除登录/认证模块：当前默认免登录进入工作台，路由仅保留课程有效性校验与工作流能力。
-- ⏳ 教学资料工作台（AI 大纲/教案/PPT/助教）仍在迭代：以 `../doc/dev/PLAN.md` 为准（过程性记录可参考 `../doc/dev/DEVELOPMENT_PLAN.md`）。
-- 📌 React 旧仓库仅供参考，所有增量需求、Bug 修复与联调任务均以 Vue 工程为准；若需对照可通过 `git worktree` 拉取 `main` tag 版本。
+- ⏳ 教学资料工作台（AI 大纲/教案/PPT/助教）后续迭代计划见 `../doc/dev/PLAN.md`（入口；过程记录可参考 `../doc/dev/DEVELOPMENT_PLAN.md`）。
 
 ---
 
@@ -56,7 +55,7 @@ TeachDo 是一套面向教师的智能备课平台，当前仓库提供 **Vite +
    ```
    默认监听 `http://localhost:5174`（已在 `vite.config.ts` 配置，如需变更可自定义）。
 4. **启动后端（TeachDo 后端服务，默认监听 `http://localhost:6800`）**
-   - 建议按照 `teachdo_local_dev.md` 中的说明使用虚拟环境运行 `python start.py`
+   - 建议按照 `teachdo_local_dev.md` 中的说明使用虚拟环境运行 `python3 start.py`
 5. **构建/预览**
    ```bash
    npm run build

@@ -1,15 +1,17 @@
 # TeachDo
 
-TeachDo 是一套面向教师的智能备课平台：以“课程/单元”为工作流单元，支持大纲生成、PPT 流式生成、知识库（KB）引用与独立编辑器导出。
+TeachDo 是一套面向教师的智能备课平台：以“课程/单元”为工作流单元，支持**大纲/教案/PPT** 的流式生成、知识库（KB）增强、助教问答与独立编辑器导出。
 
 ## ✨ 核心能力
 
 - **大纲生成（SSE）**：基于主题输入流式生成大纲并保存
+- **教案生成（SSE）**：基于大纲流式生成教案，并支持导出标准 `.docx`
 - **PPT 生成（SSE）**：支持模板选择、增量页生成、生成产物入库
+- **助教对话（SSE）**：基于教学资料 + 已选 KB 文件进行问答
 - **知识库（KB）**：上传素材向量化、生成产物入库、生成时可选引用范围
 - **独立编辑器**：工作台只读预览；跳转编辑器进行编辑与导出 PPTX
 
-## 📦 项目结构（当前以 TeachDo 为准）
+## 📦 项目结构
 
 ```
 TeachDo/
@@ -30,7 +32,7 @@ TeachDo/
 
 ```bash
 cp env_template.txt .env
-python start.py
+python3 start.py
 ```
 
 默认端口：前端 `5174`，主 API `6800`，大纲 `10001`，内容 `10011`，KB `9100`。
@@ -42,7 +44,7 @@ python start.py
 ```bash
 cd backend
 pip install -r requirements.txt
-python start_backend.py
+python3 start_backend.py
 ```
 
 前端：
@@ -79,4 +81,5 @@ npm run build
 
 ## ⚠️ 已知限制
 
-- `lesson/assistant` 等非核心页当前以“可运行收敛”为目标，部分交互入口处于禁用状态
+- 大纲编辑以“可读可改 + 可保存”为主，暂不包含拖拽排序/折叠等增强交互（如需补齐可参考 `doc/dev/DEVELOPMENT_PLAN.md` 的遗留项说明）。
+- 未配置模型/外网时，可用 `backend/mock_api` 做前端联调冒烟（见 `scripts/verify_endpoints.py` 与 `doc/dev/history/PLAN_AI2PPT_TO_TEACHDO_2026-02.md`）。

@@ -50,7 +50,7 @@ EMBEDDING_API_KEY=your_embedding_key
 
 ```bash
 # 生产模式启动（推荐）
-python start.py
+python3 start.py
 ```
 
 **功能特性**:
@@ -151,7 +151,7 @@ CONTENT_STREAMING=false
 ```bash
 # 后端开发启动
 cd backend
-python start_backend.py
+python3 start_backend.py
 
 # 前端开发启动
 cd frontend
@@ -161,7 +161,7 @@ npm run dev
 **生产模式**（新方式）:
 ```bash
 # 一键生产部署
-python start.py
+python3 start.py
 ```
 
 ### 日志管理
@@ -228,7 +228,7 @@ cat .env | grep API_KEY
 ### 4. 服务启动失败
 ```bash
 # 推荐：另开终端聚合查看所有服务实时日志
-python start.py --tail
+python3 start.py --tail
 
 # 或查看单个服务日志
 tail -f logs/production.log

@@ -1,4 +1,4 @@
-# 后端环境配置与部署指南（以当前代码为准）
+# 后端环境配置与部署指南（以代码为准）
 
 本文档聚焦 **后端服务栈**（`main_api` / `simpleOutline` / `slide_agent` / `personaldb`）的运行方式与部署入口。
 
@@ -48,7 +48,7 @@ cp env_template.txt .env
 ### 3.1 一键启动（推荐，含前端）
 
 ```bash
-python start.py
+python3 start.py
 ```
 
 特点：
@@ -58,7 +58,7 @@ python start.py
 ### 3.2 仅启动后端（不含前端）
 
 ```bash
-python backend/start_backend.py
+python3 backend/start_backend.py
 ```
 
 适用：前端用 `npm run dev` 独立启动，或你有自定义前端部署。
@@ -74,11 +74,11 @@ uvicorn main:app --host 0.0.0.0 --port 9100
 
 # 2) simpleOutline
 cd ../simpleOutline
-python main_api.py --host 0.0.0.0 --port 10001 --agent_url http://127.0.0.1:10001/
+  python3 main_api.py --host 0.0.0.0 --port 10001 --agent_url http://127.0.0.1:10001/
 
 # 3) slide_agent
 cd ../slide_agent
-python main_api.py --host 0.0.0.0 --port 10011 --agent_url http://127.0.0.1:10011/
+  python3 main_api.py --host 0.0.0.0 --port 10011 --agent_url http://127.0.0.1:10011/
 
 # 4) main_api
 cd ../main_api
@@ -110,7 +110,7 @@ docker compose up --build
 
 ## 6. 常见问题（高频）
 
-- 端口占用：优先用 `python start.py`（自带端口检测与清理）。
+- 端口占用：优先用 `python3 start.py`（自带端口检测与清理）。
 - Docker 内访问宿主机服务：通常使用 `host.docker.internal`（不同系统可能有差异）。
 
 ---

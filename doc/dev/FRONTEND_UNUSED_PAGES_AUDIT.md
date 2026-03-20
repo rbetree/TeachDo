@@ -1,121 +1,47 @@
-# 前端未使用页面和结构审查报告（修订版）
+# 前端未使用页面和结构审查报告（维护版）
 
-> **审查日期**: 2025-11-30  
-> **审查范围**: `/frontend` 目录  
-> **审查目的**: 识别流程中不使用的页面及结构
-
----
-
-## 📋 执行摘要
-
-根据对前端代码和开发计划文档的全面审查，并结合用户反馈，得出以下结论：
-
-### 🔴 关键发现
-1. **2个页面已被重构为组件** (`Loading` 和 `Share` 功能)
-2. **3个目录用途已明确** (`APP`, `Mobile`, `Screen`)
-3. **1个原型目录冗余** (`frontend-prototype`)
+> **审查日期**：2026-03-20  
+> **审查范围**：`frontend/src`  
+> **审查目的**：对齐 TeachDo 当前路由/页面入口，识别明确“未引用/可清理”的遗留文件，避免文档与实现口径长期漂移。
 
 ---
 
-## 🎯 核心业务流程（已确认）
+## 1. 当前路由与入口（以代码为准）
 
-核心流程保持不变，但 `Loading` 页面已被 `Loading` 组件取代。
+- 路由配置：`frontend/src/router/index.ts`
+- 工作台路由（TeachingMaterial）：
+  - `/`：教学资料选择页（`TeachingMaterialSelectionView.vue`）
+  - `/material/:materialId`：工作台容器（会自动归一化到 `outline` tab）
+  - `/material/:materialId/:tab`：工作台四个 tab（`outline/lesson/ppt/assistant`）
+  - `/material/:materialId/ppt/editor`：独立 PPT 编辑器
 
-```
-Home (/) 
-  ↓ 主题输入或文档上传
-Outline (/outline) 
-  ↓ 生成和编辑大纲 (使用 Loading 组件)
-PPT (/ppt) 
-  ↓ 选择模板
-Editor (/editor) 
-  ↓ 编辑演示文稿
-Screen (放映模式)
-  ↓ 放映演示
-```
+> 说明：旧版 `/outline`、`/ppt`、`/editor`、`/app/:id?` 等路由不属于 TeachDo 当前路由结构，应以历史文档为准（通常位于 `doc/dev/history/**`）。
 
 ---
 
-## 🔍 详细审查结果
+## 2. 当前在用的 View 文件
 
-### 1. 路由配置 vs 实际文件
+TeachDo 当前 `frontend/src/views/` 仅保留以下入口（其余能力通过组件/按需加载提供）：
 
-| 路由 | 文件路径 | 状态 | 说明 |
-|------|---------|------|------|
-| `/` | `views/Home.vue` | ✅ 存在 | 主页 |
-| `/outline` | `views/Outline/index.vue` | ✅ 存在 | 大纲编辑页 |
-| `/ppt` | `views/PPT/index.vue` | ✅ 存在 | 模板选择页 |
-| `/editor` | `views/Editor/index.vue` | ✅ 存在 | 编辑器页面 |
-| `/app/:id?` | `views/APP/index.vue` | ✅ 存在 | 分享/从ID生成入口 |
-
-### 2. 用途已明确的页面/目录
-
-#### ✅ APP 页面 (`/app/:id?`)
-
-- **功能**: legacy 的实验入口（通过 URL `id` 调用后端 `AIPPTByID` 生成 PPT）。由于 `/tools/aippt_by_id` 已移除，该入口当前已不可用。
-- **用途**: 历史上的“分享/从链接继续”方案（已废弃，后续应随 legacy 前端一并清理）。
-
-#### ✅ Mobile 目录 (`views/Mobile/`)
-
-- **功能**: 移动端适配视图。`index.vue` 根据 `mode` 动态加载 `MobileEditor`, `MobilePlayer`, 或 `MobilePreview`。
-- **用途**: 移动端体验。
-
-#### ✅ Screen 目录 (`views/Screen/`)
-
-- **功能**: 演示文稿的放映模式。
-- **调用方式**: 在 `App.vue` 中通过 `v-if="screening"` 条件渲染。`screening` 状态由 `useScreening` hook 控制，并通过快捷键（F5）触发。
-
-### 3. 已重构为组件的页面
-
-#### ✅ Loading 页面
-
-- **状态**: 独立的 `views/Loading.vue` 页面已不存在。
-- **替代方案**: `frontend/src/components/common/Loading.vue` 组件。
-- **使用场景**: 在 `Outline/index.vue` 中用于显示“正在生成大纲”的状态。
-
-#### ✅ Share 页面
-
-- **状态**: 独立的 `views/Share.vue` 页面已不存在。
-- **替代方案**: 分享功能很可能已整合到 `views/APP/index.vue` 中。
-
-### 4. 冗余目录
-
-#### 📁 frontend-prototype/
-
-- **位置**: 项目根目录 `archive/frontend-prototype/`
-- **内容**: 设计原型参考文件。
-- **状态**: 开发计划显示阶段1-4已完成，原型已被实现。
-- **建议**: 移动到 `doc/prototypes/` 作为参考文档，或归档。
+- `frontend/src/views/TeachingMaterialSelectionView.vue`
+- `frontend/src/views/TeachingMaterialWorkspaceView.vue`
+- `frontend/src/views/PPTEditorView.vue`（内部按需加载 `frontend/src/views/pptEditor/PPTEditorRuntime.vue`）
+- `frontend/src/views/AboutView.vue`
+- `frontend/src/views/SettingsView.vue`
 
 ---
 
-## 📊 统计数据
+## 3. 已清理项（变更记录）
 
-### 页面使用情况
-
-| 类别 | 数量 | 说明 |
-|------|------|------|
-| 核心业务页面 | 5 | Home, Outline, PPT, Editor, APP |
-| 已重构为组件 | 2 | Loading, Share |
-| 活跃的功能目录 | 2 | Mobile, Screen |
-| 原型文件目录 | 1 | frontend-prototype |
+- ✅ 已清理：`frontend/src/editor-runtime/components/OutlineEditor.vue`
+  - 原因：全仓未发现引用，且仅出现在旧文档的过期路径引用中。
+- ✅ 已清理：`frontend/src/i18n/index.ts` 中历史遗留的 `assistant/lesson in_progress` 文案
+  - 目的：避免“功能建设中”的误导，与代码实现口径保持一致。
 
 ---
 
-## 🎯 优先级建议
+## 4. 验收（建议每次清理都跑）
 
-### 🟡 中期处理（1个月内）
-
-1. **整理 frontend-prototype 目录**
-   - 移动到 `doc/prototypes/` 或归档。
-
----
-
-## ✅ 验收标准
-
-- [ ] `frontend-prototype` 已整理或归档。
-- [ ] 更新 `doc/dev/FRONTEND_UNUSED_PAGES_AUDIT.md` 为最终版本。
-
----
-
-**报告生成时间**: 2025-11-30 13:50 (UTC+8)
+- 路由无断链：`frontend/src/router/index.ts` 中不存在指向不存在 view 的 import。
+- 前端基础校验通过：`cd frontend && npm run typecheck && npm run build`。
+- 如涉及后端联调：`python3 scripts/verify_endpoints.py --base-url http://127.0.0.1:6800`。

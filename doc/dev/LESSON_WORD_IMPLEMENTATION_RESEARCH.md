@@ -1,7 +1,8 @@
 # TeachDo 教案（Word）功能开发计划（冻结版）
 
-更新时间：2026-02-19  
-状态：已冻结（按当前确认需求执行）
+更新时间：2026-03-20  
+状态：已冻结（需求口径不再变更）  
+实现状态：主链路已落地（SSE 生成 + 预览 + 标准 `.docx` 导出）
 
 ---
 
@@ -38,10 +39,10 @@
 
 ## 3.1 当前现状
 
-1. Lesson 处于“建设中”禁用态（前端已有占位）
-2. 当前“下载 Word”为前端 HTML + `application/msword` `.doc`，非标准 `.docx`
-3. 前端 `aiService` 暂无 lesson 生成/导出 API
-4. 后端已有 BFF 下载范式、已有 `python-docx` 使用痕迹
+1. Lesson 已上线：工作台可生成/预览/导出（前端：`frontend/src/components/workspace/LessonPlanView.vue`）
+2. “下载 Word”已为后端标准 `.docx`（前端：`frontend/src/services/ai/lessonService.ts`；后端：`backend/main_api/main.py` 的 `/lesson/export/docx`）
+3. 前端 `aiService` 已具备教案生成/导出/模板列表 API（`streamLessonPlan` / `exportLessonDocx` / `getLessonTemplates`）
+4. 后端 `main_api` 已提供教案端点（`POST /tools/lesson_plan`、`GET /lesson/templates`、`POST /lesson/export/docx`），并包含无模型配置时的 fallback 生成逻辑
 
 ## 3.2 目标态
 
@@ -70,7 +71,7 @@ flowchart LR
   API --> GW
 
   subgraph PPT["PPT 分支（现有）"]
-    P1["POST /tools/aippt (SSE)"]
+    P1["POST /tools/ppt (SSE)"]
     P2["slide_agent: writer/checker/controller loop"]
     P3["KB/Web/Image Tools"]
     GW --> P1 --> P2 --> P3 --> API
@@ -254,7 +255,7 @@ DoD：
 
 ## Phase 1：后端接口骨架与契约测试（先跑通链路）
 
-1. 新增 `POST /tools/lesson_plan`（先返回 mock SSE；SSE 头与 `[DONE]` 结束标记参考 `backend/main_api/main.py` 的 `/tools/aippt`）
+1. 新增 `POST /tools/lesson_plan`（先返回 mock SSE；SSE 头与 `[DONE]` 结束标记参考 `backend/main_api/main.py` 的 `/tools/ppt`（兼容别名：`/tools/aippt`））
 2. 新增 `POST /lesson/export/docx`（先最小模板导出；下载返回范式参考 `backend/main_api/main.py` 的 `/kb/files/{user_id}/{file_id}/export`）
 3. 补充单元测试（契约、错误码、流式结束标记）
 

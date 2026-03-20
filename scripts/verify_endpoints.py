@@ -335,8 +335,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="默认禁用环境代理变量（避免本机 127.0.0.1 误走代理导致 502）；如需使用代理再显式开启",
     )
-    parser.add_argument("--skip-outline", action="store_true", help="跳过 /tools/aippt_outline_unified SSE 校验")
-    parser.add_argument("--skip-ppt", action="store_true", help="跳过 /tools/aippt SSE 校验")
+    parser.add_argument("--skip-outline", action="store_true", help="跳过 /tools/outline SSE 校验")
+    parser.add_argument("--skip-ppt", action="store_true", help="跳过 /tools/ppt SSE 校验")
     parser.add_argument("--require-kb", action="store_true", help="强制校验 /kb/*（阶段 C0 完成后启用）")
     parser.add_argument("--kb-user-id", default="course-smoke", help="KB user_id（建议用 course.id），默认 course-smoke")
     args = parser.parse_args(argv)
@@ -392,7 +392,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # 3) outline sse
     if not args.skip_outline:
-        url = _req_url("/tools/aippt_outline_unified")
+        url = _req_url("/tools/outline")
         try:
             events = _sse_post_form(
                 url,
@@ -424,7 +424,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # 4) ppt sse
     if not args.skip_ppt:
-        url = _req_url("/tools/aippt")
+        url = _req_url("/tools/ppt")
         payload = {
             "content": "# TeachDo 冒烟测试\n\n## 目录\n- 第一部分\n- 第二部分\n",
             "language": "zh",

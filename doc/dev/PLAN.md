@@ -54,8 +54,8 @@
 落点（必须都改）：
 - `POST /tools/assistant_chat`：system prompt 增加“课程产出全文”段落，并确保 `/search` 只用 `rag_ids`
 - `POST /tools/lesson_plan`：lesson system prompt 增加“课程产出全文”；`/search` 只用 `rag_ids`
-- `POST /tools/aippt_outline_unified`：prompt 里追加“课程产出全文”；RAG 只用 `rag_ids`
-- `POST /tools/aippt`：
+- `POST /tools/outline`（兼容别名：`/tools/aippt_outline_unified`）：prompt 里追加“课程产出全文”；RAG 只用 `rag_ids`
+- `POST /tools/ppt`（兼容别名：`/tools/aippt`）：
   - 无论 `generateFromUploadedFile` 是否开启，都接收 `request.kb_file_ids` 用于解析 `full_ids`
   - 仅当 `generateFromUploadedFile=True` 时，把 `rag_ids` 传给内容 agent 的 metadata（保持“参考资料=检索”语义）
   - 把“课程产出全文”作为额外 markdown 章节追加到传入 content agent 的 `markdown_content`（确保在首个 `#` 之后，避免被正则截掉）
@@ -179,7 +179,7 @@ DOCX 自动入库：
 ### 6.2 前端（本地验收脚本）
 启动：
 ```bash
-cp env_template.txt .env && python start.py
+cp env_template.txt .env && python3 start.py
 ```
 
 验收步骤（必须全部通过）：

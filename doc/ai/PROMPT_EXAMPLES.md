@@ -1,12 +1,18 @@
-# 一些prompt示例
-图表的渲染，我的生成PPT的代码，模版，还有数据如下，代码会根据模版和数据进行渲染，生成图表
-核心文件
-src/types/AIPPT.ts src/hooks/useAIPPT.ts src/views/components/element/ChartElement
+# Prompt 示例（图表 / 幻灯片渲染相关）
+
+> 说明：本文件包含 prompt/代码片段的收集，部分内容来自历史实现；若与现行代码不一致，请以代码为准。
+
+核心文件（现行路径）：
+- `frontend/src/editor-runtime/types/SlideSchema.ts`（对外口径的 Slide JSON 类型别名）
+- `frontend/src/editor-runtime/types/AIPPT.ts`（底层 Slide JSON 类型定义）
+- `frontend/src/editor-runtime/hooks/useAIPPT.ts`（Slide JSON → 编辑器元素映射）
+- `frontend/src/editor-runtime/views/components/element/ChartElement/`（图表渲染组件）
+
 处理逻辑：
-src/types/AIPPT.ts中定义图表的类型 AIPPTContentChartItem， 支持 ECharts-like 的数据格式（labels 对应横轴或扇区，series 是多维数据集）。
+`frontend/src/editor-runtime/types/AIPPT.ts` 中定义图表的类型 `AIPPTContentChartItem`，支持 ECharts-like 的数据格式（labels 对应横轴或扇区，series 是多维数据集）。
 export type AIPPTChartType = 'line' | 'bar' | 'pie'
 
-src/hooks/useAIPPT.ts中的isChartItem判断返回的数据类型是否为AIPPTContentChartItem，然后进行渲染
+`frontend/src/editor-runtime/hooks/useAIPPT.ts` 中的 `isChartItem` 判断返回的数据类型是否为 `AIPPTContentChartItem`，然后进行渲染
 
 模板匹配逻辑，AIPPTGenerator() 中，处理 item.type === 'content' 的部分
 找到可用的模版
@@ -14,7 +20,7 @@ const _contentTemplates = getUseableContentTemplates(contentTemplates, items)
 
 getNewChartElement 负责核心渲染
 AIPPTContentChartItem → isChartItem → getNewChartElement → PPTChartElement → ChartRenderer
-src/views/components/element/ChartElement， 内部真正渲染图表的部分交给 <Chart /> 子组件处理。src/views/components/element/ChartElement/Chart.vue中的echarts进行最终渲染。
+`frontend/src/editor-runtime/views/components/element/ChartElement/` 内部真正渲染图表的部分交给 `<Chart />` 子组件处理；`frontend/src/editor-runtime/views/components/element/ChartElement/Chart.vue` 中通过 echarts 进行最终渲染。
 
 
 数据：
@@ -264,7 +270,7 @@ src/views/components/element/ChartElement， 内部真正渲染图表的部分�
 
 
 
-文件名: src/types/AIPPT.ts
+文件名: frontend/src/editor-runtime/types/AIPPT.ts
 内容: // 图片信息接口
 export interface AIPPTImage {
   id: string
@@ -432,7 +438,7 @@ export function isSupportedChartType(t: any): t is AIPPTChartType {
   return (SUPPORTED_CHART_TYPES as readonly string[]).includes(t)
 }
 
-文件名: src/hooks/useAIPPT.ts
+文件名: frontend/src/editor-runtime/hooks/useAIPPT.ts
 内容: import { ref } from 'vue'
 import { nanoid } from 'nanoid'
 import type {
@@ -1322,7 +1328,7 @@ export default () => {
   }
 }
 
-文件名: src/views/components/element/ChartElement/index.vue
+文件名: frontend/src/editor-runtime/views/components/element/ChartElement/index.vue
 内容: <template>
   <div class="editable-element-chart"
     :class="{ 'lock': elementInfo.lock }"
@@ -1413,7 +1419,7 @@ const openDataEditor = () => {
 }
 </style>
 
-文件名: src/views/components/element/ChartElement/BaseChartElement.vue
+文件名: frontend/src/editor-runtime/views/components/element/ChartElement/BaseChartElement.vue
 内容: <template>
   <div class="base-element-chart"
     :class="{ 'is-thumbnail': target === 'thumbnail' }"
@@ -1483,7 +1489,7 @@ defineProps<{
   height: 100%;
 }
 </style>
-文件名: src/views/components/element/ChartElement/Chart.vue
+文件名: frontend/src/editor-runtime/views/components/element/ChartElement/Chart.vue
 内容: <template>
   <div class="chart" ref="chartRef"></div>
 </template>
@@ -1569,7 +1575,7 @@ watch(() => props.textColor, updateOption)
   height: 100%;
 }
 </style>
-文件名: src/views/components/element/ChartElement/chartOption.ts
+文件名: frontend/src/editor-runtime/views/components/element/ChartElement/chartOption.ts
 内容: import type { ComposeOption } from 'echarts/core'
 import type {
   BarSeriesOption,

@@ -93,7 +93,7 @@ async def lifespan(app):
 - 关键请求链路 trace_id 贯通日志。
 
 5.9 测试策略
-- `pytest-asyncio` 覆盖：`/tools/aippt*`、`/templates`、`/data/*`、`/proxy` 白名单、上传大小/MIME、SSE 终止协议；
+- `pytest-asyncio` 覆盖：`/tools/outline`、`/tools/ppt`（含兼容别名 `/tools/aippt*`）、`/templates`、`/data/*`、`/proxy` 白名单、上传大小/MIME、SSE 终止协议；
 - `clients` 层桩与重试策略测试；少量回归用例覆盖主要故障模式。
 
 5.10 启动与部署

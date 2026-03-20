@@ -2,7 +2,7 @@
 
 ## 概述
 
-`simpleOutline` 是 TeachDo 后端中负责生成演示文稿大纲的核心服务（历史沿袭自 AI2PPT）。它基于 **Google ADK (Agent Development Kit)** 框架和 **A2A (Agent-to-Agent)** 协议构建，接收用户提供的主题或参考内容，通过智能分析和可选的网络搜索，生成结构化的 Markdown 大纲。
+`simpleOutline` 是 TeachDo 后端中负责生成演示文稿大纲的核心服务（沿革与历史命名见 `doc/architecture/PROJECT_HISTORY.md`）。它基于 **Google ADK (Agent Development Kit)** 框架和 **A2A (Agent-to-Agent)** 协议构建，接收用户提供的主题或参考内容，通过智能分析和可选的网络搜索，生成结构化的 Markdown 大纲。
 
 ## 服务定位
 
@@ -534,7 +534,7 @@ OUTLINE_STREAMING=false
 
 ## 总结
 
-`simpleOutline` 服务是 TeachDo 的核心组件之一（历史沿袭自 AI2PPT），负责将用户的简短主题或长文档转换为结构化的演示文稿大纲。其主要特点包括：
+`simpleOutline` 服务是 TeachDo 的核心组件之一（沿革与历史命名见 `doc/architecture/PROJECT_HISTORY.md`），负责将用户的简短主题或长文档转换为结构化的演示文稿大纲。其主要特点包括：
 
 1. **基于 Google ADK**: 使用现代化的 Agent 框架，而非传统的 LangChain
 2. **智能策略选择**: 根据输入长度自动决定是否使用网络搜索

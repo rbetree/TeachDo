@@ -19,9 +19,9 @@
 ## 2. 核心流程（从教学资料到可编辑 PPT）
 
 1. 进入首页（`/`）：选择/创建教学资料（TeachingMaterial）
-2. 大纲（`/material/:materialId/outline`）：`POST /tools/aippt_outline_unified`（SSE）生成 Markdown → 保存到 `TeachingMaterial.outlineContent` → `POST /kb/vectorize/text` 入库（产物）
+2. 大纲（`/material/:materialId/outline`）：`POST /tools/outline`（SSE；兼容别名 `/tools/aippt_outline_unified`）生成 Markdown → 保存到 `TeachingMaterial.outlineContent` → `POST /kb/vectorize/text` 入库（产物）
 3. 教案（`/material/:materialId/lesson`）：`POST /tools/lesson_plan`（SSE）生成结构化教案 → 保存到 `TeachingMaterial.lessonPlan` → `POST /kb/vectorize/text` 入库（产物）
-4. PPT（`/material/:materialId/ppt`）：`GET /templates` + `GET /data/{templateId}.json` → `POST /tools/aippt`（SSE）生成逐页 Slide Schema → 保存到 `TeachingMaterial.presentation/editorDocument` → `POST /kb/vectorize/text` 入库（产物）
+4. PPT（`/material/:materialId/ppt`）：`GET /templates` + `GET /data/{templateId}.json` → `POST /tools/ppt`（SSE；兼容别名 `/tools/aippt`）生成逐页 Slide Schema → 保存到 `TeachingMaterial.presentation/editorDocument` → `POST /kb/vectorize/text` 入库（产物）
 5. 独立编辑器（`/material/:materialId/ppt/editor`）：纯前端编辑/导出；导出 PPTX 后可调用 `POST /artifacts/{user_id}/{material_id}` 持久化保存（用于「课程产出」二次下载）
 6. 助教（`/material/:materialId/assistant`）：`POST /tools/assistant_chat`（SSE）基于当前教学资料 + 选中文件上下文做问答
 
@@ -39,9 +39,9 @@
 
 | 功能 | 前端入口 | API（main_api） | 说明 |
 |---|---|---|---|
-| 统一接口生成大纲（推荐） | `/material/:materialId/outline` | `POST /tools/aippt_outline_unified` | SSE Markdown；支持透传 `kb_file_ids` 增强 |
+| 统一接口生成大纲（推荐） | `/material/:materialId/outline` | `POST /tools/outline` | SSE Markdown；兼容别名：`/tools/aippt_outline_unified`；支持透传 `kb_file_ids` 增强 |
 | 主题生成大纲（兼容接口） | 同上 | `POST /tools/aippt_outline` | legacy/兼容接口 |
-| 文件/URL 生成大纲（legacy） | 同上 | `POST /tools/aippt_outline_from_file` | legacy/兼容接口 |
+| 文件/URL 生成大纲（legacy） | 同上 | `POST /tools/outline_from_file` | legacy/兼容接口（兼容别名：`/tools/aippt_outline_from_file`） |
 
 ### 3.2 教案生成与导出
 
@@ -55,7 +55,7 @@
 
 | 功能 | 前端入口 | API（main_api） | 说明 |
 |---|---|---|---|
-| 根据大纲生成内容（SSE） | `/material/:materialId/ppt` | `POST /tools/aippt` | SSE Slide Schema；支持 `kb_folder_ids/kb_file_ids` |
+| 根据大纲生成内容（SSE） | `/material/:materialId/ppt` | `POST /tools/ppt` | SSE Slide Schema；兼容别名：`/tools/aippt`；支持 `kb_folder_ids/kb_file_ids` |
 
 ### 3.4 助教问答
 
@@ -98,13 +98,13 @@
 
 ---
 
-## 4. 路由 → API（当前前端实现概览）
+## 4. 路由 → API（前端实现概览）
 
 - `/`：教学资料选择页（不调用后端）
 - `/material/:materialId/:tab`（工作台，`tab` ∈ `outline/lesson/ppt/assistant`）：
-  - `outline`：`POST /tools/aippt_outline_unified`（SSE）+ `POST /kb/vectorize/text`（产物入库）
+  - `outline`：`POST /tools/outline`（SSE）+ `POST /kb/vectorize/text`（产物入库）
   - `lesson`：`POST /tools/lesson_plan`（SSE）+ `POST /lesson/export/docx`（导出）+ `POST /kb/vectorize/text`（产物入库）
-  - `ppt`：`GET /templates`、`GET /data/{id}.json`、`POST /tools/aippt`（SSE）+ `POST /kb/vectorize/text`（产物入库）
+  - `ppt`：`GET /templates`、`GET /data/{id}.json`、`POST /tools/ppt`（SSE）+ `POST /kb/vectorize/text`（产物入库）
   - `assistant`：`POST /tools/assistant_chat`（SSE）
   - 侧栏（参考资料/课程产出）：按需调用 `POST /kb/upload`、`GET /kb/files/*`、`DELETE /kb/files/*`、`GET /kb/files/*/export`、`GET/POST /artifacts/*`
 - `/material/:materialId/ppt/editor`：编辑器路由；导出 PPTX 后可调用 `POST /artifacts/{user_id}/{material_id}` 入库

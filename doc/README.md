@@ -18,11 +18,12 @@
 
 - 系统架构：`doc/architecture/PROJECT_ARCHITECTURE.md`
 - 功能 → API / 页面映射：`doc/architecture/FEATURE_API_OVERVIEW.md`
+- 项目沿革与历史命名：`doc/architecture/PROJECT_HISTORY.md`
 
 ## 3. 后端（接口 / 部署 / 服务拆分）
 
 - 后端文档导航：`doc/backend/README.md`
-- API 参考（以当前实现为准）：`doc/backend/backend_api_reference.md`
+- API 参考（以代码为准）：`doc/backend/backend_api_reference.md`
 - 后端部署与运行：`doc/backend/backend_deployment.md`
 - 后端架构概述：`doc/backend/backend_architecture.md`
 - 后端架构评估与优化报告：`doc/backend/BACKEND_ARCH_REPORT.md`

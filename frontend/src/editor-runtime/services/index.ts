@@ -62,7 +62,7 @@ export default {
     generateFromWebSearch,
     sessionId,
   }: AIPPTPayload): Promise<any> {
-    return fetch(`${SERVER_URL}/tools/aippt`, {
+    return fetch(`${SERVER_URL}/tools/ppt`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -86,7 +86,7 @@ export default {
     formData.append('file', file)
     formData.append('user_id', user_id)
     formData.append('language', language)
-    return fetch(`${SERVER_URL}/tools/aippt_outline_from_file`, {
+    return fetch(`${SERVER_URL}/tools/outline_from_file`, {
       method: 'POST',
       headers: {
         'Accept': 'text/event-stream',
@@ -121,7 +121,7 @@ export default {
     formData.append('language', language)
     formData.append('user_id', userId)
 
-    return fetch(`${SERVER_URL}/tools/aippt_outline_unified`, {
+    return fetch(`${SERVER_URL}/tools/outline`, {
       method: 'POST',
       headers: {
         'Accept': 'text/event-stream',

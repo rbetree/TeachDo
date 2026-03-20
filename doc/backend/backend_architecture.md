@@ -36,8 +36,8 @@
 
 ### 启动方式
 
-- **一键启动**: 在项目根目录下执行 `python start.py`，会以“干净模式”输出启动进度与就绪状态（不刷屏）。如需聚合查看所有服务实时日志，请另开终端执行 `python start.py --tail`。
-- **单独启动**: 也可使用 `python backend/start_backend.py` 单独启动整个后端服务栈。
+- **一键启动**: 在项目根目录下执行 `python3 start.py`，会以“干净模式”输出启动进度与就绪状态（不刷屏）。如需聚合查看所有服务实时日志，请另开终端执行 `python3 start.py --tail`。
+- **单独启动**: 也可使用 `python3 backend/start_backend.py` 单独启动整个后端服务栈。
 
 ### 环境变量加载
 

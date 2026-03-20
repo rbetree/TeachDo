@@ -2,7 +2,7 @@
 
 ## 1. 概述
 
-`main_api` 服务是整个 AI-to-PPT 后端系统的核心入口和 API 网关。它基于 FastAPI 构建，负责接收来自前端应用的所有请求，并将这些请求路由到相应的下游微服务（Agent），最后将处理结果返回给前端。
+`main_api` 服务是 TeachDo 后端的核心入口和 API 网关。它基于 FastAPI 构建，负责接收来自前端应用的所有请求，并将这些请求路由到相应的下游微服务（Agent），最后将处理结果返回给前端。
 
 ## 2. 角色和职责
 
@@ -20,10 +20,13 @@
 
 | 请求方法 | 路径                               | 功能描述                                                                                             | 下游服务/依赖                               |
 | :------- | :--------------------------------- | :----------------------------------------------------------------------------------------------------- | :------------------------------------------ |
-| `POST`   | `/tools/aippt_outline`             | 接收用户输入的文本主题，流式生成 PPT 大纲。                                                            | `outline_client` -> `simpleOutline` 服务    |
-| `POST`   | `/tools/aippt_outline_unified`     | 统一的大纲生成接口：主题必填，可选上传文件；如有文件会先交给 personaldb 解析/向量化，再生成大纲。        | `personaldb` 服务, `outline_client`         |
-| `POST`   | `/tools/aippt_outline_from_file`   | 接收用户上传的文件（或 URL），将其发送到知识库进行处理，并基于文件内容流式生成 PPT 大纲。                | `personaldb` 服务, `outline_client`         |
-| `POST`   | `/tools/aippt`                     | 接收 Markdown 格式的大纲，流式生成完整的 PPT 幻灯片内容（JSON 格式）。                                 | `content_client` -> `slide_agent` 服务      |
+| `POST`   | `/tools/outline`                   | 大纲生成统一接口（推荐）：主题必填，可选上传文件；如有文件会先交给 personaldb 解析/向量化，再生成大纲。   | `personaldb` 服务, `outline_client`         |
+| `POST`   | `/tools/aippt_outline_unified`     | `/tools/outline` 的兼容别名（历史命名）。                                                               | 同上                                       |
+| `POST`   | `/tools/aippt_outline`             | 历史兼容接口（仅主题；需 `stream=true`）。                                                              | `outline_client` -> `simpleOutline` 服务    |
+| `POST`   | `/tools/outline_from_file`         | 历史兼容接口（文件/URL；已被统一接口覆盖）。                                                            | `personaldb` 服务, `outline_client`         |
+| `POST`   | `/tools/aippt_outline_from_file`   | `/tools/outline_from_file` 的兼容别名（历史命名）。                                                     | 同上                                       |
+| `POST`   | `/tools/ppt`                       | 根据 Markdown 大纲生成逐页 Slide Schema（SSE，JSON）。                                                   | `content_client` -> `slide_agent` 服务      |
+| `POST`   | `/tools/aippt`                     | `/tools/ppt` 的兼容别名（历史命名）。                                                                    | 同上                                       |
 | `GET`    | `/templates`                       | 返回可用的 PPT 模板列表，包含模板名称、ID 和封面图片路径。                                             | 本地静态配置                                |
 | `GET`    | `/data/{filename}`                 | 提供对 `template/` 目录下的静态文件（主要是模板封面图）的访问。                                        | 本地文件系统                                |
 | `GET`    | `/files/{user_id}`                 | 列出指定用户在 `personaldb` 知识库中存储的所有文件。                                                   | `personaldb` 服务                           |

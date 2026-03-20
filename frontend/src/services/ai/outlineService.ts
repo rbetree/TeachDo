@@ -4,7 +4,7 @@ import { ApiError, ensureBackendAvailable, requestRaw } from '@/services/apiClie
 import { KB_USER_ID } from '@/stores/appStore';
 
 /**
- * POST /tools/aippt_outline_unified (SSE Text)
+ * POST /tools/outline (SSE Text)
  */
 export async function generateOutline(
   material: TeachingMaterial,
@@ -37,7 +37,7 @@ export async function generateOutline(
   }
 
   const response = await requestRaw(
-    '/tools/aippt_outline_unified',
+    '/tools/outline',
     {
       method: 'POST',
       body: formData,

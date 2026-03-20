@@ -99,8 +99,8 @@ TeachDo 将“导出的 DOCX/PPTX”作为可再次下载的课程产物进行�
 
 ## 5. 启动与部署入口
 
-- 一键启动（推荐）：`cp env_template.txt .env && python start.py`
-- 后端全服务：`cd backend && pip install -r requirements.txt && python start_backend.py`
+- 一键启动（推荐）：`cp env_template.txt .env && python3 start.py`
+- 后端全服务：`cd backend && pip install -r requirements.txt && python3 start_backend.py`
 - 前端开发：`cd frontend && npm i && npm run dev`
 - Docker：`docker compose up --build`（见 `doc/DockerDeploy.md`）
 

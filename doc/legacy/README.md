@@ -4,13 +4,14 @@
 > 对接与开发请优先以维护版为准：
 > - 架构与能力边界：`doc/architecture/PROJECT_ARCHITECTURE.md`
 > - 功能 → API / 页面映射：`doc/architecture/FEATURE_API_OVERVIEW.md`
-> - API 参考（以当前实现为准）：`doc/backend/backend_api_reference.md`
+> - API 参考（以代码为准）：`doc/backend/backend_api_reference.md`
 
 ## 0) 归档（从维护版迁出）
 
 - `doc/legacy/PROJECT_ARCHITECTURE_AI2PPT.md`（历史架构说明）
 - `doc/legacy/FRONTEND_GUIDE_AI2PPT_2025-11-30.md`（历史前端审计汇总）
 - `doc/legacy/backend_api_reference_legacy.md`（旧版后端 API 记录）
+- `doc/legacy/CHANGES_FRONTEND_LEGACY.md`（旧版前端变更记录与片段）
 
 ## 1) 抓包/历史 API（可能过时）
 

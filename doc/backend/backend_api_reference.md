@@ -44,7 +44,9 @@ TeachDo 的流式端点统一使用 SSE：
 
 ### 2.3 大纲生成
 
-#### `POST /tools/aippt_outline_unified`（推荐，SSE Markdown）
+#### `POST /tools/outline`（推荐，SSE Markdown）
+
+> 兼容别名：`POST /tools/aippt_outline_unified`
 
 请求：`multipart/form-data`（字段）
 
@@ -60,13 +62,17 @@ TeachDo 的流式端点统一使用 SSE：
 
 用途：历史兼容接口（仅主题），请求体为 JSON（需 `stream=true`）。
 
-#### `POST /tools/aippt_outline_from_file`（legacy，SSE Markdown）
+#### `POST /tools/outline_from_file`（legacy，SSE Markdown）
+
+> 兼容别名：`POST /tools/aippt_outline_from_file`
 
 用途：历史兼容接口（文件/URL），请求为 `multipart/form-data`。
 
 ### 2.4 PPT 内容生成
 
-#### `POST /tools/aippt`（SSE，每条 data 为 JSON 字符串）
+#### `POST /tools/ppt`（SSE，每条 data 为 JSON 字符串）
+
+> 兼容别名：`POST /tools/aippt`
 
 请求：JSON（字段）
 
@@ -236,4 +242,3 @@ TeachDo 的流式端点统一使用 SSE：
 - `GET /files/{user_id}`：列出该用户文件（数组）
 - `GET /files/{user_id}/{file_id}/content`：导出该文件的聚合全文（用于 BFF 导出/全文注入）
 - `DELETE /files/{user_id}/{file_id}`：删除该文件对应的向量数据
-

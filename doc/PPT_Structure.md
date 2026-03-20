@@ -1,4 +1,9 @@
-生成流程、模板要求，以及最后这段“犯罪心理学研究”示例数据的**数据格式**与**使用规范**。
+# Slide JSON 结构约定（TeachDo）
+
+本文描述 TeachDo 在 PPT 生成/渲染链路中使用的「Slide JSON」数据格式与模板标注规范（含示例数据）。
+
+- 端点与字段：以 `doc/backend/backend_api_reference.md` 为准
+- 前端类型约束：以 `frontend/src/editor-runtime/types/SlideSchema.ts` 为准
 
 # 一、顶层结构与渲染顺序
 
@@ -94,7 +99,7 @@
 ```
 
 > **图片如何对接？**
-> 模板中通过“图片标记”占位（背景/插图/项目插图）。当前线上示例**不强制数据里写图片字段**；若要启用配图，只需按 AIPPT 方法的接口传入**候选图片集合**，引擎再按模板图片标记进行匹配替换即可。
+> 模板中通过“图片标记”占位（背景/插图/项目插图）。示例数据不强制携带图片字段；若启用配图，引擎会根据模板图片标记进行匹配/替换（具体行为以代码为准）。
 
 # 三、模板侧要求（PPTist 标注规范）
 
@@ -136,10 +141,10 @@
 
 # 六、（可直接落地的）TypeScript 等价结构（基于示例与规范的推断）
 
-> 如果你要在 `src/types/AIPPT.ts` 中做类型约束，可用类似定义：
+> 如果你要在前端做类型约束，推荐直接引用 `frontend/src/editor-runtime/types/SlideSchema.ts`；也可参考下面的等价结构示意：
 
 ```ts
-export type AIPPT =
+export type SlideSchema =
   | SlideCover
   | SlideContents
   | SlideTransition

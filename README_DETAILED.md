@@ -8,7 +8,7 @@ TeachDo 是面向教师的智能备课平台，围绕教学资料的全流程工
 - 知识库增强（KB / RAG）
 - 导出与产物管理（DOCX / PPTX Artifacts）
 
-当前仓库采用 **前后端分离 + FastAPI 多服务 + Vue 3 工作台 + 独立编辑器运行时** 的架构。
+本仓库采用 **前后端分离 + FastAPI 多服务 + Vue 3 工作台 + 独立编辑器运行时** 的架构。
 
 ---
 
@@ -154,7 +154,7 @@ TeachDo 是面向教师的智能备课平台，围绕教学资料的全流程工
 ```text
 TeachDo/
 ├── backend/               # FastAPI 多服务与后端测试
-├── frontend/              # Vue 3 前端（当前唯一前端入口）
+├── frontend/              # Vue 3 前端（唯一前端入口）
 ├── doc/                   # 项目文档（开发计划、后端架构、环境说明）
 ├── scripts/               # 冒烟校验与辅助脚本
 ├── template/              # 模板资源
@@ -225,7 +225,7 @@ cp env_template.txt .env
 
 ```bash
 cp env_template.txt .env
-python start.py
+python3 start.py
 ```
 
 默认端口：
@@ -241,7 +241,7 @@ python start.py
 ```bash
 cd backend
 pip install -r requirements.txt
-python start_backend.py
+python3 start_backend.py
 ```
 
 ### 6.3 仅启动前端
@@ -267,10 +267,10 @@ docker compose up --build
 
 ### 7.1 生成链路
 
-- `POST /tools/aippt_outline`
-- `POST /tools/aippt_outline_unified`
-- `POST /tools/aippt_outline_from_file`
-- `POST /tools/aippt`
+- `POST /tools/outline`（推荐；兼容别名：`/tools/aippt_outline_unified`）
+- `POST /tools/ppt`（兼容别名：`/tools/aippt`）
+- `POST /tools/aippt_outline`（legacy）
+- `POST /tools/outline_from_file`（legacy；兼容别名：`/tools/aippt_outline_from_file`）
 - `POST /tools/lesson_plan`
 - `POST /tools/assistant_chat`
 
@@ -366,7 +366,7 @@ pytest backend -q
 ### 10.3 接口冒烟
 
 ```bash
-python scripts/verify_endpoints.py
+python3 scripts/verify_endpoints.py
 ```
 
 ### 10.4 典型后端测试文件
@@ -432,4 +432,3 @@ python scripts/verify_endpoints.py
 - 新增能力优先落在 `services/` 与模块边界内，避免跨层耦合
 - 变更接口时同步更新：后端代码、前端调用、文档、测试
 - 提交前至少执行前端构建与后端关键测试/冒烟
-

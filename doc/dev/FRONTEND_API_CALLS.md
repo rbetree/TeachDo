@@ -33,7 +33,7 @@
 
 ### 2.2 大纲生成（SSE）
 
-- `generateOutline(material, onStream?)` → `POST /api/tools/aippt_outline_unified`
+- `generateOutline(material, onStream?)` → `POST /api/tools/outline`（兼容别名：`/api/tools/aippt_outline_unified`）
   - `multipart/form-data`
   - `Accept: text/event-stream`
   - 备注：会透传 `kb_file_ids`（来自 `TeachingMaterial.kbFileIds`）
@@ -50,7 +50,7 @@
 
 ### 2.4 PPT 内容生成（SSE）
 
-- `streamAipptSlides(payload)` → `POST /api/tools/aippt`
+- `streamPptSlides(payload)` → `POST /api/tools/ppt`（兼容别名：`/api/tools/aippt`）
   - `Content-Type: application/json`
   - `Accept: text/event-stream`
   - 备注：支持透传 `kb_folder_ids` / `kb_file_ids`

@@ -2,7 +2,7 @@
 
 ## 服务概述
 
-[`personaldb`](../../backend/personaldb/main.py#L1) 是 TeachDo 的知识库服务（历史沿袭自 AI2PPT），负责文档上传、格式转换、向量化存储和智能检索。
+[`personaldb`](../../backend/personaldb/main.py#L1) 是 TeachDo 的知识库服务（沿革与历史命名见 `doc/architecture/PROJECT_HISTORY.md`），负责文档上传、格式转换、向量化存储和智能检索。
 
 **监听端口**: `9100`
 
@@ -75,7 +75,7 @@ def _get_markdown_content(file_path: str, file_name: str) -> str:
 
 **临时目录**：默认 `var/tmp/personaldb/`（可通过 `TEACHDO_TMP_DIR` 调整）
 
-- 文件上传（`POST /upload/` 的 `file` 分支）：当前实现会将上传内容落到临时目录，**处理完成后不会自动删除**（便于调试，删除逻辑在代码中被注释掉）。
+- 文件上传（`POST /upload/` 的 `file` 分支）：现行代码会将上传内容落到临时目录，**处理完成后不会自动删除**（便于调试，删除逻辑在代码中被注释掉）。
 - URL 下载（`POST /upload/` 的 `url` 分支）：下载的临时文件会在处理完成后删除。
 
 ---

@@ -351,6 +351,7 @@ async def stream_generator():
         yield char
         await asyncio.sleep(0.01) # Simulate network latency
 
+@app.post("/tools/outline")
 @app.post("/tools/aippt_outline")
 async def aippt_outline(request: AipptRequest):
     if request.stream:
@@ -438,6 +439,7 @@ async def aippt_content_streamer(markdown_content: str):
     # 可选：显式结束信号（前端可据此收尾）
     yield b"data: [DONE]\n\n"
 
+@app.post("/tools/ppt")
 @app.post("/tools/aippt")
 async def aippt_content(request: AipptContentRequest):
     return StreamingResponse(
@@ -456,6 +458,7 @@ async def get_data(filename: str):
     file_path = TEMPLATE_DIR / filename
     return FileResponse(str(file_path))
 
+@app.post("/tools/outline_from_file")
 @app.post("/tools/aippt_outline_from_file")
 async def aippt_outline_from_file(file: UploadFile = File(...)):
     print(f"上传的文件是: {file.filename}")
