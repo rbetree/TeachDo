@@ -17,6 +17,91 @@ from .utils import validate_slide
 
 logger = logging.getLogger(__name__)
 
+# ========== 课程产出（全文注入）参考上下文处理 ==========
+def _want_english(language: str) -> bool:
+    lang = (language or "").strip().lower().replace("_", "-")
+    return lang in {"en", "english", "en-us", "en-gb"} or lang.startswith("en-")
+
+
+def _dedupe_keep_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for it in items:
+        s = (it or "").strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+    return out
+
+
+def _extract_keywords_from_slide_schema(slide_schema: dict) -> list[str]:
+    keywords: list[str] = []
+    if not isinstance(slide_schema, dict):
+        return []
+    data = slide_schema.get("data")
+    if isinstance(data, dict):
+        title = data.get("title")
+        if isinstance(title, str) and title.strip():
+            keywords.append(title.strip())
+        items = data.get("items")
+        if isinstance(items, list):
+            for it in items[:12]:
+                if isinstance(it, str) and it.strip():
+                    keywords.append(it.strip())
+                elif isinstance(it, dict):
+                    t = it.get("title")
+                    if isinstance(t, str) and t.strip():
+                        keywords.append(t.strip())
+    # 过滤过短关键词（避免误命中导致截取片段无意义）
+    keywords = [k for k in keywords if len(k) >= 2]
+    return _dedupe_keep_order(keywords)
+
+
+def _build_reference_excerpt(text: str, *, keywords: list[str], max_chars: int = 6000) -> str:
+    src = (text or "").strip()
+    if not src:
+        return ""
+    if len(src) <= max_chars:
+        return src
+
+    # 尝试围绕关键词截取更相关的片段
+    for kw in keywords or []:
+        if not kw:
+            continue
+        pos = src.find(kw)
+        if pos == -1:
+            continue
+        start = max(0, pos - max_chars // 3)
+        end = min(len(src), start + max_chars)
+        chunk = src[start:end].strip()
+        if start > 0:
+            chunk = "…" + chunk
+        if end < len(src):
+            chunk = chunk + "…"
+        return chunk
+
+    # 兜底：取开头片段
+    return src[:max_chars].rstrip() + "…"
+
+
+def _build_reference_rules(language: str) -> str:
+    if _want_english(language):
+        return (
+            "\n# IMPORTANT: Reference-only context (course outputs)\n"
+            "- Use it only to align terminology, facts, and examples.\n"
+            "- Do NOT copy sentences/paragraphs verbatim.\n"
+            "- Do NOT treat the reference document structure as the PPT structure.\n"
+            "- The current slide JSON is the single source of truth for structure.\n"
+        )
+    return (
+        "\n# 重要：参考资料使用规则（课程产出全文）\n"
+        "- 仅用于术语一致性、事实核对与例子提炼。\n"
+        "- 严禁原文照抄句子/段落，必须改写与重组。\n"
+        "- 严禁把参考资料的目录结构当作本次 PPT 的结构。\n"
+        "- 页面结构以“输入的 slide JSON”为唯一准绳。\n"
+    )
+
 # ========== 通用回调（与原文件一致） ==========
 def my_before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest) -> Optional[LlmResponse]:
     agent_name = callback_context.agent_name
@@ -168,7 +253,27 @@ class PPTWriterSubAgent(LlmAgent):
         # 根据不同的类型，形成不同的prompt
         slide_prompt = prompt.prompt_mapper[current_slide_type]
         current_slide_schema_json = json.dumps(current_slide_schema, ensure_ascii=False)
-        prompt_instruction = prefix_prompt + slide_prompt.format(input_slide_data=current_slide_schema_json, language=language)
+
+        # 若存在“课程产出全文注入”（来自 main_api 注入区块剥离），则仅作为参考上下文使用
+        course_outputs_fulltext = ctx.state.get("course_outputs_fulltext")
+        reference_block = ""
+        if isinstance(course_outputs_fulltext, str) and course_outputs_fulltext.strip():
+            keywords = _extract_keywords_from_slide_schema(current_slide_schema)
+            excerpt = _build_reference_excerpt(course_outputs_fulltext, keywords=keywords, max_chars=6000)
+            if excerpt:
+                header = "# Reference context (course outputs, excerpt)" if _want_english(language) else "# 参考资料（课程产出全文，节选）"
+                reference_block = (
+                    _build_reference_rules(language)
+                    + f"\n{header}\n"
+                    + excerpt.strip()
+                    + "\n"
+                )
+
+        prompt_instruction = (
+            prefix_prompt
+            + reference_block
+            + slide_prompt.format(input_slide_data=current_slide_schema_json, language=language)
+        )
         print(f"第{current_slide_index}页的prompt是：{prompt_instruction}")
         return prompt_instruction
 

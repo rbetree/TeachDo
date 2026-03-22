@@ -59,6 +59,10 @@ if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 
 from backend.common.env_loader import load_env_files
+from backend.common.course_outputs_injection import (
+    COURSE_OUTPUTS_START_MARKER,
+    build_course_outputs_injection_markdown,
+)
 
 load_env_files(repo_root=_repo_root, service_dir=Path(__file__).resolve().parent)
 
@@ -422,6 +426,7 @@ def _build_lesson_system_prompt(*, req: LessonPlanRequest, full_context: str, kb
             "Generate a structured lesson plan based on the provided outline.\n"
             "Rules:\n"
             "- Follow the outline structure and do NOT invent topics that are unrelated.\n"
+            "- If course outputs (full text, not retrieved) are provided, treat them as reference-only for consistency; do NOT copy verbatim and do NOT reuse its structure.\n"
             "- Output must be STRICT JSON only (no markdown, no code fences).\n"
             "- Keep it practical for classroom use.\n"
         )
@@ -431,6 +436,7 @@ def _build_lesson_system_prompt(*, req: LessonPlanRequest, full_context: str, kb
             "请基于给定的大纲生成结构化教案。\n"
             "规则：\n"
             "- 必须参考大纲结构，不要引入无关主题。\n"
+            "- 若提供“课程产出（全文，不经检索）”，仅作参考用于术语/事实对齐：不要原文照抄、不要套用其目录/结构，仍以本次大纲为准。\n"
             "- 输出必须是严格 JSON（不要 markdown、不要代码块围栏）。\n"
             "- 内容要可落地、可直接用于课堂。\n"
         )
@@ -464,7 +470,11 @@ def _build_lesson_system_prompt(*, req: LessonPlanRequest, full_context: str, kb
 
     if full_context and full_context.strip():
         context_bits.append(
-            ("Course outputs (full text, not retrieved):\n" if want_english else "课程产出（全文，不经检索）：\n")
+            (
+                "Course outputs (full text, not retrieved):\n(Note: reference-only; do NOT copy verbatim; do NOT reuse its structure.)\n"
+                if want_english
+                else "课程产出（全文，不经检索）：\n（说明：仅供参考，不要原文照抄，不要套用其目录/结构。）\n"
+            )
             + full_context.strip()
         )
 
@@ -990,7 +1000,11 @@ async def aippt_outline_unified(
     if file_content:
         prompt_parts.append(f"参考文档内容（来自你上传的文件）：\n{file_content}")
     if full_context:
-        prompt_parts.append(f"课程产出（全文，不经检索）：\n{full_context}")
+        prompt_parts.append(
+            "课程产出（全文，不经检索）：\n"
+            "（说明：仅供参考用于一致性对齐，不要原文照抄，也不要把其目录/结构当作本次大纲结构。）\n"
+            f"{full_context}"
+        )
     if kb_context:
         prompt_parts.append(f"参考资料检索片段（RAG）：\n{kb_context}")
     prompt = "\n\n".join(prompt_parts)
@@ -1929,9 +1943,6 @@ async def stream_content_response(
         yield b"data: [DONE]\n\n"
 
 
-_COURSE_OUTPUTS_MARKER = "<!-- teachdo:course-outputs-fulltext -->"
-
-
 def _inject_markdown_after_first_h1(markdown_content: str, injection_markdown: str) -> str:
     """
     将 injection_markdown 注入到 markdown_content 的首个 H1（# ）之后。
@@ -1952,15 +1963,6 @@ def _inject_markdown_after_first_h1(markdown_content: str, injection_markdown: s
     return inj + "\n\n" + src
 
 
-def _build_course_outputs_injection_markdown(full_context: str, *, language: str) -> str:
-    if not (full_context or "").strip():
-        return ""
-    lang = (language or "zh").strip().lower()
-    want_english = lang in {"en", "english"}
-    title = "## Course outputs (full text, not retrieved)" if want_english else "## 课程产出（全文，不经检索）"
-    return f"{_COURSE_OUTPUTS_MARKER}\n{title}\n\n{full_context.strip()}".strip()
-
-
 @app.post("/tools/ppt")
 @app.post("/tools/aippt")
 async def aippt_content(request: AipptContentRequest):
@@ -1975,13 +1977,13 @@ async def aippt_content(request: AipptContentRequest):
     full_ids, rag_ids = _split_kb_file_ids(resolved_kb_file_ids)
 
     # gen: 产物全文注入（不依赖 generateFromUploadedFile 开关）
-    if full_ids and personaldb_ready and _COURSE_OUTPUTS_MARKER not in (markdown_content or ""):
+    if full_ids and personaldb_ready and COURSE_OUTPUTS_START_MARKER not in (markdown_content or ""):
         full_context = await _load_personaldb_full_text_context(
             personaldb_url,
             user_id=user_id,
             file_ids=full_ids,
         )
-        injection = _build_course_outputs_injection_markdown(full_context, language=request.language)
+        injection = build_course_outputs_injection_markdown(full_context, language=request.language)
         if injection:
             markdown_content = _inject_markdown_after_first_h1(markdown_content, injection)
 

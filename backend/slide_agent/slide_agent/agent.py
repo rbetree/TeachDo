@@ -3,6 +3,7 @@ from google.adk.agents.callback_context import CallbackContext
 from google.genai import types  # 用于在回调里短路并给用户返回消息
 from .sub_agents.ppt_writer.agent import ppt_generator_loop_agent
 from .utils import parse_markdown_to_slides  # 复用你已有的解析函数
+from backend.common.course_outputs_injection import split_course_outputs_injection
 
 def _get_markdown_from_context(callback_context: CallbackContext) -> str | None:
     """
@@ -49,7 +50,13 @@ def before_agent_callback(callback_context: CallbackContext):
     language = metadata.get("language", "EN-US")
     state["language"] = language
 
-    md_content = _get_markdown_from_context(callback_context)
+    md_content_raw = _get_markdown_from_context(callback_context)
+    md_content, course_outputs_block = split_course_outputs_injection(md_content_raw or "")
+    if course_outputs_block:
+        # 作为“参考资料”留存给后续 Writer prompt 使用（不应参与大纲解析）
+        state["course_outputs_fulltext"] = course_outputs_block
+    state["markdown_raw"] = md_content_raw or ""
+
     if not md_content or not _is_valid_outline(md_content):
         # 解析前的快速校验失败：直接告诉用户不合法并短路
         return types.Content(
@@ -68,6 +75,7 @@ def before_agent_callback(callback_context: CallbackContext):
     # 成功：把 JSON(可序列化的 list/dict) 放到 metadata 里供后续 Agent 使用
     state["outline_json"] = slides
     state["slides_plan_num"] = len(slides)
+    # 这里存“剥离注入块后的大纲”，避免后续逻辑误用
     state["makrdown"] = md_content
     # 返回 None 继续执行后续 Agent: ppt_generator_loop_agent
     return None
