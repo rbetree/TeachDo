@@ -1,4 +1,4 @@
-import { getTemplateFileData, getTemplates, streamPptSlides, MOCK_TEMPLATES } from '@/services/ai/pptService';
+import { getPptCapabilities, getTemplateFileData, getTemplates, streamPptSlides, MOCK_TEMPLATES } from '@/services/ai/pptService';
 import { generateOutline } from '@/services/ai/outlineService';
 import { kbDeleteFile, kbExportFile, kbListFiles, kbUpload, vectorizeTextToKb } from '@/services/ai/kbService';
 import { streamAssistantReply } from '@/services/ai/assistantService';
@@ -16,6 +16,7 @@ export const aiService = {
   // PPT
   getTemplates,
   getTemplateFileData,
+  getPptCapabilities,
   streamPptSlides,
 
   // Outline

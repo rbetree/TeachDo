@@ -35,6 +35,8 @@ const {
   viewState,
   generateFromWebSearch,
   generateWithImages,
+  pexelsCapabilityLoading,
+  pexelsKeyConfigured,
   handleGenerate,
   cancelGenerate,
   generationCanceled,
@@ -49,6 +51,13 @@ const {
 
 const hasOutline = computed(() => !!props.currentMaterial?.outlineContent);
 const hasExternalToolbar = computed(() => !!props.headerActionHost);
+const imagesToggleBlocked = computed(() => pexelsCapabilityLoading.value || !pexelsKeyConfigured.value);
+const imagesToggleDisabled = computed(() => loading.value || imagesToggleBlocked.value);
+const imagesToggleTitle = computed(() => {
+  if (pexelsCapabilityLoading.value) return t('ppt.advanced.images_checking');
+  if (!pexelsKeyConfigured.value) return t('ppt.advanced.images_need_key');
+  return t('ppt.advanced.images_desc');
+});
 const previewSlideCount = computed(() => {
   if (draftPreviewActive.value) {
     const slides = draftEditorDocument.value?.slides;
@@ -80,6 +89,10 @@ const goToEditor = () => {
     name: 'material-ppt-editor',
     params: { materialId: props.currentMaterial.id },
   });
+};
+
+const goToSettings = () => {
+  router.push({ name: 'settings' });
 };
 
 let editorShellPrefetchPromise: Promise<unknown> | null = null;
@@ -167,12 +180,6 @@ const handleRegenerate = async () => {
               <span>{{ viewState === 'SELECT_TEMPLATE' ? t('ppt.choose_template') : t('ppt.preview_title') }}</span>
             </span>
           </div>
-          <span
-            v-if="viewState !== 'SELECT_TEMPLATE'"
-            class="toolbar-item text-slate-500 dark:text-slate-400"
-          >
-            {{ t('ppt.slides_generated', { count: previewSlideCount }) }}
-          </span>
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
@@ -197,18 +204,31 @@ const handleRegenerate = async () => {
             />
             <span>{{ t('ppt.advanced.web_search') }}</span>
           </label>
-          <label
-            class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer select-none disabled:opacity-60"
-            :class="loading ? 'opacity-60 cursor-not-allowed' : ''"
-          >
-            <input
-              v-model="generateWithImages"
-              type="checkbox"
-              class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
-              :disabled="loading"
-            />
-            <span>{{ t('ppt.advanced.images') }}</span>
-          </label>
+          <div class="flex items-center gap-1.5">
+            <label
+              class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer select-none disabled:opacity-60"
+              :class="imagesToggleDisabled ? 'opacity-60 cursor-not-allowed' : ''"
+              :title="imagesToggleTitle"
+            >
+              <input
+                v-model="generateWithImages"
+                type="checkbox"
+                class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
+                :disabled="imagesToggleDisabled"
+              />
+              <span>{{ t('ppt.advanced.images') }}</span>
+            </label>
+
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              :class="imagesToggleBlocked ? '' : 'invisible pointer-events-none'"
+              @click="goToSettings"
+            >
+              <LucideIcon name="settings" class="w-4 h-4" />
+              <span>{{ t('ppt.advanced.images_setup') }}</span>
+            </button>
+          </div>
 
           <template v-if="viewState === 'SELECT_TEMPLATE'">
             <button

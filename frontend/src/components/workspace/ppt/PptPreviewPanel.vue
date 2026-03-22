@@ -210,9 +210,6 @@ onBeforeUnmount(() => {
       <div class="flex items-center gap-4">
         <div>
           <h3 class="text-sm font-black text-slate-800 dark:text-white leading-tight">{{ t('ppt.preview_title') }}</h3>
-          <p class="text-[11px] text-slate-500 leading-tight mt-0.5">
-            {{ t('ppt.slides_generated', { count: hasEditorSlides ? editorSlides.length : (props.presentation?.slides.length || 0) }) }}
-          </p>
         </div>
       </div>
       <div class="flex gap-2 flex-wrap justify-end">

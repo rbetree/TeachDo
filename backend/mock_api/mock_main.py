@@ -365,7 +365,7 @@ class AipptContentRequest(BaseModel):
     sessionId: str = ""
     generateFromUploadedFile: bool = False
     generateFromWebSearch: bool = True
-    generateWithImages: bool = False  # mock 不做图片检索，仅用于兼容字段
+    generateWithImages: bool = False  # mock 不做图片检索：开启=联网配图，关闭=预设图片池（此处仅兼容字段）
 
 def preset_json_to_slides(markdown_text):
     """不用传递参数 markdown_text，使用假的数据 data_response_content。

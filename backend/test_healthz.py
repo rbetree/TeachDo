@@ -9,7 +9,8 @@ def test_main_api_healthz():
     client = TestClient(app)
     resp = client.get("/healthz")
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True}
+    data = resp.json()
+    assert data.get("ok") is True
 
 
 def test_personaldb_healthz():
@@ -18,5 +19,5 @@ def test_personaldb_healthz():
     client = TestClient(app)
     resp = client.get("/healthz")
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True}
-
+    data = resp.json()
+    assert data.get("ok") is True

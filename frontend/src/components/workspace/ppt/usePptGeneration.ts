@@ -29,6 +29,8 @@ export function usePptGeneration(params: UsePptGenerationParams) {
 
   const generateFromWebSearch = ref(true);
   const generateWithImages = ref(false);
+  const pexelsCapabilityLoading = ref(true);
+  const pexelsKeyConfigured = ref(false);
   const selectedKbFileIds = ref<string[]>([]);
 
   const kbFileIdsForRequest = computed(() => {
@@ -62,6 +64,23 @@ export function usePptGeneration(params: UsePptGenerationParams) {
     const list = await aiService.getTemplates();
     templates.value = list;
     ensureSelectedTemplate(list);
+  };
+
+  const loadPptCapabilities = async () => {
+    pexelsCapabilityLoading.value = true;
+    try {
+      const caps = await aiService.getPptCapabilities();
+      pexelsKeyConfigured.value = Boolean(caps?.pexelsKeyConfigured);
+    } catch {
+      pexelsKeyConfigured.value = false;
+    } finally {
+      pexelsCapabilityLoading.value = false;
+    }
+
+    // 不支持联网配图时强制关闭，避免“隐藏开关但仍发送 generateWithImages=true”。
+    if (!pexelsKeyConfigured.value) {
+      generateWithImages.value = false;
+    }
   };
 
   const syncFromMaterial = (material: TeachingMaterial) => {
@@ -271,6 +290,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
 
   onMounted(() => {
     void loadTemplates();
+    void loadPptCapabilities();
   });
 
   onBeforeUnmount(() => {
@@ -286,6 +306,8 @@ export function usePptGeneration(params: UsePptGenerationParams) {
     viewState,
     generateFromWebSearch,
     generateWithImages,
+    pexelsCapabilityLoading,
+    pexelsKeyConfigured,
     selectedKbFileIds,
     loadTemplates,
     handleGenerate,

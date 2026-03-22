@@ -8,7 +8,7 @@ import { getSettings, resetSettings, updateSettings } from '@/services/settingsS
 
 const loading = ref(false);
 const showKeys = reactive<Record<string, boolean>>({});
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 // 说明：
 // - Outline/PPT 支持多协议（google/claude/openai 兼容等）
@@ -233,6 +233,54 @@ const handleReset = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+// Pexels Key 获取辅助：浏览器安全策略下无法跨站自动填写表单，因此提供“打开创建页 + 复制用途说明模板”。
+const getPexelsKeyPageUrl = (): string => {
+  const lang = String(locale.value || '').toLowerCase();
+  return lang.startsWith('en') ? 'https://www.pexels.com/api/key/' : 'https://www.pexels.com/zh-cn/api/key/';
+};
+
+const copyTextToClipboard = async (text: string): Promise<boolean> => {
+  const content = String(text ?? '');
+  try {
+    await navigator.clipboard.writeText(content);
+    return true;
+  } catch {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = content;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+};
+
+const openPexelsKeyPage = (): boolean => {
+  const opened = window.open(getPexelsKeyPageUrl(), '_blank', 'noopener,noreferrer');
+  return !!opened;
+};
+
+const handlePexelsCopyTemplate = async () => {
+  const ok = await copyTextToClipboard(t('settings.pexels.request_template'));
+  if (ok) toast.info(t('settings.pexels.toast.copied_template'));
+  else toast.error(t('toast.error'));
+};
+
+const handlePexelsOpenAndCopy = async () => {
+  const opened = openPexelsKeyPage();
+  if (!opened) toast.info(t('settings.pexels.toast.popup_blocked'));
+  await handlePexelsCopyTemplate();
 };
 </script>
 
@@ -714,6 +762,29 @@ const handleReset = async () => {
 	                        <LucideIcon :name="showKeys.pexelsApiKey ? 'eye-off' : 'eye'" :size="16" />
 	                      </button>
 	                    </div>
+
+	                    <div class="mt-2 flex flex-wrap items-center gap-2">
+	                      <button
+	                        type="button"
+	                        class="td-btn-secondary min-h-0 h-9 px-3 text-xs"
+	                        @click="() => void handlePexelsOpenAndCopy()"
+	                      >
+	                        <LucideIcon name="globe" :size="14" />
+	                        {{ t('settings.pexels.action.open_and_copy') }}
+	                      </button>
+	                      <button
+	                        type="button"
+	                        class="td-btn-secondary min-h-0 h-9 px-3 text-xs"
+	                        @click="() => void handlePexelsCopyTemplate()"
+	                      >
+	                        <LucideIcon name="copy" :size="14" />
+	                        {{ t('settings.pexels.action.copy_template') }}
+	                      </button>
+	                    </div>
+
+	                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+	                      {{ t('settings.pexels.hint') }}
+	                    </p>
 	                  </label>
 	                </div>
 	              </div>

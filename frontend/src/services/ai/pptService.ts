@@ -3,6 +3,10 @@ import { SseParser, stripJsonCodeFence } from '@/utils/sse';
 import type { AIPPTSlide } from '@/editor-runtime/types/AIPPT';
 import { ApiError, checkBackend, ensureBackendAvailable, requestJson, requestRaw } from '@/services/apiClient';
 
+export type PptCapabilities = {
+  pexelsKeyConfigured: boolean;
+};
+
 // Fallback Mock Templates
 export const MOCK_TEMPLATES: PPTTemplate[] = [
   { id: 'classic_blue', name: '商务蓝', thumbnailColor: 'bg-blue-600', styleDescription: 'Professional, Clean' },
@@ -47,6 +51,19 @@ export async function getTemplateFileData(templateId: string): Promise<any> {
   if (!id) throw new ApiError('unknown', 'templateId is required.');
 
   return await requestJson<any>(`/data/${id}.json`, { method: 'GET' }, { timeoutMs: 12_000 });
+}
+
+export async function getPptCapabilities(): Promise<PptCapabilities> {
+  const available = await checkBackend();
+  if (!available) return { pexelsKeyConfigured: false };
+
+  try {
+    const health = await requestJson<any>('/healthz', { method: 'GET' }, { timeoutMs: 2000 });
+    const configured = Boolean(health?.capabilities?.pexels?.configured);
+    return { pexelsKeyConfigured: configured };
+  } catch {
+    return { pexelsKeyConfigured: false };
+  }
 }
 
 /**

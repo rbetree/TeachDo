@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any, Awaitable, Callable, Dict, List
 
@@ -29,6 +30,99 @@ def detect_image_theme(text: str) -> str:
             # Pexels 搜索更偏英文；education 不一定有稳定素材池，降级到 abstract
             return "abstract" if theme == "education" else theme
     return "abstract"
+
+
+_PRESET_IMAGE_POOLS: dict[str, list[str]] = {
+    "technology": [
+        "https://images.pexels.com/photos/3861969/pexels-photo-3861969.jpeg",
+        "https://images.pexels.com/photos/3861967/pexels-photo-3861967.jpeg",
+        "https://images.pexels.com/photos/3861966/pexels-photo-3861966.jpeg",
+        "https://images.pexels.com/photos/3861965/pexels-photo-3861965.jpeg",
+        "https://images.pexels.com/photos/3861964/pexels-photo-3861964.jpeg",
+    ],
+    "business": [
+        "https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg",
+        "https://images.pexels.com/photos/3183153/pexels-photo-3183153.jpeg",
+        "https://images.pexels.com/photos/3183154/pexels-photo-3183154.jpeg",
+        "https://images.pexels.com/photos/3183155/pexels-photo-3183155.jpeg",
+        "https://images.pexels.com/photos/3183156/pexels-photo-3183156.jpeg",
+    ],
+    "nature": [
+        "https://images.pexels.com/photos/3225517/pexels-photo-3225517.jpeg",
+        "https://images.pexels.com/photos/3225518/pexels-photo-3225518.jpeg",
+        "https://images.pexels.com/photos/3225519/pexels-photo-3225519.jpeg",
+        "https://images.pexels.com/photos/3225520/pexels-photo-3225520.jpeg",
+        "https://images.pexels.com/photos/3225521/pexels-photo-3225521.jpeg",
+    ],
+    "abstract": [
+        "https://images.pexels.com/photos/3255761/pexels-photo-3255761.jpeg",
+        "https://images.pexels.com/photos/3255762/pexels-photo-3255762.jpeg",
+        "https://images.pexels.com/photos/3255763/pexels-photo-3255763.jpeg",
+        "https://images.pexels.com/photos/3255764/pexels-photo-3255764.jpeg",
+        "https://images.pexels.com/photos/3255765/pexels-photo-3255765.jpeg",
+    ],
+}
+
+
+def resolve_image_source(metadata: dict) -> str:
+    """
+    决定配图来源：
+    - network：联网检索（Pexels）
+    - preset：使用内置预设图片池（不发起检索）
+    """
+    raw = metadata.get("image_source")
+    if isinstance(raw, str):
+        v = raw.strip().lower()
+        if v in {"network", "preset"}:
+            return v
+
+    # 兼容旧字段：generate_with_images 之前表示“启用自动配图”
+    # 现在将其解释为：是否启用“联网配图”。
+    return "network" if is_truthy_value(metadata.get("generate_with_images")) else "preset"
+
+
+def preset_images(query: str, count: int) -> List[Dict[str, Any]]:
+    """
+    从内置图片池生成候选图片列表（确定性输出，便于缓存与测试）。
+    """
+    q = (query or "").strip()
+    q_lower = q.lower()
+
+    selected_pool = "abstract"
+    for key in ("technology", "business", "nature", "abstract"):
+        if key in q_lower:
+            selected_pool = key
+            break
+
+    pool = _PRESET_IMAGE_POOLS.get(selected_pool) or _PRESET_IMAGE_POOLS["abstract"]
+    if not pool:
+        return []
+
+    safe_count = max(1, int(count or 1))
+    safe_count = min(safe_count, 12)
+
+    digest = hashlib.md5(q_lower.encode("utf-8"), usedforsecurity=False).hexdigest()
+    start = int(digest, 16) % len(pool)
+
+    picked: list[str] = []
+    for i in range(safe_count):
+        picked.append(pool[(start + i) % len(pool)])
+
+    images: list[dict[str, Any]] = []
+    for idx, src in enumerate(picked):
+        images.append(
+            {
+                "id": f"preset:{selected_pool}:{start + idx}",
+                "src": src,
+                "width": 1920,
+                "height": 1080,
+                "alt": q or selected_pool,
+                "photographer": "Pexels",
+                "url": src,
+                "source": "preset",
+            }
+        )
+    return images
 
 
 def build_image_query(slide: dict) -> str:
@@ -85,14 +179,16 @@ async def maybe_attach_images_to_slide(
     """
     在不修改 LLM Prompt 约束的前提下，由服务端补齐 `slide.images`，供前端模板映射/导出嵌入使用。
 
-    开关：metadata.generate_with_images 为真时启用。
+    配图策略：
+    - 开启“联网配图”（metadata.image_source=network 或 metadata.generate_with_images=true）：调用 SearchImage 联网检索。
+    - 关闭“联网配图”（preset）：使用内置预设图片池配图，不发起联网检索。
     """
     if not isinstance(slide, dict):
         return slide
 
     metadata = state.get("metadata") or {}
-    if not isinstance(metadata, dict) or not is_truthy_value(metadata.get("generate_with_images")):
-        return slide
+    if not isinstance(metadata, dict):
+        metadata = {}
 
     existing = slide.get("images")
     if isinstance(existing, list) and existing:
@@ -106,16 +202,20 @@ async def maybe_attach_images_to_slide(
     count = max(1, min(count, 12))
 
     query = build_image_query(slide)
+    source = resolve_image_source(metadata)
 
     cache = state.get("image_search_cache")
     if not isinstance(cache, dict):
         cache = {}
         state["image_search_cache"] = cache
-    cache_key = f"{query}|{count}"
+    cache_key = f"{source}|{query}|{count}"
 
     images = cache.get(cache_key)
     if not isinstance(images, list):
-        images = await search_image(query=query, count=count, tool_context=None)
+        if source == "network":
+            images = await search_image(query=query, count=count, tool_context=None)
+        else:
+            images = preset_images(query=query, count=count)
         cache[cache_key] = images
 
     cleaned: list[dict[str, Any]] = []
@@ -131,4 +231,3 @@ async def maybe_attach_images_to_slide(
         return slide
 
     return {**slide, "images": cleaned}
-

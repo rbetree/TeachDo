@@ -1128,7 +1128,7 @@ class AipptContentRequest(BaseModel):
     sessionId: str = ""  # 当使用知识库时，需要根据用户的user_id查询对应的知识库
     generateFromUploadedFile: bool = False  # 是否从上传的文件中生成PPT内容
     generateFromWebSearch: bool = True  # 是否从网络搜索中生成PPT内容
-    generateWithImages: bool = False  # 是否启用“自动配图”（图片检索 + 返回 slide.images）
+    generateWithImages: bool = False  # 是否启用“联网配图”（开启：检索网络图片；关闭：使用预设图片池）
     kb_folder_ids: list[int] | None = None  # 仅当启用知识库检索时生效，用于过滤可检索的 folder_id
     kb_file_ids: list[str] | None = None  # 仅当启用知识库检索时生效，用于过滤可检索的 file_id（更精确）
 
@@ -1875,11 +1875,13 @@ async def stream_content_response(
     if generateFromWebSearch:
         search_engine.append("DocumentSearch")
 
+    image_source = "network" if bool(generateWithImages) else "preset"
     metadata = {
         "user_id": user_id,
         "search_engine": search_engine,
         "language": language,
         "generate_with_images": bool(generateWithImages),
+        "image_source": image_source,
     }
     if kb_folder_ids:
         metadata["kb_folder_ids"] = kb_folder_ids
@@ -3303,7 +3305,16 @@ async def proxy(request: Request, url: str = Query(..., description="Target abso
 
 @app.get("/healthz")
 def healthz():
-    return {"ok": True}
+    pexels_key = (os.getenv("PEXELS_API_KEY") or "").strip()
+    return {
+        "ok": True,
+        "capabilities": {
+            "pexels": {
+                # 仅返回布尔值，不暴露 key 内容
+                "configured": bool(pexels_key),
+            }
+        },
+    }
 
 
 if __name__ == "__main__":
