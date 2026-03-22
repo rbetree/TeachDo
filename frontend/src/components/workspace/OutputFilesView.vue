@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { KBFile, TeachingMaterial } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
@@ -10,6 +10,10 @@ import { toast } from '@/utils/toast';
 import type { ArtifactKind, ArtifactMeta } from '@/services/ai/artifactService';
 import { isFullTextKbFileId, isFullUploadKbFileId } from '@/utils/kbFileId';
 import { getKbSource, getKbSourceUi } from '@/utils/kbSource';
+import { parseGenOutputFileId } from '@/utils/genOutputFileId';
+import { matchArtifactByTime } from '@/utils/matchArtifactByTime';
+import { trapTabKey } from '@/utils/focusTrap';
+import { escapeHtml } from '@/utils/safeHtml';
 
 interface Props {
   currentMaterial: TeachingMaterial;
@@ -25,6 +29,17 @@ const artifacts = ref<ArtifactMeta[]>([]);
 const artifactsError = ref<string | null>(null);
 const downloadingArtifactId = ref<string | null>(null);
 const deletingKbFileId = ref<string | null>(null);
+
+const previewOpen = ref(false);
+const previewLoading = ref(false);
+const previewError = ref<string | null>(null);
+const previewTitle = ref('');
+const previewHtml = ref('');
+const previewKbFile = ref<KBFile | null>(null);
+const previewSourceArtifact = ref<ArtifactMeta | null>(null);
+const previewDialogRef = ref<HTMLElement | null>(null);
+const previewCloseButtonRef = ref<HTMLButtonElement | null>(null);
+const previewRestoreFocusEl = ref<HTMLElement | null>(null);
 
 const isDragging = ref(false);
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -127,23 +142,76 @@ const formatDateTime = (value: unknown) => {
   }).format(date);
 };
 
-const parseGenFileId = (fileId: string) => {
-  const parts = (fileId || '').split(':');
-  if (parts[0] !== 'gen' || parts.length < 4) return null;
-  const user = (parts[1] || '').trim();
-  const materialId = (parts[2] || '').trim();
-  const kind = parts.slice(3).join(':').trim();
-  if (!user || !materialId || !kind) return null;
-  return { user, materialId, kind };
+const normalizeOutputKind = (value: string) => (value || '').trim().toLowerCase();
+
+const getGenOutputKind = (fileId: string): string => {
+  return parseGenOutputFileId(fileId)?.kind || '';
 };
+
+const getKbFileTimeMs = (file: KBFile | null | undefined): number => {
+  const parsed = file?.id ? parseGenOutputFileId(file.id) : null;
+  if (parsed?.epochMs && Number.isFinite(parsed.epochMs) && parsed.epochMs > 0) return parsed.epochMs;
+  const uploadedAt = (file as any)?.uploadedAt;
+  const t = uploadedAt instanceof Date ? uploadedAt.getTime() : Number(uploadedAt) || 0;
+  return Number.isFinite(t) && t > 0 ? t : 0;
+};
+
+type OutputGroup = 'outline' | 'lesson' | 'ppt' | 'other';
+
+const classifyOutputGroup = (kind: string): OutputGroup => {
+  const normalized = normalizeOutputKind(kind);
+  if (!normalized) return 'other';
+  if (normalized === 'outline') return 'outline';
+  if (normalized === 'lesson' || normalized.includes('lesson')) return 'lesson';
+  if (normalized === 'slides' || normalized === 'slides_final' || normalized === 'ppt' || normalized.includes('slide') || normalized.includes('ppt')) {
+    return 'ppt';
+  }
+  return 'other';
+};
+
+const lockedOutputIdSet = computed(() => {
+  const set = new Set<string>();
+  const outputs = kbOutputFiles.value;
+  if (!Array.isArray(outputs) || outputs.length === 0) return set;
+
+  const pickLatest = (items: KBFile[]) => {
+    let latest: KBFile | null = null;
+    let bestT = 0;
+    for (const f of items) {
+      const t = getKbFileTimeMs(f);
+      if (!latest || t > bestT) {
+        latest = f;
+        bestT = t;
+      }
+    }
+    return latest;
+  };
+
+  const byOutline: KBFile[] = [];
+  const byLesson: KBFile[] = [];
+  const byPpt: KBFile[] = [];
+
+  for (const file of outputs) {
+    const kind = getGenOutputKind(file.id);
+    const group = classifyOutputGroup(kind);
+    if (group === 'outline') byOutline.push(file);
+    else if (group === 'lesson') byLesson.push(file);
+    else if (group === 'ppt') byPpt.push(file);
+  }
+
+  const latestOutline = pickLatest(byOutline);
+  const latestLesson = pickLatest(byLesson);
+  const latestPpt = pickLatest(byPpt);
+  if (latestOutline?.id) set.add(latestOutline.id);
+  if (latestLesson?.id) set.add(latestLesson.id);
+  if (latestPpt?.id) set.add(latestPpt.id);
+  return set;
+});
 
 const isLockedGeneratedOutput = (file: KBFile | null | undefined): boolean => {
   const id = (file?.id || '').trim();
   if (!id.startsWith('gen:')) return false;
-  const parsed = parseGenFileId(id);
-  if (!parsed) return true;
-  // 课程产出与内容页绑定：仅当课程仍存在时锁定；若课程已删除但 KB 残留，则允许手动清理。
-  return store.materials.some((m) => m.id === parsed.materialId);
+  return lockedOutputIdSet.value.has(id);
 };
 
 const inferArtifactKindFromGenKind = (genKind: string): ArtifactKind | null => {
@@ -159,6 +227,7 @@ const outputKindWeight = (kind: string) => {
   if (normalized === 'outline') return 10;
   if (normalized === 'lesson') return 20;
   if (normalized === 'slides' || normalized === 'ppt') return 30;
+  if (normalized === 'slides_final') return 31;
   return 999;
 };
 
@@ -369,11 +438,14 @@ const pptxArtifacts = computed(() => sortArtifactsByCreatedAtDesc(artifacts.valu
 
 const kbOutputFilesSorted = computed(() => {
   return [...kbOutputFiles.value].sort((a, b) => {
-    const ak = parseGenFileId(a.id)?.kind || '';
-    const bk = parseGenFileId(b.id)?.kind || '';
+    const ak = getGenOutputKind(a.id);
+    const bk = getGenOutputKind(b.id);
     const aw = outputKindWeight(ak);
     const bw = outputKindWeight(bk);
     if (aw !== bw) return aw - bw;
+    const at = getKbFileTimeMs(a);
+    const bt = getKbFileTimeMs(b);
+    if (at !== bt) return bt - at;
     return (a.name || a.id).localeCompare(b.name || b.id);
   });
 });
@@ -427,10 +499,11 @@ const outputCards = computed<OutputCard[]>(() => {
   }
 
   for (const file of kbOutputFilesSorted.value) {
-    const genKind = parseGenFileId(file.id)?.kind || '';
+    const genKind = getGenOutputKind(file.id);
     const artifactKind = inferArtifactKindFromGenKind(genKind);
     const artifactsForCard = artifactKind === 'docx' ? docxArtifacts.value : artifactKind === 'pptx' ? pptxArtifacts.value : [];
     if (artifactKind) usedArtifactKinds.add(artifactKind);
+    const matchedArtifact = artifactKind ? matchArtifactByTime(artifactsForCard, getKbFileTimeMs(file) || null) : null;
 
     cards.push({
       key: file.id,
@@ -439,7 +512,7 @@ const outputCards = computed<OutputCard[]>(() => {
       kbFile: file,
       artifactKind,
       artifacts: artifactsForCard,
-      latestArtifact: artifactsForCard[0] || null,
+      latestArtifact: matchedArtifact,
       sourceUi: getKbSourceUi(getKbSource(typeof file.folderId === 'number' ? file.folderId : undefined)),
     });
   }
@@ -484,11 +557,14 @@ const outputCards = computed<OutputCard[]>(() => {
     }
 
     if (a.mode === 'output' && b.mode === 'output') {
-      const ak = a.kbFile ? parseGenFileId(a.kbFile.id)?.kind || '' : '';
-      const bk = b.kbFile ? parseGenFileId(b.kbFile.id)?.kind || '' : '';
+      const ak = a.kbFile ? getGenOutputKind(a.kbFile.id) : '';
+      const bk = b.kbFile ? getGenOutputKind(b.kbFile.id) : '';
       const aw = outputKindWeight(ak);
       const bw = outputKindWeight(bk);
       if (aw !== bw) return aw - bw;
+      const at = getKbFileTimeMs(a.kbFile);
+      const bt = getKbFileTimeMs(b.kbFile);
+      if (at !== bt) return bt - at;
       return a.title.localeCompare(b.title);
     }
 
@@ -515,9 +591,125 @@ const handleDownloadArtifact = async (artifact: ArtifactMeta) => {
   }
 };
 
+const renderInlineStyles = (text: string) => {
+  const parts = String(text || '').split(/(\*\*.*?\*\*)/g);
+  return parts
+    .map((part) => {
+      if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+        return `<strong class="font-bold text-slate-900 dark:text-white bg-indigo-50 dark:bg-indigo-900/30 px-1 rounded mx-0.5">${escapeHtml(part.slice(2, -2))}</strong>`;
+      }
+      return escapeHtml(part);
+    })
+    .join('');
+};
+
+const renderMarkdownToHtml = (content: string) => {
+  const raw = String(content || '');
+  if (!raw.trim()) return '';
+
+  const lines = raw.split('\n');
+  return lines
+    .map((line, idx) => {
+      if (line.startsWith('# ')) {
+        return `<h1 key="${idx}" class="text-xl md:text-2xl font-black text-slate-900 dark:text-white mt-2 mb-3 border-b pb-2 border-slate-200 dark:border-slate-700">${escapeHtml(line.replace('# ', ''))}</h1>`;
+      }
+      if (line.startsWith('## ')) {
+        return `<h2 key="${idx}" class="text-base md:text-lg font-extrabold text-indigo-600 dark:text-indigo-400 mt-4 mb-2">${escapeHtml(line.replace('## ', ''))}</h2>`;
+      }
+      if (line.startsWith('### ')) {
+        return `<h3 key="${idx}" class="text-sm md:text-base font-bold text-slate-700 dark:text-slate-200 mt-3 mb-1">${escapeHtml(line.replace('### ', ''))}</h3>`;
+      }
+
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        const text = line.replace(/^[-*] /, '');
+        return `<li key="${idx}" class="ml-4 list-disc marker:text-indigo-400 pl-2">${renderInlineStyles(text)}</li>`;
+      }
+
+      if (!line.trim()) {
+        return `<br key="${idx}" />`;
+      }
+
+      return `<p key="${idx}" class="text-sm leading-6 text-slate-700 dark:text-slate-200">${renderInlineStyles(line)}</p>`;
+    })
+    .join('');
+};
+
+const closePreview = () => {
+  previewOpen.value = false;
+};
+
+const openPreview = async (card: OutputCard) => {
+  const file = card.kbFile;
+  if (!file) return;
+  if (file.status !== 'ready') return;
+
+  previewKbFile.value = file;
+  previewSourceArtifact.value = card.latestArtifact;
+  previewTitle.value = card.title;
+  previewError.value = null;
+  previewHtml.value = '';
+  previewLoading.value = true;
+  previewOpen.value = true;
+
+  try {
+    const { blob } = await aiService.kbExportFile({ userId: KB_USER_ID, fileId: file.id });
+    const text = await blob.text();
+    previewHtml.value = renderMarkdownToHtml(text);
+  } catch (e) {
+    console.error(e);
+    previewError.value = '预览加载失败，请稍后重试。';
+    previewHtml.value = '';
+  } finally {
+    previewLoading.value = false;
+  }
+};
+
+const handlePreviewKeydown = (e: KeyboardEvent) => {
+  if (!previewOpen.value) return;
+  if (e.key === 'Escape') {
+    closePreview();
+    return;
+  }
+  if (e.key === 'Tab' && previewDialogRef.value) {
+    trapTabKey(e, previewDialogRef.value);
+  }
+};
+
+watch(
+  () => previewOpen.value,
+  async (open) => {
+    if (typeof window === 'undefined') return;
+    if (open) {
+      previewRestoreFocusEl.value = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      document.body.style.overflow = 'hidden';
+      document.addEventListener('keydown', handlePreviewKeydown);
+      await nextTick();
+      previewCloseButtonRef.value?.focus?.();
+      if (document.activeElement !== previewCloseButtonRef.value) {
+        previewDialogRef.value?.focus?.();
+      }
+      return;
+    }
+
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', handlePreviewKeydown);
+    previewKbFile.value = null;
+    previewSourceArtifact.value = null;
+    previewLoading.value = false;
+    previewError.value = null;
+    previewTitle.value = '';
+    previewHtml.value = '';
+    await nextTick();
+    const el = previewRestoreFocusEl.value;
+    if (el && document.contains(el)) el.focus();
+  },
+  { flush: 'post' },
+);
+
 watch(
   () => props.currentMaterial.id,
   () => {
+    closePreview();
     void refreshArtifacts();
   },
   { immediate: true },
@@ -538,6 +730,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (typeof window === 'undefined') return;
   window.removeEventListener('teachdo:artifacts-updated', handleArtifactsUpdated as EventListener);
+  document.removeEventListener('keydown', handlePreviewKeydown);
+  document.body.style.overflow = '';
 });
 
 defineExpose({
@@ -684,6 +878,18 @@ defineExpose({
 
             <div class="flex items-center gap-1 shrink-0">
               <button
+                v-if="card.mode === 'output' && card.kbFile"
+                type="button"
+                class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+                aria-label="预览"
+                title="预览"
+                :disabled="card.kbFile.status !== 'ready'"
+                @click="openPreview(card)"
+              >
+                <LucideIcon name="eye" :size="16" />
+              </button>
+
+              <button
                 type="button"
                 class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
                 aria-label="下载md"
@@ -695,11 +901,11 @@ defineExpose({
               </button>
 
               <button
-                v-if="card.mode !== 'full_upload'"
+                v-if="card.mode !== 'full_upload' && (card.mode === 'artifact' || card.artifactKind)"
                 type="button"
                 class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
                 aria-label="下载源文件"
-                title="下载源文件"
+                :title="card.latestArtifact ? '下载源文件' : t('kb.tooltip.source_not_ready')"
                 :disabled="!card.latestArtifact || downloadingArtifactId === card.latestArtifact.artifact_id"
                 @click="card.latestArtifact ? handleDownloadArtifact(card.latestArtifact) : null"
               >
@@ -723,4 +929,92 @@ defineExpose({
 	      </div>
     </div>
   </div>
+
+  <Teleport to="body">
+    <Transition name="td-modal">
+      <div v-if="previewOpen" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <button
+          type="button"
+          class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+          :aria-label="t('common.close')"
+          @click="closePreview"
+        />
+
+        <div
+          ref="previewDialogRef"
+          class="relative w-full max-w-3xl rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl outline-none td-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="output-preview-title"
+          tabindex="-1"
+          @click.stop
+        >
+          <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200/60 dark:border-slate-800/60">
+            <div class="min-w-0">
+              <h3 id="output-preview-title" class="text-sm font-black text-slate-900 dark:text-white truncate" :title="previewTitle">
+                {{ previewTitle || '预览' }}
+              </h3>
+              <div v-if="previewKbFile" class="mt-1 flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <span v-if="previewKbFile.size" class="font-mono">{{ formatSize(previewKbFile.size) }}</span>
+                <span v-if="previewKbFile.size && previewKbFile.uploadedAt" class="text-slate-300 dark:text-slate-700">•</span>
+                <span v-if="previewKbFile.uploadedAt">{{ formatDateTime(previewKbFile.uploadedAt) }}</span>
+              </div>
+            </div>
+            <button
+              ref="previewCloseButtonRef"
+              type="button"
+              class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              :aria-label="t('common.close')"
+              @click="closePreview"
+            >
+              <LucideIcon name="x" :size="18" />
+            </button>
+          </div>
+
+          <div class="px-5 py-4">
+            <div v-if="previewError" class="mb-3 text-xs font-bold text-red-600 dark:text-red-300">
+              {{ previewError }}
+            </div>
+
+            <div v-if="previewLoading" class="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-300">
+              <LucideIcon name="loader-2" :size="14" class="animate-spin" />
+              <span>{{ t('common.loading') }}</span>
+            </div>
+
+            <div v-else class="max-h-[65vh] overflow-y-auto custom-scrollbar pr-1">
+              <div v-if="previewHtml" class="space-y-2" v-html="previewHtml"></div>
+              <div v-else class="text-xs text-slate-400">
+                暂无内容
+              </div>
+            </div>
+          </div>
+
+          <div class="px-5 py-4 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-end gap-2 bg-slate-50/40 dark:bg-slate-950/20">
+            <button type="button" class="td-btn-secondary" @click="closePreview">
+              {{ t('sidebar.cancel') }}
+            </button>
+            <button
+              type="button"
+              class="td-btn-secondary"
+              :disabled="!previewKbFile || previewKbFile.status !== 'ready' || exportingKbFileId === previewKbFile.id"
+              @click="previewKbFile ? handleExportKb(previewKbFile) : null"
+            >
+              <LucideIcon name="download" class="w-4 h-4" />
+              下载 md
+            </button>
+            <button
+              type="button"
+              class="td-btn-primary"
+              :disabled="!previewSourceArtifact || downloadingArtifactId === previewSourceArtifact.artifact_id"
+              :title="previewSourceArtifact ? '下载源文件' : t('kb.tooltip.source_not_ready')"
+              @click="previewSourceArtifact ? handleDownloadArtifact(previewSourceArtifact) : null"
+            >
+              <LucideIcon name="file-down" class="w-4 h-4" />
+              下载源文件
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>

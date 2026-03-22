@@ -9,6 +9,7 @@ import { aiService } from '@/services/aiService';
 import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 import { getKbSource, getKbSourceUi } from '@/utils/kbSource';
 import { isFullTextKbFileId } from '@/utils/kbFileId';
+import { parseGenOutputFileId } from '@/utils/genOutputFileId';
 
 type KnowledgeBaseViewVariant = 'page' | 'panel';
 type KnowledgeBaseSourceFilter = 'all' | 'uploaded';
@@ -177,13 +178,70 @@ const getDisplayType = (file: KBFile) => normalizeExt(file.type) || getNameExt(f
 		  return parts[2] || null;
 		};
 
+		const normalizeOutputKind = (value: string) => (value || '').trim().toLowerCase();
+
+		type OutputGroup = 'outline' | 'lesson' | 'ppt' | 'other';
+
+		const classifyOutputGroup = (kind: string): OutputGroup => {
+		  const normalized = normalizeOutputKind(kind);
+		  if (!normalized) return 'other';
+		  if (normalized === 'outline') return 'outline';
+		  if (normalized === 'lesson' || normalized.includes('lesson')) return 'lesson';
+		  if (
+		    normalized === 'slides' ||
+		    normalized === 'slides_final' ||
+		    normalized === 'ppt' ||
+		    normalized.includes('slide') ||
+		    normalized.includes('ppt')
+		  ) {
+		    return 'ppt';
+		  }
+		  return 'other';
+		};
+
+		const getKbFileTimeMs = (file: KBFile): number => {
+		  const parsed = parseGenOutputFileId(file.id);
+		  if (parsed?.epochMs && Number.isFinite(parsed.epochMs) && parsed.epochMs > 0) return parsed.epochMs;
+		  return file.uploadedAt instanceof Date ? file.uploadedAt.getTime() : Number(file.uploadedAt) || 0;
+		};
+
+		const lockedGeneratedOutputIdSet = computed(() => {
+		  const set = new Set<string>();
+		  const materialsExist = new Set(store.materials.map((m) => m.id));
+		  const bestByKey = new Map<string, { id: string; t: number }>();
+
+		  for (const file of store.kbFiles || []) {
+		    const id = (file?.id || '').trim();
+		    if (!id.startsWith('gen:')) continue;
+		    const parsed = parseGenOutputFileId(id);
+		    if (!parsed?.materialId) continue;
+		    if (!materialsExist.has(parsed.materialId)) continue;
+
+		    const group = classifyOutputGroup(parsed.kind || '');
+		    if (group === 'other') continue;
+
+		    const key = `${parsed.materialId}:${group}`;
+		    const t = getKbFileTimeMs(file);
+		    const prev = bestByKey.get(key);
+		    if (!prev || t > prev.t) {
+		      bestByKey.set(key, { id, t });
+		    }
+		  }
+
+		  for (const item of bestByKey.values()) {
+		    set.add(item.id);
+		  }
+		  return set;
+		});
+
 		const isLockedGeneratedOutputId = (fileId: string): boolean => {
 		  const id = (fileId || '').trim();
 		  if (!id.startsWith('gen:')) return false;
-		  const materialId = parseMaterialIdFromGenFileId(id);
-		  if (!materialId) return true;
+		  const parsed = parseGenOutputFileId(id);
+		  if (!parsed) return true;
 		  // 课程产出与内容页绑定：仅当课程仍存在时锁定；若课程已删除但 KB 残留，则允许手动清理。
-		  return store.materials.some((m) => m.id === materialId);
+		  if (!store.materials.some((m) => m.id === parsed.materialId)) return false;
+		  return lockedGeneratedOutputIdSet.value.has(id);
 		};
 
 	const getSourceTagUi = (file: KBFile) => getKbSourceUi(getKbSource(file.folderId));

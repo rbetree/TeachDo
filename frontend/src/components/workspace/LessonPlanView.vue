@@ -18,6 +18,7 @@ import {
   loadLessonDocxPreviewCached,
   saveLessonDocxPreviewCached,
 } from '@/utils/lessonDocxPreviewCache';
+import { buildGenOutputFileId, formatVersionLabel, sanitizeFilenameSegment } from '@/utils/genOutputFileId';
 
 type LessonViewState = 'SELECT_TEMPLATE' | 'PREVIEW';
 type WordPreviewMeta = {
@@ -254,6 +255,32 @@ const downloadBlob = (blob: Blob, filename: string) => {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+};
+
+const uploadLessonDocxArtifact = async (input: { plan: LessonPlan; nowMs: number }) => {
+  const materialIdValue = String(props.currentMaterial?.id || '').trim();
+  if (!materialIdValue) return;
+
+  const titleBase = sanitizeFilenameSegment(props.currentMaterial.title || materialIdValue) || materialIdValue;
+  const version = formatVersionLabel(input.nowMs) || String(input.nowMs);
+  const fileName = `教案-${titleBase}-${version}.docx`;
+
+  try {
+    const { blob } = await aiService.exportLessonDocx({
+      lessonPlan: input.plan,
+      style: style.value,
+      templateId: selectedTemplateId.value,
+      language: locale.value,
+      persist: false,
+    });
+    const file = new File([blob], fileName, { type: DOCX_MIME });
+    await aiService.uploadArtifact({ userId: KB_USER_ID, materialId: materialIdValue, kind: 'docx', file });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('teachdo:artifacts-updated', { detail: { materialId: materialIdValue } }));
+    }
+  } catch (e) {
+    console.warn('教案 DOCX 源文件入库失败（已忽略）', e);
+  }
 };
 
 const buildLessonMarkdown = (input: { plan: LessonPlan; templateId: string; language: string }): string => {
@@ -577,47 +604,54 @@ const generateLesson = async () => {
 
     plan.value = final;
     emit('updateMaterial', { lessonPlan: final, selectedLessonTemplateId: selectedTemplateId.value, lessonStyle: style.value });
-    toast.success(t('lesson.toast.success'));
-    scheduleRefreshWordPreview({ reason: 'final', delayMs: 0, force: true });
+	    toast.success(t('lesson.toast.success'));
+	    scheduleRefreshWordPreview({ reason: 'final', delayMs: 0, force: true });
 
-    // 教案 Markdown 产物入库：用于右侧“课程产出”勾选全文注入（失败不阻断）
-    const materialIdValue = props.currentMaterial?.id;
-    if (materialIdValue) {
-      const fileId = `gen:${KB_USER_ID}:${materialIdValue}:lesson`;
-      const fileName = `教案-${props.currentMaterial.title || materialIdValue}.md`;
-      const md = buildLessonMarkdown({ plan: final, templateId: selectedTemplateId.value, language: locale.value });
-      void aiService
-        .vectorizeTextToKb({
-          userId: KB_USER_ID,
-          fileId,
-          fileName,
-          content: md,
-          fileType: 'md',
-          folderId: 1,
-          createdAt: Date.now(),
-          sourceType: 'material',
-          sourceMaterialId: materialIdValue,
-          sourceMaterialTitle: props.currentMaterial.title,
-        })
-        .then(() => {
-          const next = (store.kbFiles || []).filter((f) => f.id !== fileId);
-          next.unshift({
-            id: fileId,
-            name: fileName,
-            size: md.length,
-            type: 'md',
-            status: 'ready',
-            uploadedAt: new Date(),
-            folderId: 1,
-            sourceType: 'material',
-            sourceMaterialId: materialIdValue,
-            sourceMaterialTitle: props.currentMaterial.title,
-          });
-          store.setKbFiles(next);
-        })
-        .catch((e) => console.warn('lesson markdown 产物入库失败（已忽略）', e));
-    }
-  } catch (e) {
+	    // 教案 Markdown 产物入库：用于右侧“课程产出”勾选全文注入（失败不阻断）
+	    const materialIdValue = props.currentMaterial?.id;
+	    if (materialIdValue) {
+	      const nowMs = Date.now();
+	      const fileId = buildGenOutputFileId({ userId: KB_USER_ID, materialId: materialIdValue, kind: 'lesson', nowMs });
+	      const titleBase = sanitizeFilenameSegment(props.currentMaterial.title || materialIdValue) || materialIdValue;
+	      const version = formatVersionLabel(nowMs) || String(nowMs);
+	      const fileName = `教案-${titleBase}-${version}.md`;
+	      const md = buildLessonMarkdown({ plan: final, templateId: selectedTemplateId.value, language: locale.value });
+
+	      // 自动生成并入库 DOCX 源文件（失败不阻断）
+	      void uploadLessonDocxArtifact({ plan: final, nowMs });
+
+	      void aiService
+	        .vectorizeTextToKb({
+	          userId: KB_USER_ID,
+	          fileId,
+	          fileName,
+	          content: md,
+	          fileType: 'md',
+	          folderId: 1,
+	          createdAt: nowMs,
+	          sourceType: 'material',
+	          sourceMaterialId: materialIdValue,
+	          sourceMaterialTitle: props.currentMaterial.title,
+	        })
+	        .then(() => {
+	          const next = (store.kbFiles || []).filter((f) => f.id !== fileId);
+	          next.unshift({
+	            id: fileId,
+	            name: fileName,
+	            size: md.length,
+	            type: 'md',
+	            status: 'ready',
+	            uploadedAt: new Date(nowMs),
+	            folderId: 1,
+	            sourceType: 'material',
+	            sourceMaterialId: materialIdValue,
+	            sourceMaterialTitle: props.currentMaterial.title,
+	          });
+	          store.setKbFiles(next);
+	        })
+	        .catch((e) => console.warn('lesson markdown 产物入库失败（已忽略）', e));
+	    }
+	  } catch (e) {
     const aborted = e instanceof ApiError && e.kind === 'abort';
     if (aborted) toast.info(t('lesson.toast.cancelled'));
     else toast.error(t('lesson.toast.error'));

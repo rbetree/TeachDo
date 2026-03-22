@@ -10,6 +10,8 @@ import { useAppStore } from '@/stores/appStore';
 import { aiService } from '@/services/aiService';
 import { KB_USER_ID } from '@/stores/appStore';
 import { TEACHDO_EDITOR_BRIDGE_KEY } from '@editor/contexts/teachdoBridge';
+import useExport from '@editor/hooks/useExport';
+import { buildGenOutputFileId, formatVersionLabel, sanitizeFilenameSegment } from '@/utils/genOutputFileId';
 
 import EditorView from '@editor/views/Editor/index.vue';
 import ScreenView from '@editor/views/Screen/index.vue';
@@ -34,6 +36,7 @@ const editorSlidesStore = useSlidesStore();
 const snapshotStore = useSnapshotStore();
 const screenStore = useScreenStore();
 const { screening } = storeToRefs(screenStore);
+const { exportPPTX } = useExport();
 
 const saving = ref(false);
 const exitPersisted = ref(false);
@@ -150,7 +153,7 @@ const buildSlidesMarkdownFromEditor = (materialTitle: string, slides: Slide[]): 
   return chunks.join('\n\n');
 };
 
-const persistEditorDocument = (materialIdValue: string) => {
+const persistEditorDocument = async (materialIdValue: string) => {
   const material = appStore.materials.find((m) => m.id === materialIdValue);
   if (!material) return;
 
@@ -175,21 +178,50 @@ const persistEditorDocument = (materialIdValue: string) => {
   appStore.patchMaterial(materialIdValue, { editorDocument });
 
   // 产物入库（失败不阻断）
+  const nowMs = Date.now();
+  const titleBase = sanitizeFilenameSegment(material.title || materialIdValue) || materialIdValue;
+  const version = formatVersionLabel(nowMs) || String(nowMs);
   const md = buildSlidesMarkdownFromEditor(material.title, editorDocument.slides as Slide[]);
+  const fileId = buildGenOutputFileId({ userId: KB_USER_ID, materialId: materialIdValue, kind: 'slides_final', nowMs });
+  const fileName = `幻灯片最终版-${titleBase}-${version}.md`;
   void aiService
     .vectorizeTextToKb({
       userId: KB_USER_ID,
-      fileId: `gen:${KB_USER_ID}:${materialIdValue}:slides_final`,
-      fileName: `幻灯片最终版-${material.title}.md`,
+      fileId,
+      fileName,
       content: md,
       fileType: 'md',
       folderId: 1,
-      createdAt: Date.now(),
+      createdAt: nowMs,
       sourceType: 'material',
       sourceMaterialId: materialIdValue,
       sourceMaterialTitle: material.title,
     })
+    .then(() => {
+      const next = (appStore.kbFiles || []).filter((f) => f.id !== fileId);
+      next.unshift({
+        id: fileId,
+        name: fileName,
+        size: md.length,
+        type: 'md',
+        status: 'ready',
+        uploadedAt: new Date(nowMs),
+        folderId: 1,
+        sourceType: 'material',
+        sourceMaterialId: materialIdValue,
+        sourceMaterialTitle: material.title,
+      });
+      appStore.setKbFiles(next);
+    })
     .catch((e) => console.warn('slides_final 产物入库失败（已忽略）', e));
+
+  // 自动生成并入库 PPTX 源文件（编辑器完整导出，失败不阻断）
+  try {
+    const pptxFileName = `幻灯片最终版-${titleBase}-${version}.pptx`;
+    await exportPPTX(editorDocument.slides as Slide[], true, true, { download: false, upload: true, fileNameOverride: pptxFileName });
+  } catch (e) {
+    console.warn('slides_final PPTX 入库失败（已忽略）', e);
+  }
 };
 
 const handleBackToWorkspace = async () => {
@@ -200,7 +232,7 @@ const handleBackToWorkspace = async () => {
 
   saving.value = true;
   try {
-    persistEditorDocument(materialId.value);
+    await persistEditorDocument(materialId.value);
     exitPersisted.value = true;
   } finally {
     saving.value = false;

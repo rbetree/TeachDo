@@ -448,8 +448,24 @@ export default () => {
     return isSVGBase64 || isSVGUrl
   }
 
+  interface ExportPptxOptions {
+    /**
+     * 是否下载到本地（默认 true）。
+     */
+    download?: boolean
+    /**
+     * 是否上传并保存到 TeachDo 课程产出（默认 true；但仍要求存在 teachdoUserId/materialId）。
+     */
+    upload?: boolean
+    /**
+     * 覆盖导出文件名（默认使用当前 title）。
+     * 注意：若不含 .pptx 会自动补全。
+     */
+    fileNameOverride?: string
+  }
+
   // 导出PPTX文件
-  const exportPPTX = async (_slides: Slide[], masterOverwrite: boolean, ignoreMedia: boolean) => {
+  const exportPPTX = async (_slides: Slide[], masterOverwrite: boolean, ignoreMedia: boolean, options: ExportPptxOptions = {}) => {
     exporting.value = true
     const pptx = new pptxgen()
 
@@ -962,50 +978,58 @@ export default () => {
       }
     }
 
-	    setTimeout(async () => {
-	      try {
-	        const mime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-	        const raw: unknown = await (pptx as any).write({ outputType: 'blob' })
-	        let blob: Blob
-	        if (raw instanceof Blob) blob = raw
-	        else if (raw instanceof ArrayBuffer) blob = new Blob([raw], { type: mime })
-	        else if (raw instanceof Uint8Array) {
-	          // 兼容 TS lib 对 SharedArrayBuffer 的限制：复制到 ArrayBuffer 再构造 Blob
-	          const copy = new Uint8Array(raw.byteLength)
-	          copy.set(raw)
-	          blob = new Blob([copy.buffer], { type: mime })
-	        }
-	        else blob = new Blob([String(raw)], { type: mime })
+		    // 让 UI 有机会先渲染 exporting 状态（避免“点了没反应”的错觉）
+		    await new Promise((resolve) => setTimeout(resolve, 200))
 
-        const fileName = `${title.value || 'TeachDo'}.pptx`
-        saveAs(blob, fileName)
+		    try {
+		      const mime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+		      const raw: unknown = await (pptx as any).write({ outputType: 'blob' })
+		      let blob: Blob
+		      if (raw instanceof Blob) blob = raw
+		      else if (raw instanceof ArrayBuffer) blob = new Blob([raw], { type: mime })
+		      else if (raw instanceof Uint8Array) {
+		        // 兼容 TS lib 对 SharedArrayBuffer 的限制：复制到 ArrayBuffer 再构造 Blob
+		        const copy = new Uint8Array(raw.byteLength)
+		        copy.set(raw)
+		        blob = new Blob([copy.buffer], { type: mime })
+		      }
+		      else blob = new Blob([String(raw)], { type: mime })
 
-        const teachdoUserId = (mainStore.teachdoUserId || '').trim()
-        const teachdoMaterialId = (mainStore.teachdoMaterialId || '').trim()
-	        if (teachdoUserId && teachdoMaterialId) {
-	          const file = new File([blob], fileName, { type: mime })
-	          uploadArtifact({ userId: teachdoUserId, materialId: teachdoMaterialId, kind: 'pptx', file })
-	            .then(() => {
-	              message.success('已保存到课程产出')
-	              if (typeof window !== 'undefined') {
-	                window.dispatchEvent(new CustomEvent('teachdo:artifacts-updated', { detail: { materialId: teachdoMaterialId } }))
-	              }
-	            })
-	            .catch((e) => {
-	              console.warn('PPTX 入库失败（已忽略）', e)
-	              message.warning('已下载，但保存到课程产出失败')
-	            })
-	        }
-      }
-      catch (e) {
-        console.error(e)
-        message.error('导出失败')
-      }
-      finally {
-        exporting.value = false
-      }
-    }, 200)
-  }
+		      const wantDownload = options.download !== false
+		      const wantUpload = options.upload !== false
+		      const baseName = (options.fileNameOverride || `${title.value || 'TeachDo'}.pptx`).trim() || 'TeachDo.pptx'
+		      const fileName = baseName.toLowerCase().endsWith('.pptx') ? baseName : `${baseName}.pptx`
+
+		      if (wantDownload) {
+		        saveAs(blob, fileName)
+		      }
+
+		      const teachdoUserId = (mainStore.teachdoUserId || '').trim()
+		      const teachdoMaterialId = (mainStore.teachdoMaterialId || '').trim()
+		      if (wantUpload && teachdoUserId && teachdoMaterialId) {
+		        try {
+		          const file = new File([blob], fileName, { type: mime })
+		          await uploadArtifact({ userId: teachdoUserId, materialId: teachdoMaterialId, kind: 'pptx', file })
+		          message.success('已保存到课程产出')
+		          if (typeof window !== 'undefined') {
+		            window.dispatchEvent(new CustomEvent('teachdo:artifacts-updated', { detail: { materialId: teachdoMaterialId } }))
+		          }
+		        }
+		        catch (e) {
+		          console.warn('PPTX 入库失败（已忽略）', e)
+		          if (wantDownload) message.warning('已下载，但保存到课程产出失败')
+		          else message.warning('保存到课程产出失败')
+		        }
+		      }
+		    }
+		    catch (e) {
+		      console.error(e)
+		      message.error('导出失败')
+		    }
+		    finally {
+		      exporting.value = false
+		    }
+	  }
 
   return {
     exporting,

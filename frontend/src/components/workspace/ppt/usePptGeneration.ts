@@ -4,9 +4,11 @@ import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import type { ImgPoolItem } from '@/editor-runtime/aippt/aipptGenerator';
 import { buildSlidesMarkdown, mapAipptSlideToPreview } from '@/components/workspace/ppt/pptGenerationUtils';
-import { KB_USER_ID } from '@/stores/appStore';
+import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 import { ApiError } from '@/services/apiClient';
 import { isFullTextKbFileId } from '@/utils/kbFileId';
+import { buildGenOutputFileId, formatVersionLabel, sanitizeFilenameSegment } from '@/utils/genOutputFileId';
+import { buildSimpleTextPptxBlob, PPTX_MIME } from '@/utils/simplePptxExport';
 
 export type PptViewState = 'SELECT_TEMPLATE' | 'PREVIEW';
 
@@ -17,6 +19,7 @@ export interface UsePptGenerationParams {
 }
 
 export function usePptGeneration(params: UsePptGenerationParams) {
+  const store = useAppStore();
   const loading = ref(false);
   const presentation = ref<Presentation | null>(null);
   const templates = ref<PPTTemplate[]>([]);
@@ -228,19 +231,56 @@ export function usePptGeneration(params: UsePptGenerationParams) {
       });
 
       // 产物入库（失败不阻断）
+      const nowMs = Date.now();
+      const fileId = buildGenOutputFileId({ userId: KB_USER_ID, materialId: material.id, kind: 'slides', nowMs });
+      const titleBase = sanitizeFilenameSegment(material.title || material.id) || material.id;
+      const version = formatVersionLabel(nowMs) || String(nowMs);
+      const fileName = `幻灯片-${titleBase}-${version}.md`;
       const md = buildSlidesMarkdown(material.title, result.slides);
+
+      // 自动生成并入库 PPTX 源文件（文本简化版，失败不阻断）
+      void (async () => {
+        try {
+          const blob = await buildSimpleTextPptxBlob({ title: material.title || material.id, slides: result.slides || [] });
+          const pptxFileName = `幻灯片-${titleBase}-${version}.pptx`;
+          const file = new File([blob], pptxFileName, { type: PPTX_MIME });
+          await aiService.uploadArtifact({ userId: KB_USER_ID, materialId: material.id, kind: 'pptx', file });
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('teachdo:artifacts-updated', { detail: { materialId: material.id } }));
+          }
+        } catch (e) {
+          console.warn('PPTX 源文件入库失败（已忽略）', e);
+        }
+      })();
+
       void aiService
         .vectorizeTextToKb({
           userId: KB_USER_ID,
-          fileId: `gen:${KB_USER_ID}:${material.id}:slides`,
-          fileName: `幻灯片-${material.title}.md`,
+          fileId,
+          fileName,
           content: md,
           fileType: 'md',
           folderId: 1,
-          createdAt: Date.now(),
+          createdAt: nowMs,
           sourceType: 'material',
           sourceMaterialId: material.id,
           sourceMaterialTitle: material.title,
+        })
+        .then(() => {
+          const next = (store.kbFiles || []).filter((f) => f.id !== fileId);
+          next.unshift({
+            id: fileId,
+            name: fileName,
+            size: md.length,
+            type: 'md',
+            status: 'ready',
+            uploadedAt: new Date(nowMs),
+            folderId: 1,
+            sourceType: 'material',
+            sourceMaterialId: material.id,
+            sourceMaterialTitle: material.title,
+          });
+          store.setKbFiles(next);
         })
         .catch((e) => console.warn('PPT 产物入库失败（已忽略）', e));
 
