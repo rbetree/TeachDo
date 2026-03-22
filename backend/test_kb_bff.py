@@ -259,6 +259,7 @@ def test_tools_aippt_disables_kb_when_personaldb_not_configured(main_api_client,
         generateFromUploadedFile: bool,
         generateFromWebSearch: bool,
         user_id: str,
+        generateWithImages: bool = False,
         kb_folder_ids=None,
         kb_file_ids=None,
     ):
@@ -303,6 +304,7 @@ def test_tools_aippt_disables_kb_when_personaldb_not_ready(main_api_client, monk
         generateFromUploadedFile: bool,
         generateFromWebSearch: bool,
         user_id: str,
+        generateWithImages: bool = False,
         kb_folder_ids=None,
         kb_file_ids=None,
     ):
@@ -348,6 +350,7 @@ def test_tools_aippt_keeps_kb_when_personaldb_ready(main_api_client, monkeypatch
         generateFromUploadedFile: bool,
         generateFromWebSearch: bool,
         user_id: str,
+        generateWithImages: bool = False,
         kb_folder_ids=None,
         kb_file_ids=None,
     ):
@@ -376,3 +379,41 @@ def test_tools_aippt_keeps_kb_when_personaldb_ready(main_api_client, monkeypatch
     assert seen["kb_folder_ids"] == [0, 1]
     # gen:* 属于“课程产出全文注入”，不应走 KB 检索（metadata 里仅保留 upload:*）
     assert seen["kb_file_ids"] == ["upload:test:fid0"]
+
+
+def test_tools_aippt_forwards_generate_with_images(main_api_client, monkeypatch):
+    monkeypatch.delenv("PERSONAL_DB", raising=False)
+
+    import backend.main_api.main as main_api
+
+    seen: Dict[str, Any] = {}
+
+    async def _fake_stream_content_response(
+        markdown_content: str,
+        language: str,
+        generateFromUploadedFile: bool,
+        generateFromWebSearch: bool,
+        user_id: str,
+        generateWithImages: bool = False,
+        kb_folder_ids=None,
+        kb_file_ids=None,
+    ):
+        seen["generateWithImages"] = generateWithImages
+        yield b"data: [DONE]\n\n"
+
+    monkeypatch.setattr(main_api, "stream_content_response", _fake_stream_content_response)
+
+    payload = {
+        "content": "# TeachDo\n\n## Outline\n- A\n",
+        "language": "zh",
+        "sessionId": "course-1",
+        "generateFromUploadedFile": False,
+        "generateFromWebSearch": False,
+        "generateWithImages": True,
+    }
+
+    with main_api_client.stream("POST", "/tools/aippt", json=payload) as resp:
+        assert resp.status_code == 200
+        _ = b"".join(resp.iter_bytes())
+
+    assert seen["generateWithImages"] is True

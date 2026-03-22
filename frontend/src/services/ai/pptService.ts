@@ -59,6 +59,7 @@ export async function streamPptSlides(input: {
   language?: string;
   generateFromWebSearch?: boolean;
   generateFromUploadedFile?: boolean;
+  generateWithImages?: boolean;
   kbFolderIds?: number[] | null;
   kbFileIds?: string[] | null;
   onSlide?: (slide: AIPPTSlide) => void;
@@ -75,6 +76,7 @@ export async function streamPptSlides(input: {
     sessionId: input.sessionId,
     generateFromWebSearch: input.generateFromWebSearch ?? true,
     generateFromUploadedFile: input.generateFromUploadedFile ?? false,
+    generateWithImages: input.generateWithImages ?? false,
     kb_folder_ids: input.kbFolderIds ?? null,
     kb_file_ids: input.kbFileIds ?? null,
   };

@@ -171,7 +171,20 @@ def test_lesson_plan_stream_returns_sections_and_done_without_llm_config(main_ap
     assert '"type":"final"' in body
 
 
-def test_lesson_plan_fallback_respects_jnu_form_template(main_api_client):
+def test_lesson_plan_fallback_respects_jnu_form_template(main_api_client, monkeypatch):
+    # 该用例验证“无 LLM 配置时”的兜底输出，避免被本机 .env 或其他用例的模型配置干扰
+    for k in [
+        "LESSON_TYPE",
+        "LESSON_MODEL",
+        "LESSON_API_KEY",
+        "LESSON_BASE_URL",
+        "OUTLINE_TYPE",
+        "OUTLINE_MODEL",
+        "OUTLINE_API_KEY",
+        "OUTLINE_BASE_URL",
+    ]:
+        monkeypatch.delenv(k, raising=False)
+
     payload = {
         "title": "三角形的基本性质",
         "subject": "数学",
@@ -220,6 +233,18 @@ def test_lesson_plan_stream_enriches_kb_search_when_personaldb_available(
     main_api_client, personaldb_stub, monkeypatch
 ):
     monkeypatch.setenv("PERSONAL_DB", "http://personaldb.test")
+    # 强制走 fallback，避免本机 .env 触发真实 LLM 调用导致用例超时
+    for k in [
+        "LESSON_TYPE",
+        "LESSON_MODEL",
+        "LESSON_API_KEY",
+        "LESSON_BASE_URL",
+        "OUTLINE_TYPE",
+        "OUTLINE_MODEL",
+        "OUTLINE_API_KEY",
+        "OUTLINE_BASE_URL",
+    ]:
+        monkeypatch.delenv(k, raising=False)
 
     import backend.main_api.main as main_api
 

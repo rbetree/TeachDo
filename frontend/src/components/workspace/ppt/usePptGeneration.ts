@@ -28,6 +28,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
   const draftEditorDocument = ref<EditorDocument | null>(null);
 
   const generateFromWebSearch = ref(true);
+  const generateWithImages = ref(false);
   const selectedKbFileIds = ref<string[]>([]);
 
   const kbFileIdsForRequest = computed(() => {
@@ -156,6 +157,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
         language: 'zh',
         generateFromWebSearch: generateFromWebSearch.value,
         generateFromUploadedFile: useKb,
+        generateWithImages: generateWithImages.value,
         kbFileIds: kbFileIds.length > 0 ? kbFileIds : null,
         signal: controller.signal,
         onSlide: (slide) => {
@@ -283,6 +285,7 @@ export function usePptGeneration(params: UsePptGenerationParams) {
     presentation,
     viewState,
     generateFromWebSearch,
+    generateWithImages,
     selectedKbFileIds,
     loadTemplates,
     handleGenerate,

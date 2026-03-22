@@ -34,6 +34,7 @@ const {
   presentation,
   viewState,
   generateFromWebSearch,
+  generateWithImages,
   handleGenerate,
   cancelGenerate,
   generationCanceled,
@@ -195,6 +196,18 @@ const handleRegenerate = async () => {
               :disabled="loading"
             />
             <span>{{ t('ppt.advanced.web_search') }}</span>
+          </label>
+          <label
+            class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer select-none disabled:opacity-60"
+            :class="loading ? 'opacity-60 cursor-not-allowed' : ''"
+          >
+            <input
+              v-model="generateWithImages"
+              type="checkbox"
+              class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
+              :disabled="loading"
+            />
+            <span>{{ t('ppt.advanced.images') }}</span>
           </label>
 
           <template v-if="viewState === 'SELECT_TEMPLATE'">

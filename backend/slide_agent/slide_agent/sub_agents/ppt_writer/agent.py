@@ -9,6 +9,7 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmRequest, LlmResponse
 from .tools import SearchImage, DocumentSearch,KnowledgeBaseSearch
+from .image_enricher import maybe_attach_images_to_slide
 from ...config import PPT_WRITER_AGENT_CONFIG  # 保留导入，检查器不需要模型
 from ...create_model import create_model
 from . import prompt
@@ -287,6 +288,13 @@ class ControllerAgent(BaseAgent):
 
         if is_valid:
             data = st.get("last_slide_json")
+            if isinstance(data, dict):
+                try:
+                    data = await maybe_attach_images_to_slide(data, state=st, search_image=SearchImage)
+                    st["last_slide_json"] = data
+                except Exception as exc:
+                    # 配图失败不应阻断主链路（仍返回文本/结构）
+                    logger.warning("自动配图失败，将跳过 images 注入：%s", exc, exc_info=True)
             # 累计保存
             self._append_accumulated(st, data if data is not None else st.get("last_written_raw"))
             # 清理本页中间态

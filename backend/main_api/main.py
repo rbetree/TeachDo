@@ -1128,6 +1128,7 @@ class AipptContentRequest(BaseModel):
     sessionId: str = ""  # 当使用知识库时，需要根据用户的user_id查询对应的知识库
     generateFromUploadedFile: bool = False  # 是否从上传的文件中生成PPT内容
     generateFromWebSearch: bool = True  # 是否从网络搜索中生成PPT内容
+    generateWithImages: bool = False  # 是否启用“自动配图”（图片检索 + 返回 slide.images）
     kb_folder_ids: list[int] | None = None  # 仅当启用知识库检索时生效，用于过滤可检索的 folder_id
     kb_file_ids: list[str] | None = None  # 仅当启用知识库检索时生效，用于过滤可检索的 file_id（更精确）
 
@@ -1858,6 +1859,7 @@ async def stream_content_response(
     generateFromUploadedFile,
     generateFromWebSearch,
     user_id,
+    generateWithImages: bool = False,
     kb_folder_ids: list[int] | None = None,
     kb_file_ids: list[str] | None = None,
 ):
@@ -1873,7 +1875,12 @@ async def stream_content_response(
     if generateFromWebSearch:
         search_engine.append("DocumentSearch")
 
-    metadata = {"user_id": user_id, "search_engine": search_engine, "language": language}
+    metadata = {
+        "user_id": user_id,
+        "search_engine": search_engine,
+        "language": language,
+        "generate_with_images": bool(generateWithImages),
+    }
     if kb_folder_ids:
         metadata["kb_folder_ids"] = kb_folder_ids
     if kb_file_ids:
@@ -1986,6 +1993,7 @@ async def aippt_content(request: AipptContentRequest):
             language=request.language,
             generateFromUploadedFile=generate_from_uploaded_file,
             generateFromWebSearch=request.generateFromWebSearch,
+            generateWithImages=request.generateWithImages,
             user_id=user_id,
             kb_folder_ids=request.kb_folder_ids if generate_from_uploaded_file else None,
             kb_file_ids=rag_ids if generate_from_uploaded_file else None,

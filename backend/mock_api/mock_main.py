@@ -361,6 +361,11 @@ async def aippt_outline(request: AipptRequest):
 
 class AipptContentRequest(BaseModel):
     content: str
+    language: str = "zh"  # 默认中文
+    sessionId: str = ""
+    generateFromUploadedFile: bool = False
+    generateFromWebSearch: bool = True
+    generateWithImages: bool = False  # mock 不做图片检索，仅用于兼容字段
 
 def preset_json_to_slides(markdown_text):
     """不用传递参数 markdown_text，使用假的数据 data_response_content。
