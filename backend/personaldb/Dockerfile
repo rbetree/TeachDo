@@ -1,7 +1,16 @@
-# Use an official Python runtime as a parent image
-FROM python:3.12
+# Use a slim Python base to reduce image size.
+FROM python:3.12-slim-bookworm
 
-ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 LC_ALL=C.UTF-8 LANG=C.UTF-8
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Some wheels (e.g. onnxruntime) require libgomp at runtime.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
 WORKDIR /app
