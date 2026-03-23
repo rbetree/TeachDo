@@ -34,6 +34,7 @@ services:
     volumes:
       - ./var:/app/var
       - ./logs:/app/logs
+      - ./backend/common:/app/backend/common:ro
 
   content_api:
     image: "${TEACHDO_IMAGE_PREFIX:-teachdo}-content_api:${TEACHDO_IMAGE_TAG:-latest}"
@@ -61,6 +62,7 @@ services:
     volumes:
       - ./var:/app/var
       - ./logs:/app/logs
+      - ./backend/common:/app/backend/common:ro
 
   personaldb:
     image: "${TEACHDO_IMAGE_PREFIX:-teachdo}-personaldb:${TEACHDO_IMAGE_TAG:-latest}"
@@ -77,6 +79,7 @@ services:
     volumes:
       - ./var:/app/var
       - ./logs:/app/logs
+      - ./backend/common:/app/backend/common:ro
 
   main_api:
     image: "${TEACHDO_IMAGE_PREFIX:-teachdo}-main_api:${TEACHDO_IMAGE_TAG:-latest}"
@@ -104,6 +107,7 @@ services:
     volumes:
       - ./var:/app/var
       - ./logs:/app/logs
+      - ./backend/common:/app/backend/common:ro
 
   frontend:
     image: "${TEACHDO_IMAGE_PREFIX:-teachdo}-frontend:${TEACHDO_IMAGE_TAG:-latest}"
