@@ -57,6 +57,39 @@ npm run dev
 
 说明：前端统一请求相对路径 `/api/*`，开发环境由 `frontend/vite.config.ts` 代理到 `http://127.0.0.1:6800/*`。
 
+### 方式三：Docker 启动（本地构建）
+
+```bash
+cp env_template.txt .env
+# 修改 .env，填入你的 API Key
+
+docker compose up --build
+```
+
+启动后访问：
+- 前端（Nginx）：`http://127.0.0.1:5174`
+- 主 API：`http://127.0.0.1:6800`
+
+如本机 `5174` 端口被占用，可临时指定其他端口：
+
+```bash
+FRONTEND_PORT=12345 docker compose up --build
+```
+
+### 方式四：拉取并运行预构建镜像（GHCR）
+
+仓库已提供 GitHub Actions 工作流：`.github/workflows/docker-build.yml`，会在 `push main` / `v*` 标签时构建并推送镜像到 GHCR。
+
+```bash
+export TEACHDO_IMAGE_PREFIX=ghcr.io/rbetree/teachdo
+export TEACHDO_IMAGE_TAG=latest
+
+docker compose pull
+docker compose up -d --no-build
+```
+
+更多 Docker 说明见：`doc/DockerDeploy.md`。
+
 ## 🧭 路由速查（TeachDo）
 
 - 选择教学资料：`/`
