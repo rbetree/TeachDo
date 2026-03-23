@@ -8,7 +8,6 @@ import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 import { ApiError } from '@/services/apiClient';
 import { isFullTextKbFileId } from '@/utils/kbFileId';
 import { buildGenOutputFileId, formatVersionLabel, sanitizeFilenameSegment } from '@/utils/genOutputFileId';
-import { buildSimpleTextPptxBlob, PPTX_MIME } from '@/utils/simplePptxExport';
 
 export type PptViewState = 'SELECT_TEMPLATE' | 'PREVIEW';
 
@@ -237,21 +236,6 @@ export function usePptGeneration(params: UsePptGenerationParams) {
       const version = formatVersionLabel(nowMs) || String(nowMs);
       const fileName = `幻灯片-${titleBase}-${version}.md`;
       const md = buildSlidesMarkdown(material.title, result.slides);
-
-      // 自动生成并入库 PPTX 源文件（文本简化版，失败不阻断）
-      void (async () => {
-        try {
-          const blob = await buildSimpleTextPptxBlob({ title: material.title || material.id, slides: result.slides || [] });
-          const pptxFileName = `幻灯片-${titleBase}-${version}.pptx`;
-          const file = new File([blob], pptxFileName, { type: PPTX_MIME });
-          await aiService.uploadArtifact({ userId: KB_USER_ID, materialId: material.id, kind: 'pptx', file });
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('teachdo:artifacts-updated', { detail: { materialId: material.id } }));
-          }
-        } catch (e) {
-          console.warn('PPTX 源文件入库失败（已忽略）', e);
-        }
-      })();
 
       void aiService
         .vectorizeTextToKb({

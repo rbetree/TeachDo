@@ -218,7 +218,9 @@ const inferArtifactKindFromGenKind = (genKind: string): ArtifactKind | null => {
   const kind = (genKind || '').trim().toLowerCase();
   if (!kind) return null;
   if (kind === 'lesson' || kind.includes('lesson')) return 'docx';
-  if (kind === 'slides' || kind.includes('slide') || kind === 'ppt' || kind.includes('ppt')) return 'pptx';
+  // PPT：工作台生成阶段只入库 md（slides）；只有在 PPT 编辑器“最终版导出”后才会入库完整样式的 PPTX（slides_final）。
+  if (kind === 'slides_final') return 'pptx';
+  if (kind === 'ppt' || kind.includes('ppt')) return 'pptx';
   return null;
 };
 
@@ -436,6 +438,17 @@ const sortArtifactsByCreatedAtDesc = (items: ArtifactMeta[]) =>
 const docxArtifacts = computed(() => sortArtifactsByCreatedAtDesc(artifacts.value.filter((a) => a.kind === 'docx')));
 const pptxArtifacts = computed(() => sortArtifactsByCreatedAtDesc(artifacts.value.filter((a) => a.kind === 'pptx')));
 
+const isFinalPptxArtifact = (artifact: ArtifactMeta | null | undefined): boolean => {
+  const name = String(artifact?.file_name || '');
+  if (!name) return false;
+  return name.includes('最终版') || /final/i.test(name);
+};
+
+const pickPreferredPptxArtifact = (items: ArtifactMeta[]): ArtifactMeta | null => {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  return items.find(isFinalPptxArtifact) || items[0] || null;
+};
+
 const kbOutputFilesSorted = computed(() => {
   return [...kbOutputFiles.value].sort((a, b) => {
     const ak = getGenOutputKind(a.id);
@@ -538,7 +551,7 @@ const outputCards = computed<OutputCard[]>(() => {
       kbFile: null,
       artifactKind: 'pptx',
       artifacts: pptxArtifacts.value,
-      latestArtifact: pptxArtifacts.value[0] || null,
+      latestArtifact: pickPreferredPptxArtifact(pptxArtifacts.value),
       sourceUi: getKbSourceUi('generated'),
     });
   }
