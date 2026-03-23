@@ -285,12 +285,110 @@ def check_tcp_port_bindable(host: str, port: int) -> Tuple[bool, Optional[int]]:
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
     try:
         with socket.socket(family, socket.SOCK_STREAM) as s:
+            # 与 uvicorn 等 Web server 的默认行为对齐：允许快速重启，避免 TIME_WAIT 造成误判。
+            try:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            except Exception:
+                pass
             s.bind((host, int(port)))
+            # 进一步贴近实际：确保该端口可进入 LISTEN。
+            try:
+                s.listen(1)
+            except Exception:
+                pass
         return True, None
     except OSError as e:
         return False, getattr(e, "errno", None)
     except Exception:
         return False, None
+
+
+def find_listening_pids_on_tcp_port(port: int) -> Set[int]:
+    """
+    尽力定位正在监听（TCP LISTEN）指定端口的进程 PID。
+
+    注意：
+    - 在 WSL mirrored networking、宿主机端口占用、或权限受限时，可能无法返回 PID。
+    - 本函数用于“最佳努力”的诊断与清理，不应作为端口占用判断的唯一依据。
+    """
+
+    def _via_psutil() -> Set[int]:
+        try:
+            import psutil  # type: ignore
+        except Exception:
+            return set()
+
+        wanted: Set[int] = set()
+        try:
+            for c in psutil.net_connections(kind="inet"):
+                try:
+                    if not c.laddr:
+                        continue
+                    if int(getattr(c.laddr, "port", -1)) != int(port):
+                        continue
+                    if getattr(c, "status", None) != psutil.CONN_LISTEN:
+                        continue
+                    pid = getattr(c, "pid", None)
+                    if pid:
+                        wanted.add(int(pid))
+                except Exception:
+                    continue
+        except Exception:
+            return set()
+        return wanted
+
+    def _via_lsof() -> Set[int]:
+        if shutil.which("lsof") is None:
+            return set()
+        try:
+            result = subprocess.run(
+                ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            out = (result.stdout or "").strip()
+            if not out:
+                return set()
+            return {int(x) for x in out.splitlines() if x.strip().isdigit()}
+        except Exception:
+            return set()
+
+    def _via_fuser() -> Set[int]:
+        if shutil.which("fuser") is None:
+            return set()
+        try:
+            result = subprocess.run(
+                ["fuser", "-n", "tcp", str(port)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            out = (result.stdout or "") + (result.stderr or "")
+            return {int(x) for x in re.findall(r"\b\d+\b", out)}
+        except Exception:
+            return set()
+
+    def _via_ss() -> Set[int]:
+        if shutil.which("ss") is None:
+            return set()
+        try:
+            result = subprocess.run(
+                ["ss", "-ltnp", f"sport = :{port}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            out = (result.stdout or "") + (result.stderr or "")
+            return {int(x) for x in re.findall(r"pid=(\d+)", out)}
+        except Exception:
+            return set()
+
+    for getter in (_via_psutil, _via_lsof, _via_fuser, _via_ss):
+        pids = getter()
+        if pids:
+            return pids
+    return set()
 
 
 def _tail_last_lines(path: Path, *, max_lines: int = 80) -> List[str]:
@@ -429,6 +527,8 @@ class ProductionStarter:
 
         self.processes: Dict[str, subprocess.Popen] = {}
         self._log_file_handles: Dict[str, io.TextIOWrapper] = {}
+        # 运行期对环境变量的覆盖（仅对子进程生效，不修改用户的 Shell 环境）。
+        self._runtime_env_overrides: Dict[str, str] = {}
 
     def setup_logging(self):
         """设置日志系统"""
@@ -527,7 +627,80 @@ TeachDo 生产环境启动器
         # LiteLLM 默认会尝试从 GitHub 拉取模型价格/上下文窗口映射表，网络不通时会阻塞启动。
         # 这里默认强制使用包内置的本地备份（不覆盖用户显式配置）。
         env.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "true")
+
+        # 确保子进程与启动器的 bind_host 一致，避免“端口检查通过但服务实际 bind 失败”的漂移。
+        env["HOST"] = self.bind_host
+
+        # 应用运行期覆盖（例如自动换端口）。
+        if self._runtime_env_overrides:
+            env.update(self._runtime_env_overrides)
         return env
+
+    def _is_wsl(self) -> bool:
+        if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
+            return True
+        try:
+            with open("/proc/version", "r", encoding="utf-8", errors="ignore") as f:
+                return "microsoft" in (f.read() or "").lower()
+        except Exception:
+            return False
+
+    def _pick_bindable_tcp_port(self, host: str, start_port: int, *, max_tries: int = 200) -> Optional[int]:
+        start_port = int(start_port)
+        for p in range(start_port, start_port + max(1, int(max_tries))):
+            ok, _ = check_tcp_port_bindable(host, p)
+            if ok:
+                return int(p)
+        return None
+
+    def _override_personal_db_port(self, new_port: int) -> None:
+        new_port = int(new_port)
+        if "personal_db" in self.services:
+            self.services["personal_db"]["port"] = new_port
+
+        # 同步端口与 URL，确保 main_api / slide_agent 等通过 PERSONAL_DB 访问时一致。
+        self._runtime_env_overrides["PERSONAL_DB_PORT"] = str(new_port)
+        self._runtime_env_overrides["PERSONALDB_PORT"] = str(new_port)
+        self._runtime_env_overrides["PERSONAL_DB"] = f"http://{self.access_host}:{new_port}"
+
+    def _maybe_autoswitch_personal_db_port(self, occupied: List[Tuple[str, int, str, Optional[int]]]) -> bool:
+        """
+        尝试在端口无法释放时自动为“知识库”服务换一个可用端口。
+
+        典型场景：
+        - WSL2 mirrored networking 下，Windows 宿主机占用 127.0.0.1:9100（JetDirect 打印端口等），
+          WSL 内 lsof/ss 查不到进程但 bind 会失败。
+        """
+        import errno
+
+        if "personal_db" not in self.services:
+            return False
+
+        current_port = int(self.services["personal_db"]["port"])
+        hit = False
+        for _host, port, name, err in occupied:
+            if name != "知识库":
+                continue
+            if int(port) != current_port:
+                continue
+            if err not in {None, errno.EADDRINUSE}:
+                continue
+            hit = True
+            break
+
+        if not hit:
+            return False
+
+        base = 9101 if current_port == 9100 else current_port + 1
+        new_port = self._pick_bindable_tcp_port(self.bind_host, base, max_tries=200)
+        if new_port is None:
+            return False
+
+        self._print_warn(f"知识库端口 {current_port} 无法使用，自动切换到 {new_port}（仅本次启动生效）")
+        if self._is_wsl():
+            self._print_warn("检测到 WSL 环境：若 9100 由 Windows 宿主机占用，WSL 内可能无法定位/终止对应进程。")
+        self._override_personal_db_port(new_port)
+        return True
 
     def _run_command(
         self,
@@ -667,20 +840,22 @@ TeachDo 生产环境启动器
         """检查端口占用"""
         import errno
 
-        targets: List[Tuple[str, int, str]] = []
-        # 后端服务：使用 self.bind_host（实际启动时也会用它绑定）
-        for config in self.services.values():
-            targets.append((self.bind_host, int(config["port"]), str(config.get("name", ""))))
-        # 前端：固定用 127.0.0.1 启动（vite dev），不要用 access_host 误判
-        targets.append((self.frontend_host, int(self.frontend_port), "前端"))
-
         def _occupied_targets() -> List[Tuple[str, int, str, Optional[int]]]:
             occupied: List[Tuple[str, int, str, Optional[int]]] = []
-            for host, port, name in targets:
+            # 后端服务：使用 self.bind_host（实际启动时也会用它绑定）
+            for config in self.services.values():
+                host = self.bind_host
+                port = int(config["port"])
+                name = str(config.get("name", ""))
                 ok, err = check_tcp_port_bindable(host, port)
                 if ok:
                     continue
-                occupied.append((host, int(port), name, err))
+                occupied.append((host, port, name, err))
+
+            # 前端：固定用 127.0.0.1 启动（vite dev），不要用 access_host 误判
+            ok, err = check_tcp_port_bindable(self.frontend_host, int(self.frontend_port))
+            if not ok:
+                occupied.append((self.frontend_host, int(self.frontend_port), "前端", err))
             return occupied
 
         occupied = _occupied_targets()
@@ -702,6 +877,14 @@ TeachDo 生产环境启动器
             still_occupied = _occupied_targets()
             still_ports = sorted({p for _h, p, _n, _e in still_occupied})
             if still_ports:
+                # 兜底：部分环境（尤其 WSL mirrored networking）端口会被宿主机占用，WSL 内无法定位 PID。
+                # 对知识库端口进行自动换端口，提升“开箱可启动”的体验。
+                if self._maybe_autoswitch_personal_db_port(still_occupied):
+                    still_occupied = _occupied_targets()
+                    still_ports = sorted({p for _h, p, _n, _e in still_occupied})
+                    if not still_ports:
+                        return
+
                 self._print_error(f"端口仍被占用: {still_ports}（已尝试终止 {killed} 个进程）")
                 for host, port, name, err in still_occupied:
                     if err == errno.EADDRINUSE:
@@ -710,6 +893,10 @@ TeachDo 生产环境启动器
                     self._print_error(
                         f"请手动释放端口 {port}，例如：`lsof -nP -iTCP:{port} -sTCP:LISTEN` 或 `fuser -n tcp {port}`"
                     )
+                    if self._is_wsl():
+                        self._print_error(
+                            f"你在 WSL 环境下，若以上命令查不到 PID，可能是 Windows 宿主机占用端口 {port}。"
+                        )
                 sys.exit(1)
 
     def kill_processes_on_ports(self, ports: List[int]):
@@ -759,98 +946,14 @@ TeachDo 生产环境启动器
                 time.sleep(0.1)
             return not _pid_exists(pid)
 
-        def _pids_listening_via_psutil(port: int) -> Set[int]:
-            try:
-                import psutil  # type: ignore
-            except Exception:
-                return set()
-
-            wanted: Set[int] = set()
-            try:
-                for c in psutil.net_connections(kind="inet"):
-                    try:
-                        if not c.laddr:
-                            continue
-                        if int(getattr(c.laddr, "port", -1)) != int(port):
-                            continue
-                        if getattr(c, "status", None) != psutil.CONN_LISTEN:
-                            continue
-                        pid = getattr(c, "pid", None)
-                        if pid:
-                            wanted.add(int(pid))
-                    except Exception:
-                        continue
-            except Exception:
-                return set()
-            return wanted
-
-        def _pids_listening_via_lsof(port: int) -> Set[int]:
-            if shutil.which("lsof") is None:
-                return set()
-            try:
-                result = subprocess.run(
-                    ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                out = (result.stdout or "").strip()
-                if not out:
-                    return set()
-                return {int(x) for x in out.splitlines() if x.strip().isdigit()}
-            except Exception:
-                return set()
-
-        def _pids_listening_via_fuser(port: int) -> Set[int]:
-            if shutil.which("fuser") is None:
-                return set()
-            try:
-                result = subprocess.run(
-                    ["fuser", "-n", "tcp", str(port)],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                out = (result.stdout or "") + (result.stderr or "")
-                pids = {int(x) for x in re.findall(r"\b\d+\b", out)}
-                return pids
-            except Exception:
-                return set()
-
-        def _pids_listening_via_ss(port: int) -> Set[int]:
-            if shutil.which("ss") is None:
-                return set()
-            try:
-                result = subprocess.run(
-                    ["ss", "-ltnp", f"sport = :{port}"],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                out = (result.stdout or "") + (result.stderr or "")
-                # ss 输出可能包含 pid=1234,fd=xx
-                return {int(x) for x in re.findall(r"pid=(\d+)", out)}
-            except Exception:
-                return set()
-
-        def _pids_listening_on_port(port: int) -> Set[int]:
-            pids = _pids_listening_via_psutil(port)
-            if pids:
-                return pids
-            pids = _pids_listening_via_lsof(port)
-            if pids:
-                return pids
-            pids = _pids_listening_via_fuser(port)
-            if pids:
-                return pids
-            return _pids_listening_via_ss(port)
-
         killed_count = 0
         for port in ports:
             port = int(port)
-            pids = sorted(_pids_listening_on_port(port))
+            pids = sorted(find_listening_pids_on_tcp_port(port))
             if not pids:
-                self._print_warn(f"无法定位占用端口 {port} 的进程（可能权限不足或工具不可用）")
+                self._print_warn(
+                    f"无法定位占用端口 {port} 的监听进程（可能由宿主机占用/非 LISTEN 状态/权限或工具限制）"
+                )
                 continue
 
             self._print_warn(f"端口 {port} 占用进程: {', '.join(str(p) for p in pids)}，尝试终止")
