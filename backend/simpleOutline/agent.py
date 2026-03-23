@@ -103,4 +103,12 @@ class OutlineAgent(LlmAgent):
             prompt_instruction = prompt.OUTLINE_INSTRUCTION_WITH_SEARCH.format(language=language)
         return prompt_instruction
 
-root_agent = OutlineAgent()
+def build_root_agent() -> OutlineAgent:
+    """
+    构建一个新的根 Agent（用于 /admin/reload 热加载场景）。
+
+    注意：
+    - OutlineAgent 会在 __init__ 中读取 OUTLINE_* 环境变量并创建模型实例；
+    - 因此需要在 reload 后重新实例化，以确保新配置真正生效。
+    """
+    return OutlineAgent()

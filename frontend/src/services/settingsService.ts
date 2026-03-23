@@ -60,6 +60,21 @@ export type UiSettingsResponse = {
   persistPath?: string;
   note?: string;
   updatedKeys?: string[];
+  reload?: UiSettingsReloadResults | null;
+  restartRequired?: boolean;
+  restartKeys?: string[];
+};
+
+export type UiSettingsReloadServiceResult = {
+  ok: boolean;
+  status?: number;
+  error?: string;
+};
+
+export type UiSettingsReloadResults = {
+  outline?: UiSettingsReloadServiceResult;
+  content?: UiSettingsReloadServiceResult;
+  personaldb?: UiSettingsReloadServiceResult;
 };
 
 export async function getSettings(input: { signal?: AbortSignal } = {}): Promise<UiSettingsResponse> {

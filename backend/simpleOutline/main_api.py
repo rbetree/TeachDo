@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import asyncio
 from pathlib import Path
 
 import click
@@ -32,7 +33,7 @@ except Exception:  # pragma: no cover - 单服务打包场景可能不存在 com
     apply_logging_config = None
 
 from adk_agent_executor import ADKAgentExecutor
-from agent import root_agent
+from agent import build_root_agent
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
@@ -45,6 +46,7 @@ from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill
 from starlette.middleware.cors import CORSMiddleware
 from starlette.applications import Starlette
+from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
@@ -118,16 +120,6 @@ def main(host: str, port: int, agent_url: str=""):
         skills=[skill],
     )
 
-    # 初始化 Runner，管理 agent 的执行、会话、记忆和产物
-    logger.info("初始化Runner...")
-    runner = Runner(
-        app_name=agent_card.name,
-        agent=root_agent,
-        artifact_service=InMemoryArtifactService(),
-        session_service=InMemorySessionService(),
-        memory_service=InMemoryMemoryService(),
-    )
-
     # 根据环境变量决定是否启用流式输出
     if streaming:
         logger.info("使用 SSE 流式输出模式")
@@ -142,8 +134,20 @@ def main(host: str, port: int, agent_url: str=""):
             max_llm_calls=500
         )
 
+    def build_agent_executor() -> ADKAgentExecutor:
+        # 每次都重建 Runner + Agent（用于热加载 LLM 配置）
+        logger.info("初始化 Runner / AgentExecutor ...")
+        runner = Runner(
+            app_name=agent_card.name,
+            agent=build_root_agent(),
+            artifact_service=InMemoryArtifactService(),
+            session_service=InMemorySessionService(),
+            memory_service=InMemoryMemoryService(),
+        )
+        return ADKAgentExecutor(runner, agent_card, run_config)
+
     # 初始化 agent 执行器
-    agent_executor = ADKAgentExecutor(runner, agent_card, run_config)
+    agent_executor = build_agent_executor()
 
     # 请求处理器，管理任务存储和请求分发
     request_handler = DefaultRequestHandler(
@@ -162,6 +166,47 @@ def main(host: str, port: int, agent_url: str=""):
         return JSONResponse({"ok": True})
 
     app.add_route("/healthz", healthz, methods=["GET"])
+
+    _reload_lock = asyncio.Lock()
+
+    async def admin_reload(request: Request):  # noqa: ANN001 - Starlette handler
+        client_host = request.client.host if request.client else ""
+        if client_host not in {"127.0.0.1", "::1"}:
+            return JSONResponse(
+                {"ok": False, "error": {"message": "forbidden"}},
+                status_code=403,
+            )
+
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+
+        clear_secrets = bool((payload or {}).get("clearSecrets", False))
+
+        async with _reload_lock:
+            try:
+                from backend.common.settings_store import apply_settings_to_environ, read_settings_env
+
+                llm_keys = {"OUTLINE_TYPE", "OUTLINE_BASE_URL", "OUTLINE_MODEL", "OUTLINE_API_KEY"}
+                settings_env = read_settings_env()
+                updates = {k: settings_env[k] for k in llm_keys if k in settings_env}
+                apply_settings_to_environ(updates, overwrite=True)
+
+                if clear_secrets:
+                    os.environ.pop("OUTLINE_API_KEY", None)
+
+                request_handler.agent_executor = build_agent_executor()
+            except Exception as exc:
+                logger.exception("admin_reload 重建执行器失败: %s", exc)
+                return JSONResponse(
+                    {"ok": False, "error": {"message": f"rebuild_failed: {exc}"}},
+                    status_code=500,
+                )
+
+        return JSONResponse({"ok": True, "data": {"service": "outline", "applied": True}})
+
+    app.add_route("/admin/reload", admin_reload, methods=["POST"])
 
     # CORS
     app.add_middleware(

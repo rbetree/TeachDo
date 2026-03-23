@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from dataclasses import dataclass
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -21,6 +22,151 @@ from backend.common.settings_store import (
 
 
 _router = APIRouter(tags=["settings"])
+
+
+_OUTLINE_LLM_ENV_KEYS: set[str] = {"OUTLINE_TYPE", "OUTLINE_BASE_URL", "OUTLINE_MODEL", "OUTLINE_API_KEY"}
+_LESSON_LLM_ENV_KEYS: set[str] = {"LESSON_TYPE", "LESSON_BASE_URL", "LESSON_MODEL", "LESSON_API_KEY"}
+_PPT_LLM_ENV_KEYS: set[str] = {
+    "PPT_WRITER_TYPE",
+    "PPT_WRITER_BASE_URL",
+    "PPT_WRITER_MODEL",
+    "PPT_WRITER_API_KEY",
+    "PPT_CHECKER_TYPE",
+    "PPT_CHECKER_BASE_URL",
+    "PPT_CHECKER_MODEL",
+    "PPT_CHECKER_API_KEY",
+}
+_EMBEDDING_LLM_ENV_KEYS: set[str] = {
+    "EMBEDDING_TYPE",
+    "EMBEDDING_BASE_URL",
+    "EMBEDDING_MODEL",
+    "EMBEDDING_API_KEY",
+    "EMBEDDING_TIMEOUT_S",
+    "EMBEDDING_MAX_RETRIES",
+    "EMBEDDING_DIM",
+}
+_LLM_ENV_KEYS: set[str] = set().union(
+    _OUTLINE_LLM_ENV_KEYS,
+    _LESSON_LLM_ENV_KEYS,
+    _PPT_LLM_ENV_KEYS,
+    _EMBEDDING_LLM_ENV_KEYS,
+)
+
+
+def _join_url(base_url: str, path: str) -> str:
+    base = (base_url or "").strip().rstrip("/")
+    if not base:
+        return path
+    if not path.startswith("/"):
+        path = "/" + path
+    return f"{base}{path}"
+
+
+def _resolve_service_base_url(*, url_key: str, port_key: str) -> str:
+    raw = (os.environ.get(url_key) or "").strip()
+    if raw:
+        return raw.rstrip("/")
+    bind_host = (os.environ.get("HOST") or str(DEFAULT_SETTINGS_ENV.get("HOST") or "127.0.0.1")).strip() or "127.0.0.1"
+    try:
+        port = int(str(os.environ.get(port_key) or DEFAULT_SETTINGS_ENV.get(port_key) or "").strip())
+    except Exception:
+        port = int(DEFAULT_SETTINGS_ENV.get(port_key) or 0) or 0
+    if port <= 0:
+        # 最后的兜底：避免拼出非法 URL
+        port = 80
+    return f"http://{access_host_for_bind_host(bind_host)}:{port}"
+
+
+@dataclass(frozen=True)
+class _ReloadResult:
+    ok: bool
+    status: int | None = None
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {"ok": bool(self.ok)}
+        if self.status is not None:
+            data["status"] = int(self.status)
+        if self.error:
+            data["error"] = str(self.error)
+        return data
+
+
+def _safe_extract_httpx_error_message(response) -> str:  # noqa: ANN001 - httpx.Response
+    try:
+        payload = response.json()
+        if isinstance(payload, dict):
+            err = payload.get("error")
+            if isinstance(err, dict) and isinstance(err.get("message"), str) and err["message"].strip():
+                return err["message"].strip()
+            detail = payload.get("detail")
+            if isinstance(detail, str) and detail.strip():
+                return detail.strip()
+            msg = payload.get("message")
+            if isinstance(msg, str) and msg.strip():
+                return msg.strip()
+    except Exception:
+        pass
+    try:
+        text = (response.text or "").strip()
+        if text:
+            return text[:500]
+    except Exception:
+        pass
+    return f"HTTP {getattr(response, 'status_code', 'unknown')}"
+
+
+def _post_reload(base_url: str, *, clear_secrets: bool) -> _ReloadResult:
+    """
+    触发子服务 /admin/reload（失败不抛错，返回结构化结果）。
+    """
+    import httpx  # 延迟导入：避免在无 httpx 环境下影响其它路由加载
+
+    url = _join_url(base_url, "/admin/reload")
+    try:
+        timeout = httpx.Timeout(3.0, connect=0.5)
+        with httpx.Client(timeout=timeout, trust_env=False) as client:
+            resp = client.post(url, json={"clearSecrets": bool(clear_secrets)})
+        if 200 <= int(resp.status_code) < 300:
+            return _ReloadResult(ok=True, status=int(resp.status_code))
+        return _ReloadResult(ok=False, status=int(resp.status_code), error=_safe_extract_httpx_error_message(resp))
+    except Exception as exc:
+        return _ReloadResult(ok=False, error=str(exc))
+
+
+def _trigger_llm_reload(*, updated_env_keys: set[str], clear_secrets: bool) -> dict[str, Any]:
+    """
+    根据“本次更新的 env keys”，决定哪些子服务需要热加载 LLM 配置。
+
+    - 仅保存/重置 LLM 配置时调用（其它配置仍需重启）
+    - 失败不阻断 /settings 的保存：仅在响应里返回 warning 结果给前端提示
+    """
+    services: set[str] = set()
+    if updated_env_keys & _OUTLINE_LLM_ENV_KEYS:
+        services.update({"outline", "content"})
+    if updated_env_keys & _PPT_LLM_ENV_KEYS:
+        services.add("content")
+    if updated_env_keys & _EMBEDDING_LLM_ENV_KEYS:
+        services.add("personaldb")
+
+    if not services:
+        return {}
+
+    results: dict[str, Any] = {}
+
+    if "outline" in services:
+        base = _resolve_service_base_url(url_key="OUTLINE_API", port_key="OUTLINE_API_PORT")
+        results["outline"] = _post_reload(base, clear_secrets=clear_secrets).to_dict()
+
+    if "content" in services:
+        base = _resolve_service_base_url(url_key="CONTENT_API", port_key="CONTENT_API_PORT")
+        results["content"] = _post_reload(base, clear_secrets=clear_secrets).to_dict()
+
+    if "personaldb" in services:
+        base = _resolve_service_base_url(url_key="PERSONAL_DB", port_key="PERSONAL_DB_PORT")
+        results["personaldb"] = _post_reload(base, clear_secrets=clear_secrets).to_dict()
+
+    return results
 
 
 class UiSettingsPayload(BaseModel):
@@ -314,7 +460,7 @@ def get_settings():
             "config": _build_ui_config(effective_env),
             "secrets": _mask_secrets_flags(effective_env),
             "persistPath": str(settings_file_path()),
-            "note": "已保存到 settings.json 的配置会在服务重启后影响 Outline/Content 等子服务。",
+            "note": "LLM 配置可在保存后自动热加载；端口/地址/目录等运行参数仍需重启服务生效。",
         },
     }
 
@@ -392,6 +538,11 @@ def update_settings(payload: UiSettingsPayload):
         # 非 secret：允许空字符串（例如 base_url 置空以使用默认 openai）
         updates[env_key] = str(ui_value).strip() if ui_value is not None else ""
 
+    # 记录：用户本次请求显式更新的 env keys（用于判断 restartRequired / 是否触发 LLM reload）。
+    # 注意：后续 _apply_ports_link_service_urls 可能会“自动补齐” OUTLINE_API/CONTENT_API 等 URL keys，
+    # 这些不应影响前端的“是否需要重启”提示。
+    requested_update_keys = set(updates.keys())
+
     # 端口 <-> URL 联动（只在用户未显式改 URL 时自动同步）
     existing_effective: dict[str, Any] = dict(DEFAULT_SETTINGS_ENV)
     existing_effective.update(existing)
@@ -409,6 +560,9 @@ def update_settings(payload: UiSettingsPayload):
     # 若用户把某些 secret 留空，则不修改当前进程里的值；但在“下一次重启”时也不会写入 settings.json，
     # 因此不会覆盖 `.env` 的 secret（安全）。
 
+    restart_keys = sorted([k for k in requested_update_keys if k not in _LLM_ENV_KEYS])
+    reload_results = _trigger_llm_reload(updated_env_keys=requested_update_keys, clear_secrets=False)
+
     effective_env = _load_effective_env_for_ui()
     return {
         "ok": True,
@@ -417,6 +571,9 @@ def update_settings(payload: UiSettingsPayload):
             "secrets": _mask_secrets_flags(effective_env),
             "persistPath": str(settings_file_path()),
             "updatedKeys": sorted(list(updates.keys())),
+            "reload": reload_results or None,
+            "restartRequired": bool(restart_keys),
+            "restartKeys": restart_keys,
         },
     }
 
@@ -440,6 +597,11 @@ def reset_settings():
     for k in SECRET_ENV_KEYS:
         os.environ.pop(k, None)
 
+    updated_env_keys = set(defaults.keys()).union(SECRET_ENV_KEYS)
+    restart_keys = sorted([k for k in updated_env_keys if k not in _LLM_ENV_KEYS])
+    # reset 场景：子服务需清空 secret（避免继续使用旧 key）
+    reload_results = _trigger_llm_reload(updated_env_keys=updated_env_keys, clear_secrets=True)
+
     effective_env = _load_effective_env_for_ui()
     return {
         "ok": True,
@@ -447,6 +609,9 @@ def reset_settings():
             "config": _build_ui_config(effective_env),
             "secrets": _mask_secrets_flags(effective_env),
             "persistPath": str(settings_file_path()),
+            "reload": reload_results or None,
+            "restartRequired": bool(restart_keys),
+            "restartKeys": restart_keys,
         },
     }
 

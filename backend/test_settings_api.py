@@ -26,6 +26,13 @@ def client(settings_file: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         monkeypatch.delenv(k, raising=False)
 
     from backend.main_api.main import app
+    import backend.main_api.settings_api as settings_api
+
+    # settings API 会尝试调用子服务 /admin/reload；测试环境下统一 mock 掉，避免真实网络请求与超时。
+    def _fake_post_reload(_base_url: str, *, clear_secrets: bool):  # noqa: ANN001 - signature compat
+        return settings_api._ReloadResult(ok=True, status=200)
+
+    monkeypatch.setattr(settings_api, "_post_reload", _fake_post_reload)
 
     return TestClient(app)
 
@@ -76,6 +83,9 @@ def test_settings_put_updates_file_without_writing_empty_secrets(client: TestCli
     assert body["data"]["config"]["useChart"] is False
     assert body["data"]["config"]["outlineApiKey"] == ""
     assert body["data"]["secrets"]["outlineApiKey"] is False
+    assert body["data"]["restartRequired"] is True
+    assert isinstance(body["data"]["restartKeys"], list)
+    assert body["data"]["reload"] is not None
 
     assert settings_file.exists()
     stored = json.loads(settings_file.read_text(encoding="utf-8"))
@@ -118,9 +128,29 @@ def test_settings_put_writes_secret_when_provided(client: TestClient, settings_f
     assert body["ok"] is True
     assert body["data"]["config"]["outlineApiKey"] == ""
     assert body["data"]["secrets"]["outlineApiKey"] is True
+    assert body["data"]["reload"] is not None
 
     stored = json.loads(settings_file.read_text(encoding="utf-8"))
     assert stored["OUTLINE_API_KEY"] == "sk-test"
+
+
+def test_settings_put_only_llm_triggers_reload_without_restart_required(client: TestClient):
+    resp = client.put(
+        "/settings",
+        json={
+            "outlineType": "openai",
+            "outlineBaseUrl": "https://example.com/v1",
+            "outlineModel": "foo",
+            "outlineApiKey": "sk-test",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["data"]["restartRequired"] is False
+    assert body["data"]["reload"] is not None
+    assert body["data"]["reload"]["outline"]["ok"] is True
+    assert body["data"]["reload"]["content"]["ok"] is True
 
 
 def test_settings_put_lesson_fields_persist_and_secret_flag(client: TestClient, settings_file: Path):
@@ -141,6 +171,9 @@ def test_settings_put_lesson_fields_persist_and_secret_flag(client: TestClient, 
     assert body["data"]["config"]["lessonModel"] == "lesson-model"
     assert body["data"]["config"]["lessonApiKey"] == ""
     assert body["data"]["secrets"]["lessonApiKey"] is True
+    # lesson 只影响 main_api，本次不需要触发 Outline/Content/PersonalDB reload
+    assert body["data"]["reload"] is None
+    assert body["data"]["restartRequired"] is False
 
     stored = json.loads(settings_file.read_text(encoding="utf-8"))
     assert stored["LESSON_TYPE"] == "openai"
@@ -211,6 +244,8 @@ def test_settings_put_full_coverage_fields_persist(client: TestClient, settings_
     assert body["data"]["config"]["frontendPort"] == "5175"
     assert body["data"]["config"]["pexelsApiKey"] == ""
     assert body["data"]["secrets"]["pexelsApiKey"] is True
+    assert body["data"]["reload"] is not None
+    assert body["data"]["restartRequired"] is True
 
     stored = json.loads(settings_file.read_text(encoding="utf-8"))
     assert stored["HOST"] == "0.0.0.0"
@@ -235,7 +270,17 @@ def test_settings_put_full_coverage_fields_persist(client: TestClient, settings_
     assert stored["EMBEDDING_DIM"] == 0
 
 
-def test_settings_reset_clears_secrets_in_file_and_response(client: TestClient, settings_file: Path):
+def test_settings_reset_clears_secrets_in_file_and_response(client: TestClient, settings_file: Path, monkeypatch: pytest.MonkeyPatch):
+    import backend.main_api.settings_api as settings_api
+
+    calls: list[bool] = []
+
+    def _spy_post_reload(_base_url: str, *, clear_secrets: bool):  # noqa: ANN001 - signature compat
+        calls.append(bool(clear_secrets))
+        return settings_api._ReloadResult(ok=True, status=200)
+
+    monkeypatch.setattr(settings_api, "_post_reload", _spy_post_reload)
+
     # 先写入一个 secret
     client.put(
         "/settings",
@@ -270,6 +315,11 @@ def test_settings_reset_clears_secrets_in_file_and_response(client: TestClient, 
     body = resp.json()
     assert body["ok"] is True
     assert body["data"]["secrets"]["outlineApiKey"] is False
+    assert body["data"]["reload"] is not None
+    assert body["data"]["restartRequired"] is True
+    # 期间会先触发一次保存（clearSecrets=False），再触发 reset（clearSecrets=True）
+    assert calls[:3] == [False, False, False]
+    assert calls[-3:] == [True, True, True]
 
     stored = json.loads(settings_file.read_text(encoding="utf-8"))
     assert "OUTLINE_API_KEY" not in stored

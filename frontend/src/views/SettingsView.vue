@@ -3,7 +3,7 @@ import { onMounted, reactive, ref, watch } from 'vue';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { toast } from '@/utils/toast';
 import { useI18n } from 'vue-i18n';
-import type { UiSettingsConfig, UiSettingsSecrets } from '@/services/settingsService';
+import type { UiSettingsConfig, UiSettingsResponse, UiSettingsSecrets } from '@/services/settingsService';
 import { getSettings, resetSettings, updateSettings } from '@/services/settingsService';
 
 const loading = ref(false);
@@ -206,12 +206,54 @@ const toggleKeyVisibility = (key: string) => {
 
 const getKeyToggleLabel = (key: string) => (showKeys[key] ? t('settings.key.hide') : t('settings.key.show'));
 
+const hasReloadFailure = (reload: UiSettingsResponse['reload']): boolean => {
+  if (!reload) return false;
+  return Object.values(reload).some((it) => it && it.ok === false);
+};
+
+const hasReloadAttempted = (reload: UiSettingsResponse['reload']): boolean =>
+  !!reload && Object.keys(reload).length > 0;
+
+const toastAfterSave = (data: UiSettingsResponse) => {
+  const restartRequired = !!data.restartRequired;
+  const reload = data.reload ?? null;
+  const attempted = hasReloadAttempted(reload);
+  const failed = hasReloadFailure(reload);
+
+  if (restartRequired) {
+    toast.success(t(attempted ? 'settings.toast.saved.restart_with_reload' : 'settings.toast.saved.restart'));
+    return;
+  }
+  if (failed) {
+    toast.info(t('settings.toast.saved.partial'));
+    return;
+  }
+  toast.success(t('settings.toast.saved.applied'));
+};
+
+const toastAfterReset = (data: UiSettingsResponse) => {
+  const restartRequired = !!data.restartRequired;
+  const reload = data.reload ?? null;
+  const attempted = hasReloadAttempted(reload);
+  const failed = hasReloadFailure(reload);
+
+  if (restartRequired) {
+    toast.info(t(attempted ? 'settings.toast.reset.restart_with_reload' : 'settings.toast.reset.restart'));
+    return;
+  }
+  if (failed) {
+    toast.info(t('settings.toast.reset.partial'));
+    return;
+  }
+  toast.info(t('settings.toast.reset.applied'));
+};
+
 const handleSave = async () => {
   loading.value = true;
   try {
     const data = await updateSettings({ config });
     applyRemoteSettings(data);
-    toast.success(t('settings.toast.saved'));
+    toastAfterSave(data);
   } catch (e) {
     console.error(e);
     toast.error(t('toast.error'));
@@ -226,7 +268,7 @@ const handleReset = async () => {
   try {
     const data = await resetSettings();
     applyRemoteSettings(data);
-    toast.info(t('settings.toast.reset'));
+    toastAfterReset(data);
   } catch (e) {
     console.error(e);
     toast.error(t('toast.error'));

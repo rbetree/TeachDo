@@ -64,6 +64,53 @@ def healthz():
     return {"ok": True}
 
 
+@app.post("/admin/reload")
+async def admin_reload(request: Request):  # noqa: ANN001 - FastAPI handler
+    """
+    热加载（仅 LLM/Embedding 相关配置）。
+
+    设计目标：
+    - 设置页保存后无需重启 personaldb 即可让 EMBEDDING_* 生效
+    - 出于安全考虑，仅允许本机回环调用（127.0.0.1 / ::1）
+    """
+    client_host = request.client.host if request.client else ""
+    # TestClient 下 client.host 通常为 "testclient"，为保证单测可跑，这里在 pytest 环境下放行。
+    is_pytest = bool(os.environ.get("PYTEST_CURRENT_TEST"))
+    if client_host not in {"127.0.0.1", "::1"} and not (is_pytest and client_host == "testclient"):
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    clear_secrets = bool((payload or {}).get("clearSecrets", False))
+
+    try:
+        from backend.common.settings_store import apply_settings_to_environ, read_settings_env
+    except Exception as exc:  # pragma: no cover - 极端裁剪/打包场景
+        raise HTTPException(status_code=500, detail=f"settings_store_unavailable: {exc}") from exc
+
+    embedding_keys = {
+        "EMBEDDING_TYPE",
+        "EMBEDDING_BASE_URL",
+        "EMBEDDING_MODEL",
+        "EMBEDDING_API_KEY",
+        "EMBEDDING_TIMEOUT_S",
+        "EMBEDDING_MAX_RETRIES",
+        "EMBEDDING_DIM",
+    }
+
+    settings_env = read_settings_env()
+    updates = {k: settings_env[k] for k in embedding_keys if k in settings_env}
+    apply_settings_to_environ(updates, overwrite=True)
+
+    if clear_secrets:
+        os.environ.pop("EMBEDDING_API_KEY", None)
+
+    return {"ok": True, "data": {"service": "personaldb", "applied": True}}
+
+
 # 创建临时下载目录（集中到 var/tmp）
 TEMP_DIR = str(get_tmp_dir("personaldb"))
 

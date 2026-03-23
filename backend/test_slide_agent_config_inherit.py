@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import importlib
-
 import pytest
 
 
-def _reload_slide_config():
-    # config.py 在 import 时读取环境变量，因此测试里需要 reload
-    import backend.slide_agent.slide_agent.config as slide_config
+def _get_writer_config():
+    # 配置读取为函数式实现：每次调用都会读取当前环境变量
+    from backend.slide_agent.slide_agent.config import get_ppt_writer_agent_config
 
-    return importlib.reload(slide_config)
+    return get_ppt_writer_agent_config()
 
 
 def test_ppt_writer_inherits_outline_when_blank(monkeypatch: pytest.MonkeyPatch):
@@ -25,11 +23,11 @@ def test_ppt_writer_inherits_outline_when_blank(monkeypatch: pytest.MonkeyPatch)
     # secret 留空通常不会写入 settings.json，这里显式模拟为“未设置”
     monkeypatch.delenv("PPT_WRITER_API_KEY", raising=False)
 
-    slide_config = _reload_slide_config()
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["provider"] == "openai"
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["model"] == "gpt-4o-mini"
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["api_key"] == "sk-outline"
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["base_url"] == "https://example.com/v1"
+    cfg = _get_writer_config()
+    assert cfg["provider"] == "openai"
+    assert cfg["model"] == "gpt-4o-mini"
+    assert cfg["api_key"] == "sk-outline"
+    assert cfg["base_url"] == "https://example.com/v1"
 
 
 def test_ppt_writer_overrides_outline_when_set(monkeypatch: pytest.MonkeyPatch):
@@ -43,11 +41,11 @@ def test_ppt_writer_overrides_outline_when_set(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("PPT_WRITER_API_KEY", "sk-ppt")
     monkeypatch.setenv("PPT_WRITER_BASE_URL", "https://ppt.example.com")
 
-    slide_config = _reload_slide_config()
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["provider"] == "claude"
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["model"] == "claude-sonnet-4-20250514"
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["api_key"] == "sk-ppt"
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["base_url"] == "https://ppt.example.com"
+    cfg = _get_writer_config()
+    assert cfg["provider"] == "claude"
+    assert cfg["model"] == "claude-sonnet-4-20250514"
+    assert cfg["api_key"] == "sk-ppt"
+    assert cfg["base_url"] == "https://ppt.example.com"
 
 
 def test_ppt_writer_defaults_when_all_missing(monkeypatch: pytest.MonkeyPatch):
@@ -64,9 +62,8 @@ def test_ppt_writer_defaults_when_all_missing(monkeypatch: pytest.MonkeyPatch):
     ]:
         monkeypatch.delenv(k, raising=False)
 
-    slide_config = _reload_slide_config()
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["provider"] == "openai"
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["model"] == "qwen-turbo-latest"
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["api_key"] is None
-    assert slide_config.PPT_WRITER_AGENT_CONFIG["base_url"] is None
-
+    cfg = _get_writer_config()
+    assert cfg["provider"] == "openai"
+    assert cfg["model"] == "qwen-turbo-latest"
+    assert cfg["api_key"] is None
+    assert cfg["base_url"] is None

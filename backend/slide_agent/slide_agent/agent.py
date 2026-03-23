@@ -1,7 +1,7 @@
 from google.adk.agents.sequential_agent import SequentialAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.genai import types  # 用于在回调里短路并给用户返回消息
-from .sub_agents.ppt_writer.agent import ppt_generator_loop_agent
+from .sub_agents.ppt_writer.agent import build_ppt_generator_loop_agent
 from .utils import parse_markdown_to_slides  # 复用你已有的解析函数
 from backend.common.course_outputs_injection import split_course_outputs_injection
 
@@ -77,13 +77,21 @@ def before_agent_callback(callback_context: CallbackContext):
     state["slides_plan_num"] = len(slides)
     # 这里存“剥离注入块后的大纲”，避免后续逻辑误用
     state["makrdown"] = md_content
-    # 返回 None 继续执行后续 Agent: ppt_generator_loop_agent
+    # 返回 None 继续执行后续 Agent: build_ppt_generator_loop_agent()
     return None
 
 
-root_agent = SequentialAgent(
-    name="WritingSystemAgent",
-    description="多Agent写作系统的总协调器",
-    sub_agents=[ppt_generator_loop_agent],
-    before_agent_callback=before_agent_callback
-)
+def build_root_agent() -> SequentialAgent:
+    """
+    构建一个新的根 Agent（用于 /admin/reload 热加载场景）。
+
+    注意：
+    - Content 服务的 Agent 树包含 PPTWriterSubAgent（会在初始化时创建 LLM 模型实例）；
+    - 因此需要重新构建整棵 Agent 树，确保新配置真正生效。
+    """
+    return SequentialAgent(
+        name="WritingSystemAgent",
+        description="多Agent写作系统的总协调器",
+        sub_agents=[build_ppt_generator_loop_agent()],
+        before_agent_callback=before_agent_callback,
+    )

@@ -10,7 +10,7 @@ from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmRequest, LlmResponse
 from .tools import SearchImage, DocumentSearch,KnowledgeBaseSearch
 from .image_enricher import maybe_attach_images_to_slide
-from ...config import PPT_WRITER_AGENT_CONFIG  # 保留导入，检查器不需要模型
+from ...config import get_ppt_writer_agent_config
 from ...create_model import create_model
 from . import prompt
 from .utils import validate_slide
@@ -158,10 +158,11 @@ def my_after_agent_callback(callback_context: CallbackContext) -> None:
 # ========== Writer（生成） ==========
 class PPTWriterSubAgent(LlmAgent):
     def __init__(self, **kwargs):
-        writer_provider = PPT_WRITER_AGENT_CONFIG["provider"]
-        writer_model = PPT_WRITER_AGENT_CONFIG["model"]
-        writer_api_key = PPT_WRITER_AGENT_CONFIG.get("api_key")
-        writer_base_url = PPT_WRITER_AGENT_CONFIG.get("base_url")
+        writer_config = get_ppt_writer_agent_config()
+        writer_provider = writer_config["provider"]
+        writer_model = writer_config["model"]
+        writer_api_key = writer_config.get("api_key")
+        writer_base_url = writer_config.get("base_url")
 
         super().__init__(
             name="PPTWriterSubAgent",
@@ -479,14 +480,22 @@ def my_super_before_agent_callback(callback_context: CallbackContext):
     # attempts 不是必须，这里不做。
     return None
 
-# --- 4. PPTGeneratorLoopAgent ---
-ppt_generator_loop_agent = LoopAgent(
-    name="PPTGeneratorLoopAgent",
-    max_iterations=200,  # 给足够大，依赖 Controller 决定终止
-    sub_agents=[
-        PPTWriterSubAgent(),  # 1) 生成
-        CheckerAgent(),       # 2) 规则校验 JSON（不调用大模型）
-        ControllerAgent(),    # 3) 控制推进 / 终止
-    ],
-    before_agent_callback=my_super_before_agent_callback,
-)
+
+def build_ppt_generator_loop_agent() -> LoopAgent:
+    """
+    构建 PPT 生成 LoopAgent（动态读取环境变量）。
+
+    说明：
+    - PPTWriterSubAgent 在初始化时会读取当前环境变量并创建模型；
+    - 因此热加载时需要重新 build 整棵 Agent 树，避免 import-time 常量导致配置不生效。
+    """
+    return LoopAgent(
+        name="PPTGeneratorLoopAgent",
+        max_iterations=200,  # 给足够大，依赖 Controller 决定终止
+        sub_agents=[
+            PPTWriterSubAgent(),  # 1) 生成
+            CheckerAgent(),  # 2) 规则校验 JSON（不调用大模型）
+            ControllerAgent(),  # 3) 控制推进 / 终止
+        ],
+        before_agent_callback=my_super_before_agent_callback,
+    )
