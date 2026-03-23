@@ -448,6 +448,113 @@ export default () => {
     return isSVGBase64 || isSVGUrl
   }
 
+  const parseSvgMarkup = (markup: string): Element | null => {
+    const raw = String(markup || '').trim()
+    if (!raw) return null
+
+    try {
+      const doc = new DOMParser().parseFromString(raw, 'image/svg+xml')
+      const el = doc.documentElement
+      if (!el) return null
+      const tag = String(el.tagName || '').toLowerCase()
+      return tag === 'svg' ? el : null
+    }
+    catch {
+      return null
+    }
+  }
+
+  const toSvgDataUrl = (markup: string): string | null => {
+    const svgEl = parseSvgMarkup(markup)
+    if (!svgEl) return null
+    try {
+      return svg2Base64(svgEl)
+    }
+    catch {
+      return null
+    }
+  }
+
+  const buildLatexSvgMarkup = (el: any): string => {
+    const viewBoxW = Array.isArray(el?.viewBox) ? Number(el.viewBox[0]) : 0
+    const viewBoxH = Array.isArray(el?.viewBox) ? Number(el.viewBox[1]) : 0
+    const w = Number.isFinite(viewBoxW) && viewBoxW > 0 ? viewBoxW : Math.max(Number(el?.width) || 0, 1)
+    const h = Number.isFinite(viewBoxH) && viewBoxH > 0 ? viewBoxH : Math.max(Number(el?.height) || 0, 1)
+
+    const stroke = String(el?.color || '#000000') || '#000000'
+    const strokeWidth = Math.max(Number(el?.strokeWidth) || 2, 0.1)
+    const path = String(el?.path || '')
+
+    return [
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">`,
+      `<path d="${path}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" />`,
+      `</svg>`,
+    ].join('')
+  }
+
+  const buildSpecialShapeSvgMarkup = (el: any): string => {
+    const viewBoxW = Array.isArray(el?.viewBox) ? Number(el.viewBox[0]) : 0
+    const viewBoxH = Array.isArray(el?.viewBox) ? Number(el.viewBox[1]) : 0
+    const w = Number.isFinite(viewBoxW) && viewBoxW > 0 ? viewBoxW : Math.max(Number(el?.width) || 0, 1)
+    const h = Number.isFinite(viewBoxH) && viewBoxH > 0 ? viewBoxH : Math.max(Number(el?.height) || 0, 1)
+
+    // 与非 special 形状导出逻辑保持一致：渐变做混色近似；pattern 视为透明（当前导出也不支持）。
+    let fillColor = formatColor(String(el?.fill || '#ffffff'))
+    const gradient = el?.gradient
+    if (gradient?.colors?.length) {
+      const colors = gradient.colors
+      const color1 = colors[0].color
+      const color2 = colors[colors.length - 1].color
+      const color = tinycolor.mix(color1, color2).toHexString()
+      fillColor = formatColor(color)
+    }
+    if (el?.pattern) fillColor = formatColor('#00000000')
+
+    const opacity = el?.opacity === undefined ? 1 : Number(el.opacity)
+    const finalOpacity = Number.isFinite(opacity) ? Math.min(1, Math.max(0, opacity)) : 1
+    const fillOpacity = Math.min(1, Math.max(0, fillColor.alpha * finalOpacity))
+
+    const outline = el?.outline
+    const hasOutline = Boolean(outline?.width && outline?.color)
+    const strokeColor = hasOutline ? formatColor(outline.color).color : 'none'
+    const strokeAlpha = hasOutline ? formatColor(outline.color).alpha : 1
+    const strokeOpacity = hasOutline ? Math.min(1, Math.max(0, strokeAlpha * finalOpacity)) : 1
+
+    // outline.width 是按像素/渲染尺寸的宽度；转换为 viewBox 单位以便 SVG 缩放后视觉更接近。
+    const scaleX = Number(el?.width) && w ? Number(el.width) / w : 1
+    const rawStrokeWidth = hasOutline ? Number(outline.width) || 0 : 0
+    const strokeWidth = hasOutline ? Math.max(rawStrokeWidth / (scaleX || 1), 0.1) : 0
+
+    let dashArray = ''
+    const style = String(outline?.style || '')
+    if (hasOutline && style === 'dashed') {
+      dashArray = `${strokeWidth * 3} ${strokeWidth * 2}`
+    }
+    if (hasOutline && style === 'dotted') {
+      dashArray = `${strokeWidth} ${strokeWidth * 2}`
+    }
+
+    const path = String(el?.path || '')
+    const attrs: string[] = [
+      `d="${path}"`,
+      `fill="${fillColor.color}"`,
+      `fill-opacity="${fillOpacity}"`,
+    ]
+    if (hasOutline) {
+      attrs.push(`stroke="${strokeColor}"`)
+      attrs.push(`stroke-opacity="${strokeOpacity}"`)
+      attrs.push(`stroke-width="${strokeWidth}"`)
+      if (dashArray) attrs.push(`stroke-dasharray="${dashArray}"`)
+      if (style === 'dotted') attrs.push(`stroke-linecap="round"`)
+    }
+
+    return [
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">`,
+      `<path ${attrs.join(' ')} />`,
+      `</svg>`,
+    ].join('')
+  }
+
   interface ExportPptxOptions {
     /**
      * 是否下载到本地（默认 true）。
@@ -625,9 +732,8 @@ export default () => {
 
         else if (el.type === 'shape') {
           if (el.special) {
-            const svgRef = document.querySelector(`.thumbnail-list .base-element-${el.id} svg`) as HTMLElement
-            if (svgRef.clientWidth < 1 || svgRef.clientHeight < 1) continue // 临时处理（导入PPTX文件带来的异常数据）
-            const base64SVG = svg2Base64(svgRef)
+            const base64SVG = toSvgDataUrl(buildSpecialShapeSvgMarkup(el))
+            if (!base64SVG) continue
 
             const options: pptxgen.ImageProps = {
               data: base64SVG,
@@ -936,8 +1042,8 @@ export default () => {
         }
         
         else if (el.type === 'latex') {
-          const svgRef = document.querySelector(`.thumbnail-list .base-element-${el.id} svg`) as HTMLElement
-          const base64SVG = svg2Base64(svgRef)
+          const base64SVG = toSvgDataUrl(buildLatexSvgMarkup(el))
+          if (!base64SVG) continue
 
           const options: pptxgen.ImageProps = {
             data: base64SVG,

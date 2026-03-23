@@ -10,10 +10,12 @@ import { toast } from '@/utils/toast';
 import type { ArtifactKind, ArtifactMeta } from '@/services/ai/artifactService';
 import { isFullTextKbFileId, isFullUploadKbFileId } from '@/utils/kbFileId';
 import { getKbSource, getKbSourceUi } from '@/utils/kbSource';
-import { parseGenOutputFileId } from '@/utils/genOutputFileId';
+import { formatVersionLabel, parseGenOutputFileId, sanitizeFilenameSegment } from '@/utils/genOutputFileId';
 import { matchArtifactByTime } from '@/utils/matchArtifactByTime';
 import { trapTabKey } from '@/utils/focusTrap';
 import { escapeHtml } from '@/utils/safeHtml';
+import useExport from '@editor/hooks/useExport';
+import { useMainStore, useSlidesStore } from '@editor/store';
 
 interface Props {
   currentMaterial: TeachingMaterial;
@@ -22,6 +24,7 @@ interface Props {
 const props = defineProps<Props>();
 const { t } = useI18n();
 const store = useAppStore();
+const { exporting: exportingPptx, exportPPTX } = useExport();
 
 const exportingKbFileId = ref<string | null>(null);
 const loadingArtifacts = ref(false);
@@ -218,9 +221,7 @@ const inferArtifactKindFromGenKind = (genKind: string): ArtifactKind | null => {
   const kind = (genKind || '').trim().toLowerCase();
   if (!kind) return null;
   if (kind === 'lesson' || kind.includes('lesson')) return 'docx';
-  // PPT：工作台生成阶段只入库 md（slides）；只有在 PPT 编辑器“最终版导出”后才会入库完整样式的 PPTX（slides_final）。
-  if (kind === 'slides_final') return 'pptx';
-  if (kind === 'ppt' || kind.includes('ppt')) return 'pptx';
+  if (kind === 'slides' || kind === 'slides_final' || kind.includes('slide') || kind === 'ppt' || kind.includes('ppt')) return 'pptx';
   return null;
 };
 
@@ -438,17 +439,6 @@ const sortArtifactsByCreatedAtDesc = (items: ArtifactMeta[]) =>
 const docxArtifacts = computed(() => sortArtifactsByCreatedAtDesc(artifacts.value.filter((a) => a.kind === 'docx')));
 const pptxArtifacts = computed(() => sortArtifactsByCreatedAtDesc(artifacts.value.filter((a) => a.kind === 'pptx')));
 
-const isFinalPptxArtifact = (artifact: ArtifactMeta | null | undefined): boolean => {
-  const name = String(artifact?.file_name || '');
-  if (!name) return false;
-  return name.includes('最终版') || /final/i.test(name);
-};
-
-const pickPreferredPptxArtifact = (items: ArtifactMeta[]): ArtifactMeta | null => {
-  if (!Array.isArray(items) || items.length === 0) return null;
-  return items.find(isFinalPptxArtifact) || items[0] || null;
-};
-
 const kbOutputFilesSorted = computed(() => {
   return [...kbOutputFiles.value].sort((a, b) => {
     const ak = getGenOutputKind(a.id);
@@ -551,7 +541,7 @@ const outputCards = computed<OutputCard[]>(() => {
       kbFile: null,
       artifactKind: 'pptx',
       artifacts: pptxArtifacts.value,
-      latestArtifact: pickPreferredPptxArtifact(pptxArtifacts.value),
+      latestArtifact: pptxArtifacts.value[0] || null,
       sourceUi: getKbSourceUi('generated'),
     });
   }
@@ -602,6 +592,109 @@ const handleDownloadArtifact = async (artifact: ArtifactMeta) => {
   } finally {
     downloadingArtifactId.value = null;
   }
+};
+
+const canExportFullPptx = computed(() => {
+  const doc = (props.currentMaterial as any)?.editorDocument;
+  return Boolean(doc && Array.isArray(doc.slides) && doc.slides.length > 0);
+});
+
+const exportAndDownloadFullPptx = async () => {
+  if (exportingPptx.value) return;
+
+  const material = props.currentMaterial;
+  const doc = (material as any)?.editorDocument as any;
+  const slides = Array.isArray(doc?.slides) ? (doc.slides as any[]) : [];
+
+  if (!slides.length) {
+    toast.error('未找到可导出的 PPT 数据，请先生成 PPT。');
+    return;
+  }
+
+  const slidesStore = useSlidesStore();
+  const mainStore = useMainStore();
+
+  const backup = {
+    title: slidesStore.title,
+    theme: slidesStore.theme,
+    slides: slidesStore.slides,
+    viewportSize: slidesStore.viewportSize,
+    viewportRatio: slidesStore.viewportRatio,
+    teachdoMaterialId: mainStore.teachdoMaterialId,
+    teachdoUserId: mainStore.teachdoUserId,
+  };
+
+  try {
+    const viewportSize = Number(doc?.viewport?.size || doc?.width || 960);
+    const viewportRatio = Number(doc?.viewport?.ratio || (doc?.width ? Number(doc?.height || 540) / Number(doc?.width || 960) : 0.5625));
+
+    slidesStore.$patch({
+      title: String(doc?.title || material.title || backup.title || 'TeachDo'),
+      theme: doc?.theme ? { ...backup.theme, ...(doc.theme as any) } : backup.theme,
+      slides: slides as any,
+      viewportSize: Number.isFinite(viewportSize) && viewportSize > 0 ? viewportSize : backup.viewportSize,
+      viewportRatio: Number.isFinite(viewportRatio) && viewportRatio > 0 ? viewportRatio : backup.viewportRatio,
+    });
+
+    mainStore.setTeachdoUserId(KB_USER_ID);
+    mainStore.setTeachdoMaterialId(material.id);
+
+    const nowMs = Date.now();
+    const titleBase = sanitizeFilenameSegment(material.title || material.id) || material.id;
+    const version = formatVersionLabel(nowMs) || String(nowMs);
+    const pptxFileName = `幻灯片最终版-${titleBase}-${version}.pptx`;
+
+    await exportPPTX(slides as any, true, true, { download: true, upload: true, fileNameOverride: pptxFileName });
+    toast.success('已导出完整 PPTX。');
+  } catch (e) {
+    console.error(e);
+    toast.error('PPTX 导出失败，请重试。');
+  } finally {
+    slidesStore.$patch({
+      title: backup.title,
+      theme: backup.theme,
+      slides: backup.slides,
+      viewportSize: backup.viewportSize,
+      viewportRatio: backup.viewportRatio,
+    });
+    mainStore.setTeachdoMaterialId(backup.teachdoMaterialId);
+    mainStore.setTeachdoUserId(backup.teachdoUserId);
+  }
+};
+
+const canDownloadSourceForCard = (card: OutputCard): boolean => {
+  if (card.mode === 'full_upload') return false;
+  if (card.artifactKind === 'pptx') return canExportFullPptx.value;
+  if (card.latestArtifact) return true;
+  return false;
+};
+
+const isDownloadingSourceForCard = (card: OutputCard): boolean => {
+  if (card.artifactKind === 'pptx') return exportingPptx.value;
+  if (card.latestArtifact) return downloadingArtifactId.value === card.latestArtifact.artifact_id;
+  return false;
+};
+
+const getSourceButtonTitle = (card: OutputCard): string => {
+  if (card.artifactKind === 'pptx' && canExportFullPptx.value) return '导出并下载完整 PPTX';
+  if (card.latestArtifact) return '下载源文件';
+  return t('kb.tooltip.source_not_ready');
+};
+
+const handleDownloadSource = async (card: OutputCard) => {
+  if (card.mode === 'full_upload') return;
+
+  if (card.artifactKind === 'pptx') {
+    await exportAndDownloadFullPptx();
+    return;
+  }
+
+  if (card.latestArtifact) {
+    await handleDownloadArtifact(card.latestArtifact);
+    return;
+  }
+
+  toast.info(t('kb.tooltip.source_not_ready'));
 };
 
 const renderInlineStyles = (text: string) => {
@@ -918,9 +1011,9 @@ defineExpose({
                 type="button"
                 class="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
                 aria-label="下载源文件"
-                :title="card.latestArtifact ? '下载源文件' : t('kb.tooltip.source_not_ready')"
-                :disabled="!card.latestArtifact || downloadingArtifactId === card.latestArtifact.artifact_id"
-                @click="card.latestArtifact ? handleDownloadArtifact(card.latestArtifact) : null"
+                :title="getSourceButtonTitle(card)"
+                :disabled="!canDownloadSourceForCard(card) || isDownloadingSourceForCard(card)"
+                @click="handleDownloadSource(card)"
               >
                 <LucideIcon name="file-down" :size="16" />
               </button>

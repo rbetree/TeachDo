@@ -61,31 +61,6 @@ const defaultState: AppStoreState = {
   language: 'zh',
 };
 
-function createDemoMaterials(): TeachingMaterial[] {
-  return [
-    {
-      id: 'demo-material-1',
-      title: '三角形的基本性质',
-      subject: '数学',
-      description: '八年级上册 · 重点讲解三角形三边关系与内角和。',
-      objectives: '理解三角形三边关系；掌握内角和定理；能解决基础应用题。',
-      createdAt: new Date(),
-      kbFileIds: [],
-      outlineContent: '',
-    },
-    {
-      id: 'demo-material-2',
-      title: '中国古代文明概览',
-      subject: '历史',
-      description: '高一必修 · 以时间线梳理早期文明发展脉络。',
-      objectives: '掌握核心时间线；能结合史料进行简单分析；形成宏观框架。',
-      createdAt: new Date(),
-      kbFileIds: [],
-      outlineContent: '',
-    },
-  ];
-}
-
 const isBrowser = typeof window !== 'undefined';
 
 function normalizeStringArray(raw: unknown): string[] {
@@ -339,10 +314,6 @@ export const setupAppStore = (pinia: Pinia) => {
     }
     store.materials = patched;
   })();
-
-  if (!store.materials.length) {
-    store.setMaterials(createDemoMaterials());
-  }
 
   return store;
 };
