@@ -32,3 +32,22 @@ docker compose up --build
 
 如果你用 Vite 本地启动前端（`npm run dev`），并在宿主机启动后端服务，请根据实际 IP/端口调整代理配置：
 - `frontend/vite.config.ts`
+
+## 4) GitHub Actions 自动构建 Docker 镜像（GHCR）
+
+仓库已添加工作流：`.github/workflows/docker-build.yml`。
+- `push` 到 `main` / 打 `v*` 标签：构建并推送镜像到 GHCR
+- `pull_request`：只构建不推送（用于验证 Dockerfile 可构建）
+
+镜像命名（示例）：
+- `ghcr.io/<OWNER>/teachdo-main_api:latest`
+- `ghcr.io/<OWNER>/teachdo-frontend:latest`
+
+如果希望 `docker compose` 直接拉取并启动预构建镜像：
+
+```bash
+export TEACHDO_IMAGE_PREFIX=ghcr.io/<OWNER>/teachdo
+export TEACHDO_IMAGE_TAG=latest
+docker compose pull
+docker compose up -d --no-build
+```

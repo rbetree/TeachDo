@@ -9,9 +9,12 @@
 # - 日志写入 ./logs
 services:
   outline_api:
+    image: "${TEACHDO_IMAGE_PREFIX:-teachdo}-outline_api:${TEACHDO_IMAGE_TAG:-latest}"
     build:
       context: ./backend/simpleOutline
       dockerfile: Dockerfile
+      args:
+        PIP_INDEX_URL: "${PIP_INDEX_URL:-https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple}"
     ports:
       - "10001:10001"
     env_file:
@@ -33,9 +36,12 @@ services:
       - ./logs:/app/logs
 
   content_api:
+    image: "${TEACHDO_IMAGE_PREFIX:-teachdo}-content_api:${TEACHDO_IMAGE_TAG:-latest}"
     build:
       context: ./backend/slide_agent
       dockerfile: Dockerfile
+      args:
+        PIP_INDEX_URL: "${PIP_INDEX_URL:-https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple}"
     ports:
       - "10011:10011"
     env_file:
@@ -57,9 +63,12 @@ services:
       - ./logs:/app/logs
 
   personaldb:
+    image: "${TEACHDO_IMAGE_PREFIX:-teachdo}-personaldb:${TEACHDO_IMAGE_TAG:-latest}"
     build:
       context: ./backend/personaldb
       dockerfile: Dockerfile
+      args:
+        PIP_INDEX_URL: "${PIP_INDEX_URL:-https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple}"
     ports:
       - "9100:9100"
     env_file:
@@ -70,9 +79,12 @@ services:
       - ./logs:/app/logs
 
   main_api:
+    image: "${TEACHDO_IMAGE_PREFIX:-teachdo}-main_api:${TEACHDO_IMAGE_TAG:-latest}"
     build:
       context: ./backend/main_api
       dockerfile: Dockerfile
+      args:
+        PIP_INDEX_URL: "${PIP_INDEX_URL:-https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple}"
     ports:
       - "6800:6800"
     env_file:
@@ -94,6 +106,7 @@ services:
       - ./logs:/app/logs
 
   frontend:
+    image: "${TEACHDO_IMAGE_PREFIX:-teachdo}-frontend:${TEACHDO_IMAGE_TAG:-latest}"
     build:
       context: ./frontend
       dockerfile: Dockerfile

@@ -10,7 +10,8 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+ARG PIP_INDEX_URL=https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+RUN python -m pip install --no-cache-dir -r requirements.txt -i "${PIP_INDEX_URL}"
 
 # Copy the rest of the application's code into the container at /app
 COPY . .
