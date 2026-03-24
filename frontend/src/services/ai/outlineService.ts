@@ -17,7 +17,7 @@ export async function generateOutline(
   await ensureBackendAvailable();
 
   const topic = material.title?.trim();
-  if (!topic) throw new ApiError('unknown', 'Unit title is required to generate outline.');
+  if (!topic) throw new ApiError('unknown', '请先填写主题，再生成大纲。');
 
   const content = [
     `主题：${topic}`,

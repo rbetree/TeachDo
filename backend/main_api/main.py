@@ -457,7 +457,7 @@ def _build_lesson_system_prompt(*, req: LessonPlanRequest, full_context: str, kb
     context_bits: list[str] = []
     title = (req.title or "").strip()
     if title:
-        context_bits.append(("Title: " if want_english else "标题：") + title)
+        context_bits.append(("Topic: " if want_english else "主题：") + title)
     if req.subject:
         context_bits.append(("Subject: " if want_english else "学科：") + str(req.subject).strip())
     if req.description:

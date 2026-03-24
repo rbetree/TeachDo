@@ -86,7 +86,7 @@ export async function streamLessonPlan(input: {
 
   const material = input.material;
   const title = material.title?.trim();
-  if (!title) throw new ApiError('unknown', 'Unit title is required to generate lesson plan.');
+  if (!title) throw new ApiError('unknown', '请先填写主题，再生成教案。');
 
   const outlineContent = material.outlineContent?.trim();
   if (!outlineContent) throw new ApiError('unknown', 'Outline is required to generate lesson plan.');

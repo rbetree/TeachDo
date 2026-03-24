@@ -38,7 +38,7 @@ const resetForm = () => {
   form.objectives = '';
 };
 
-const creationDisabled = computed(() => !form.title.trim() || !form.subject.trim() || !form.objectives.trim());
+const creationDisabled = computed(() => !form.title.trim());
 
 const handleCreate = () => {
   if (creationDisabled.value) return;
