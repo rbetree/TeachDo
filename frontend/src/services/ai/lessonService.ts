@@ -91,9 +91,9 @@ export async function streamLessonPlan(input: {
   const outlineContent = material.outlineContent?.trim();
   if (!outlineContent) throw new ApiError('unknown', 'Outline is required to generate lesson plan.');
 
-  const outlineFileId = `gen:${KB_USER_ID}:${material.id}:outline`;
+  const outlinePrefix = `gen:${KB_USER_ID}:${material.id}:outline`;
   const kbFileIds = Array.from(new Set((material.kbFileIds ?? []).map((id) => id.trim()).filter(Boolean))).filter(
-    (id) => id !== outlineFileId,
+    (id) => id !== outlinePrefix && !id.startsWith(`${outlinePrefix}:`),
   );
 
   const payload = {

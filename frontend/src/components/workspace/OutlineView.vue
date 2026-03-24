@@ -6,8 +6,9 @@ import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
 import { escapeHtml } from '@/utils/safeHtml';
-import { KB_USER_ID } from '@/stores/appStore';
+import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 import { ApiError } from '@/services/apiClient';
+import { buildGenOutputFileId, formatVersionLabel, sanitizeFilenameSegment } from '@/utils/genOutputFileId';
 
 interface Props {
   currentMaterial: TeachingMaterial;
@@ -30,6 +31,7 @@ const pendingController = ref<AbortController | null>(null);
 const editorRef = ref<HTMLElement | null>(null);
 const editorFocused = ref(false);
 const editorFrozenHtml = ref('');
+const store = useAppStore();
 
 const hasUnsavedChanges = computed(() => (outlineText.value || '') !== (props.currentMaterial.outlineContent || ''));
 
@@ -132,18 +134,41 @@ const vectorizeOutlineToKb = (content: string) => {
   const trimmed = content?.trim();
   if (!trimmed) return;
 
+  const nowMs = Date.now();
+  const materialId = props.currentMaterial.id;
+  const titleBase = sanitizeFilenameSegment(props.currentMaterial.title || materialId) || materialId;
+  const version = formatVersionLabel(nowMs) || String(nowMs);
+  const fileId = buildGenOutputFileId({ userId: KB_USER_ID, materialId, kind: 'outline', nowMs });
+  const fileName = `大纲-${titleBase}-${version}.md`;
+
   void aiService
     .vectorizeTextToKb({
       userId: KB_USER_ID,
-      fileId: `gen:${KB_USER_ID}:${props.currentMaterial.id}:outline`,
-      fileName: `大纲-${props.currentMaterial.title}.md`,
+      fileId,
+      fileName,
       content: trimmed,
       fileType: 'md',
       folderId: 1,
-      createdAt: Date.now(),
+      createdAt: nowMs,
       sourceType: 'material',
-      sourceMaterialId: props.currentMaterial.id,
+      sourceMaterialId: materialId,
       sourceMaterialTitle: props.currentMaterial.title,
+    })
+    .then(() => {
+      const next = (store.kbFiles || []).filter((f) => f.id !== fileId);
+      next.unshift({
+        id: fileId,
+        name: fileName,
+        size: trimmed.length,
+        type: 'md',
+        status: 'ready',
+        uploadedAt: new Date(nowMs),
+        folderId: 1,
+        sourceType: 'material',
+        sourceMaterialId: materialId,
+        sourceMaterialTitle: props.currentMaterial.title,
+      });
+      store.setKbFiles(next);
     })
     .catch((e) => console.warn('大纲入库失败（已忽略）', e));
 };
