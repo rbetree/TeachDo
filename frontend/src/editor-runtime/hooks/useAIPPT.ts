@@ -337,37 +337,8 @@ export default () => {
     const img = getUseableImage(el)
     if (!img) return el
 
-    // 计算图片和容器的宽高比
-    const containerRatio = el.width / el.height
-    const imageRatio = img.width / img.height
-
-    // 使用contain模式：图片完整显示，不裁剪任何内容
-    // 计算缩放比例，选择较小的比例确保图片完全包含在容器内
-    const scaleX = el.width / img.width
-    const scaleY = el.height / img.height
-    const scale = Math.min(scaleX, scaleY)
-
-    // 计算缩放后的图片尺寸
-    const scaledWidth = img.width * scale
-    const scaledHeight = img.height * scale
-
-    // 计算居中位置的偏移量
-    const offsetX = (el.width - scaledWidth) / 2
-    const offsetY = (el.height - scaledHeight) / 2
-
-    // 更新元素尺寸和位置，确保图片完整显示
-    const newElement: PPTImageElement = {
-      ...el,
-      src: img.src,
-      width: scaledWidth,
-      height: scaledHeight,
-      left: el.left + offsetX,
-      top: el.top + offsetY,
-      // 不使用裁剪，移除clip属性或设置为完整显示
-      clip: undefined
-    }
-
-    return newElement
+    // 保持模板图片槽位的布局与裁剪（clip/filters 等）不变，仅替换图片源，避免破坏模板风格。
+    return { ...el, src: img.src }
   }
 
   /**

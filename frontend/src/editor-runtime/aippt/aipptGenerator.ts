@@ -294,25 +294,9 @@ export function createAipptGenerator() {
     const img = getUseableImage(el);
     if (!img) return el;
 
-    const scaleX = el.width / img.width;
-    const scaleY = el.height / img.height;
-    const scale = Math.min(scaleX, scaleY);
-
-    const scaledWidth = img.width * scale;
-    const scaledHeight = img.height * scale;
-
-    const offsetX = (el.width - scaledWidth) / 2;
-    const offsetY = (el.height - scaledHeight) / 2;
-
-    return {
-      ...el,
-      src: img.src,
-      width: scaledWidth,
-      height: scaledHeight,
-      left: el.left + offsetX,
-      top: el.top + offsetY,
-      clip: undefined,
-    };
+    // 保持模板中图片槽位的几何与裁剪（clip/filters 等）不变，
+    // 仅替换图片源，避免破坏模板的圆形/异形裁剪与布局。
+    return { ...el, src: img.src };
   };
 
   /**

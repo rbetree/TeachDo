@@ -19,6 +19,16 @@ def detect_image_theme(text: str) -> str:
     - 从内容里粗略识别主题，再拼接稳定的英文关键词（technology/business/nature/abstract）。
     """
     s = (text or "").lower()
+
+    # 数学/几何类：优先返回更贴近“图形/公式/图表”的英文关键词，避免一律落到 abstract。
+    # 说明：Pexels 更偏英文检索，中文关键词命中不稳定，因此这里做一次轻量级映射。
+    if any(k in s for k in ["三角形", "triangle"]):
+        return "triangle geometry"
+    if any(k in s for k in ["几何", "geometry"]):
+        return "geometry"
+    if any(k in s for k in ["数学", "math", "代数", "algebra", "函数", "function", "概率", "probability", "统计", "statistics"]):
+        return "math"
+
     theme_map = {
         "technology": ["ai", "a.i", "人工智能", "算法", "大模型", "机器学习", "深度学习", "科技", "技术", "数据", "数字化", "智能"],
         "business": ["商业", "市场", "营销", "企业", "管理", "战略", "品牌", "运营", "产品", "增长", "财务", "融资"],
@@ -30,6 +40,62 @@ def detect_image_theme(text: str) -> str:
             # Pexels 搜索更偏英文；education 不一定有稳定素材池，降级到 abstract
             return "abstract" if theme == "education" else theme
     return "abstract"
+
+
+def extract_english_hints(text: str) -> str:
+    """
+    从中文/混合文本中提取少量“可用于图片检索”的英文提示词。
+
+    目标：
+    - 在中文主题下提高 Pexels 命中率
+    - 只做有限映射，避免引入大规模翻译依赖
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+
+    hints: list[str] = []
+
+    # 常见数学/几何关键词（可按需扩展）
+    if "三角形" in raw or "triangle" in raw.lower():
+        hints += ["triangle", "geometry"]
+    if "四边形" in raw or "quadrilateral" in raw.lower():
+        hints += ["quadrilateral", "geometry"]
+    if "圆" in raw or "circle" in raw.lower():
+        hints.append("circle")
+    if any(k in raw for k in ["几何", "角", "边", "相似", "全等", "勾股"]):
+        hints.append("geometry")
+    if any(k in raw for k in ["函数", "坐标", "图像", "曲线"]):
+        hints += ["graph", "math"]
+    if any(k in raw for k in ["概率", "统计"]):
+        hints += ["statistics", "math"]
+
+    # 去重并保持顺序
+    uniq: list[str] = []
+    seen = set()
+    for h in hints:
+        k = h.strip().lower()
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        uniq.append(h)
+
+    return " ".join(uniq)
+
+
+def _dedupe_keywords(query: str) -> str:
+    parts = [p.strip() for p in str(query or "").split() if p and p.strip()]
+    if not parts:
+        return ""
+    uniq: list[str] = []
+    seen = set()
+    for p in parts:
+        key = p.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(p)
+    return " ".join(uniq)
 
 
 _PRESET_IMAGE_POOLS: dict[str, list[str]] = {
@@ -147,25 +213,41 @@ def build_image_query(slide: dict) -> str:
                     parts.append(v.strip())
         items_text = " ".join(parts)
 
-    theme = detect_image_theme(" ".join([title, items_text]))
+    raw_text = " ".join([title, items_text]).strip()
+    theme = detect_image_theme(raw_text)
+    hints = extract_english_hints(raw_text)
+
+    # Pexels 对中文关键词命中率不稳定：若已提取到英文提示词，则避免把中文标题直接拼进 query。
+    title_for_query = title
+    if hints:
+        title_for_query = ""
+    elif re.search(r"[\u4e00-\u9fff]", title_for_query or "") and not re.search(r"[a-zA-Z]", title_for_query or ""):
+        title_for_query = ""
+
+    keywords = _dedupe_keywords(" ".join([hints, theme, title_for_query]))
+    keywords = re.sub(r"\s+", " ", keywords).strip()
+
+    is_math = any(k in (keywords or "").lower() for k in ["triangle", "geometry", "math", "algebra", "statistics", "graph"])
 
     # 针对不同页型的检索偏好：尽量命中“背景/插图”类素材
     if slide_type == "cover":
-        suffix = "abstract background"
+        suffix = "diagram illustration background" if is_math else "abstract background"
     elif slide_type == "contents":
-        suffix = "minimal abstract background"
+        suffix = "minimal geometry background" if is_math else "minimal abstract background"
     elif slide_type == "transition":
-        suffix = "abstract background"
+        suffix = "geometry background" if is_math else "abstract background"
     elif slide_type == "content":
-        suffix = "illustration"
+        suffix = "diagram illustration" if is_math else "illustration"
     elif slide_type == "end":
         # 结束页优先简洁背景，不依赖标题
         title = ""
-        suffix = "minimal abstract background"
+        keywords = _dedupe_keywords(" ".join([hints, theme]))
+        keywords = re.sub(r"\s+", " ", keywords).strip()
+        suffix = "minimal geometry background" if is_math else "minimal abstract background"
     else:
-        suffix = "abstract background"
+        suffix = "geometry background" if is_math else "abstract background"
 
-    query = " ".join([theme, title, suffix]).strip()
+    query = " ".join([keywords, suffix]).strip()
     query = re.sub(r"\s+", " ", query)
     return query or "abstract background"
 
