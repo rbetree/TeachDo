@@ -233,6 +233,13 @@ class PPTWriterSubAgent(LlmAgent):
         metadata = ctx.state.get("metadata", {})
         # 默认支持所有的搜索工具
         search_engine = metadata.get("search_engine", [])
+        # 若启用“联网配图”，确保 SearchImage 出现在工具列表中（让模型自己决定 query 并调用工具）
+        try:
+            want_images = bool(metadata.get("generate_with_images"))
+        except Exception:
+            want_images = False
+        if want_images and isinstance(search_engine, list) and "SearchImage" not in search_engine:
+            search_engine = [*search_engine, "SearchImage"]
         # 如果是None，那么没问题，走默认PREFIX_PAGE_PROMPT，如果是空列表，那么使用所有工具
         if search_engine == []:
             search_engine = ["KnowledgeBaseSearch","DocumentSearch","SearchImage"]
@@ -247,7 +254,8 @@ class PPTWriterSubAgent(LlmAgent):
         elif search_engine == ["SearchImage"]:
             prefix_prompt = prompt.PREFIX_PAGE_PROMPT_WITH_IMAGE.format(language=language)
         else:
-            prefix_prompt = prompt.PREFIX_PAGE_PROMPT_WITH_SEARCH.format(tool_names=search_engine,language=language)
+            tool_names = ", ".join([str(x) for x in search_engine]) if isinstance(search_engine, list) else str(search_engine)
+            prefix_prompt = prompt.PREFIX_PAGE_PROMPT_WITH_SEARCH.format(tool_names=tool_names,language=language)
         # 这页ppt的类型
         current_slide_type = current_slide_schema.get("type")
         print(f"当前要生成第{current_slide_index}页的ppt， 类型为：{current_slide_type}， 具体内容为：{current_slide_schema}")

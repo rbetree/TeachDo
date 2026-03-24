@@ -1888,6 +1888,9 @@ async def stream_content_response(
         search_engine.append("KnowledgeBaseSearch")
     if generateFromWebSearch:
         search_engine.append("DocumentSearch")
+    # 联网配图：由 Writer 直接调用 SearchImage 决定 query（失败时服务端再做兜底注入）
+    if bool(generateWithImages) and "SearchImage" not in search_engine:
+        search_engine.append("SearchImage")
 
     image_source = "network" if bool(generateWithImages) else "preset"
     metadata = {

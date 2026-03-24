@@ -15,18 +15,23 @@ PREFIX_PAGE_PROMPT_WITH_IMAGE = """
 # 通用约束：
 1. 你将收到一段 单行 JSON，键名固定为 type 和 data（如有）。
 2. 保持原有结构与键名尽量不变：**不得修改已有字段的名称**；**不得删除既有字段**。除非另有“内容页特例”说明，不得新增字段或改变数组长度。
+   - 例外：你需要在 JSON 顶层新增 images 字段（数组），用于配图。
 3. 统一输出为{language}；专有名词可带英文小写缩写。
 4. 文风：简洁、商务演示友好，避免夸张或无法证实的数字。
 5. 严禁输出除 JSON 外的任何内容（包括说明、Markdown、代码块围栏）。
 
 # 重要：图片搜索工具使用
 你必须为每个页面搜索合适的配图！使用 SearchImage 工具搜索相关图片，然后将图片信息添加到返回的 JSON 中。
+- 你必须自己生成英文检索 query（不要用纯中文），并调用 SearchImage(query, count=6) 返回 6 张候选图。
 
 # 图片搜索规则：
 - 封面页：搜索与主题相关的商务、抽象或科技类图片，关键词如 "business abstract"、"technology background"
 - 内容页：根据内容主题搜索相关图片，如技术类内容搜索 "technology"、"innovation"
 - 过渡页：搜索抽象或商务类图片，关键词如 "abstract background"、"business concept"
 - 结束页：搜索简洁的商务或抽象图片，关键词如 "minimal business"、"clean abstract"
+
+# 图片质量要求：
+- 优先选择“简洁、干净、适合作为演示背景/插图”的图片（尽量避免强人物特写、明显水印/大段文字）。
 
 # 图片数据格式：
 在 JSON 中添加 images 字段，包含搜索到的图片信息：
@@ -47,10 +52,17 @@ PREFIX_PAGE_PROMPT_WITH_SEARCH = """
 # 通用约束：
 1. 你将收到一段 单行 JSON，键名固定为 type 和 data（如有）。
 2. 保持原有结构与键名尽量不变：**不得修改已有字段的名称**；**不得删除既有字段**。除非另有“内容页特例”说明，不得新增字段或改变数组长度。
+   - 例外：若可用工具包含 SearchImage，则允许在 JSON 顶层新增 images 字段（数组），用于配图。
 3. 必须使用搜索工具{tool_names}进行搜索，然后完成内容扩充。
 4. 统一输出为{language}；专有名词可带英文小写缩写。
 5. 文风：简洁、商务演示友好，避免夸张或无法证实的数字。
 6. 严禁输出除 JSON 外的任何内容（包括说明、Markdown、代码块围栏）。
+
+# 若工具列表包含 SearchImage（联网配图）：
+- 你必须为每个页面调用 SearchImage 工具获取配图，并把结果写入 JSON 顶层 images 字段。
+- 你必须自己生成英文检索 query（不要用纯中文），并调用 SearchImage(query, count=6) 返回 6 张候选图。
+- query 建议结构：`主题关键词(英文) + 风格关键词(如 minimal/diagram/illustration/background)`。
+- 图片质量要求：优先选择“简洁、干净、适合作为演示背景/插图”的图片（尽量避免强人物特写、明显水印/大段文字）。
 """
 
 # input_slide_data代表slide的json的模版
