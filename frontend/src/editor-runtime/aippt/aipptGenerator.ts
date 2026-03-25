@@ -285,7 +285,9 @@ export function createAipptGenerator() {
     else imgs = imgPool.filter((img) => img.width <= img.height);
     if (!imgs.length) imgs = imgPool;
 
-    const picked = imgs[Math.floor(Math.random() * imgs.length)];
+    // 说明：Pexels 返回的顺序通常已按相关度排序；为了提升“自动配图”的命中率与稳定性，
+    // 这里不再随机选图，而是优先取最靠前（更相关）的候选图。
+    const picked = imgs[0];
     imgPool = imgPool.filter((item) => item.id !== picked.id);
     return picked;
   };

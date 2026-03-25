@@ -276,6 +276,25 @@ async def maybe_attach_images_to_slide(
     if isinstance(existing, list) and existing:
         return slide
 
+    # 兼容：部分模型会把 images 放进 data.images（而不是 JSON 顶层）。
+    # 前端只读取顶层 slide.images 来替换模板图片，因此这里优先“提升”到顶层，
+    # 避免重复调用 SearchImage 以及出现“日志里搜了图但 PPT 仍用模板图”的错觉。
+    data = slide.get("data")
+    if isinstance(data, dict):
+        nested = data.get("images")
+        if isinstance(nested, list) and nested:
+            cleaned_nested: list[dict[str, Any]] = []
+            for img in nested:
+                if not isinstance(img, dict):
+                    continue
+                src = img.get("src")
+                if not isinstance(src, str) or not src.strip():
+                    continue
+                cleaned_nested.append(img)
+
+            if cleaned_nested:
+                return {**slide, "images": cleaned_nested}
+
     # 每页默认给一组候选图片（覆盖常见模板的多图片槽位）；可通过 metadata.image_count 覆盖
     try:
         count = int(metadata.get("image_count") or 6)

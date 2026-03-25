@@ -23,29 +23,30 @@ PREFIX_PAGE_PROMPT_WITH_IMAGE = """
 # 重要：图片搜索工具使用
 你必须为每个页面搜索合适的配图！使用 SearchImage 工具搜索相关图片，然后将图片信息添加到返回的 JSON 中。
 - 你必须自己生成英文检索 query（不要用纯中文），并调用 SearchImage(query, count=6) 返回 6 张候选图。
+- images 字段必须放在 JSON 顶层（与 type 同级），不要放在 data 内。
 
-# 图片搜索规则：
-- 封面页：搜索与主题相关的商务、抽象或科技类图片，关键词如 "business abstract"、"technology background"
-- 内容页：根据内容主题搜索相关图片，如技术类内容搜索 "technology"、"innovation"
-- 过渡页：搜索抽象或商务类图片，关键词如 "abstract background"、"business concept"
-- 结束页：搜索简洁的商务或抽象图片，关键词如 "minimal business"、"clean abstract"
+# 图片搜索规则（关键：必须“贴主题”，避免泛化）：
+- query 必须包含本页的主题关键词（英文，来自 data.title 或 data.text 的翻译/提取），不要只用 technology/business/abstract 这类泛词。
+- 对 content 页：query 还必须额外包含 1～2 个更具体的“内容锚点词”（英文，来自 data.items[*].title 的翻译/提取），例如 object detection / camera / classroom / factory / chart 等。
+- 风格词建议：diagram / illustration / background / minimal（按页型选择）。
+- 若 SearchImage 返回结果的 alt 大量出现 laptop/keyboard/office/desk 等“通用电脑办公图”，说明 query 过泛或缺少锚点词：请把锚点词写得更具体后重试 1 次 SearchImage（最多重试 1 次），并使用更相关那次的结果写入 images。
 
 # 图片质量要求：
 - 优先选择“简洁、干净、适合作为演示背景/插图”的图片（尽量避免强人物特写、明显水印/大段文字）。
 
 # 图片数据格式：
 在 JSON 中添加 images 字段，包含搜索到的图片信息：
-{
+{{
   "type": "cover",
-  "data": { ... },
+  "data": {{ ... }},
   "images": [
-    {
+    {{
       "id": "图片ID",
       "src": "图片URL",
       "alt": "图片描述"
-    }
+    }}
   ]
-}
+}}
 """
 # 带搜索的prompt
 PREFIX_PAGE_PROMPT_WITH_SEARCH = """
@@ -61,7 +62,10 @@ PREFIX_PAGE_PROMPT_WITH_SEARCH = """
 # 若工具列表包含 SearchImage（联网配图）：
 - 你必须为每个页面调用 SearchImage 工具获取配图，并把结果写入 JSON 顶层 images 字段。
 - 你必须自己生成英文检索 query（不要用纯中文），并调用 SearchImage(query, count=6) 返回 6 张候选图。
-- query 建议结构：`主题关键词(英文) + 风格关键词(如 minimal/diagram/illustration/background)`。
+- images 字段必须放在 JSON 顶层（与 type 同级），不要放在 data 内。
+- query 必须“贴主题”，建议结构：`本页主题关键词(英文) + 本页内容锚点词(英文) + 风格关键词(如 minimal/diagram/illustration/background)`。
+- 禁止只用 technology/business/abstract 等泛词 + minimal/background 这类风格词组合，否则很容易命中无关图片。
+- 若 SearchImage 返回结果 alt 大量出现 laptop/keyboard/office/desk 等“通用电脑办公图”，说明 query 过泛：请追加更具体的锚点词后重试 1 次 SearchImage（最多重试 1 次），并使用更相关那次的结果写入 images。
 - 图片质量要求：优先选择“简洁、干净、适合作为演示背景/插图”的图片（尽量避免强人物特写、明显水印/大段文字）。
 """
 
