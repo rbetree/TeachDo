@@ -2,6 +2,68 @@
 
 TeachDo 是面向教师的智能备课平台。系统以“课程/单元”为工作流单元，支持大纲、教案、PPT 的流式生成，以及知识库增强、助教问答和独立编辑器导出。
 
+## 项目截图
+
+![TeachDo 大纲版本对比](doc/screenshots/readme/05-outline-compare.png)
+
+> 完整界面截图收纳在可展开画廊中
+
+<details>
+<summary>展开查看完整项目截图</summary>
+
+<br>
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="doc/screenshots/readme/02-outline.png" alt="TeachDo 大纲生成页面" width="100%">
+      <br>
+      <sub>大纲生成</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="doc/screenshots/readme/03-lesson.png" alt="TeachDo 教案生成页面" width="100%">
+      <br>
+      <sub>教案生成</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="doc/screenshots/readme/04-assistant.png" alt="TeachDo 助教问答页面" width="100%">
+      <br>
+      <sub>助教问答</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <img src="doc/screenshots/readme/01-workspace.png" alt="TeachDo 工作台首页" width="100%">
+      <br>
+      <sub>首页</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="doc/screenshots/readme/06-ppt-preview.png" alt="TeachDo PPT 生成预览页面" width="100%">
+      <br>
+      <sub>PPT 生成预览</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="doc/screenshots/readme/09-ppt-editor.png" alt="TeachDo PPT 编辑器页面" width="100%">
+      <br>
+      <sub>PPT 编辑器</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <img src="doc/screenshots/readme/07-settings-overview.png" alt="TeachDo 设置页总览" width="100%">
+      <br>
+      <sub>系统设置总览</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="doc/screenshots/readme/08-settings-advanced.png" alt="TeachDo 设置页高级配置" width="100%">
+      <br>
+      <sub>系统设置高级配置</sub>
+    </td>
+  </tr>
+</table>
+
+</details>
+
 ## 核心能力
 
 - **大纲生成（SSE）**：基于主题输入流式生成大纲并保存
