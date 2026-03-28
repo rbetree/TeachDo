@@ -1,17 +1,17 @@
 # TeachDo
 
-TeachDo 是一套面向教师的智能备课平台：以“课程/单元”为工作流单元，支持**大纲/教案/PPT** 的流式生成、知识库（KB）增强、助教问答与独立编辑器导出。
+TeachDo 是面向教师的智能备课平台。系统以“课程/单元”为工作流单元，支持大纲、教案、PPT 的流式生成，以及知识库增强、助教问答和独立编辑器导出。
 
-## ✨ 核心能力
+## 核心能力
 
 - **大纲生成（SSE）**：基于主题输入流式生成大纲并保存
 - **教案生成（SSE）**：基于大纲流式生成教案，并支持导出标准 `.docx`
-- **PPT 生成（SSE）**：支持模板选择、增量页生成；产物默认入库为 Markdown（`.md`），PPTX 需在编辑器导出最终版
-- **助教对话（SSE）**：基于教学资料 + 已选 KB 文件进行问答
+- **PPT 生成（SSE）**：支持模板选择和增量页生成；产物默认入库为 Markdown（`.md`），PPTX 需在编辑器中导出最终版本
+- **助教对话（SSE）**：基于教学资料和已选 KB 文件进行问答
 - **知识库（KB）**：上传素材向量化、生成产物入库、生成时可选引用范围
 - **独立编辑器**：工作台只读预览；跳转编辑器进行编辑与导出 PPTX
 
-## 📦 项目结构
+## 项目结构
 
 ```
 TeachDo/
@@ -21,21 +21,50 @@ TeachDo/
 │   ├── slide_agent/         # PPT 内容生成服务
 │   ├── personaldb/          # KB（向量化/检索）
 │   └── mock_api/            # 可选：mock SSE 联调用
-├── frontend/                # ✅ TeachDo 唯一前端入口（Vue 3 + Vite + TS）
+├── frontend/                # TeachDo 项目的前端应用（Vue 3 + Vite + TS）
 ├── scripts/                 # 验证脚本与工具
 └── doc/                     # 项目文档（含迁移说明）
 ```
 
-## 🚀 快速开始
+## 快速开始
 
-### 方式一：一键启动（推荐）
+### 方式一：使用 `start.py` 启动（推荐）
 
 ```bash
 cp env_template.txt .env
-python3 start.py
+source venv/bin/activate
+python start.py
 ```
 
 默认端口：前端 `5174`，主 API `6800`，大纲 `10001`，内容 `10011`，KB `9100`。
+
+常用启动命令：
+
+首次启动或需要自动安装依赖时：
+
+```bash
+source venv/bin/activate
+python start.py
+```
+
+依赖已安装、希望跳过安装阶段时：
+
+```bash
+source venv/bin/activate
+python start.py --no-install
+```
+
+需要实时查看聚合日志时，请另开一个终端执行：
+
+```bash
+source venv/bin/activate
+python start.py --tail
+```
+
+说明：
+
+- `--no-install` 只跳过依赖安装，仍会启动 TeachDo 服务
+- `--tail` 只做日志跟随，不会安装依赖，也不会启动服务
 
 ### 方式二：分别启动（开发联调）
 
@@ -55,7 +84,7 @@ npm i
 npm run dev
 ```
 
-说明：前端统一请求相对路径 `/api/*`，开发环境由 `frontend/vite.config.ts` 代理到 `http://127.0.0.1:6800/*`。
+说明：TeachDo 前端统一请求相对路径 `/api/*`，开发环境由 `frontend/vite.config.ts` 代理到 `http://127.0.0.1:6800/*`。
 
 ### 方式三：Docker 启动（本地构建）
 
@@ -90,13 +119,13 @@ docker compose up -d --no-build
 
 更多 Docker 说明见：`doc/DockerDeploy.md`。
 
-## 🧭 路由速查（TeachDo）
+## 路由速查
 
 - 选择教学资料：`/`
 - 工作台：`/material/:materialId/:tab`（`tab` ∈ `outline` / `lesson` / `ppt` / `assistant`）
 - 独立编辑器：`/material/:materialId/ppt/editor`
 
-## ✅ 工程校验（发布前必跑）
+## 工程校验
 
 ```bash
 cd frontend
@@ -105,14 +134,16 @@ npm run lint
 npm run build
 ```
 
-## 📚 文档与脚本
+发布前建议至少执行一次以上校验命令，确保 TeachDo 前端的类型检查、Lint 和构建结果正常。
+
+## 文档与脚本
 
 - 开发计划（当前）：`doc/dev/PLAN.md`
 - 环境变量说明：`doc/dev/ENV_GUIDE.md`
 - 前端 API 映射：`doc/dev/FRONTEND_API_CALLS.md`
 - 接口冒烟校验：`scripts/verify_endpoints.py`
 
-## ⚠️ 已知限制
+## 已知限制
 
-- 大纲编辑以“可读可改 + 可保存”为主，暂不包含拖拽排序/折叠等增强交互（如需补齐可参考 `doc/dev/DEVELOPMENT_PLAN.md` 的遗留项说明）。
-- 未配置模型/外网时，可用 `backend/mock_api` 做前端联调冒烟（见 `scripts/verify_endpoints.py` 与 `doc/dev/history/PLAN_AI2PPT_TO_TEACHDO_2026-02.md`）。
+- 大纲编辑以“可读可改 + 可保存”为主，暂不包含拖拽排序、折叠等增强交互（如需补齐可参考 `doc/dev/DEVELOPMENT_PLAN.md` 的遗留项说明）。
+- 未配置模型或外网时，可用 `backend/mock_api` 做前端联调冒烟（见 `scripts/verify_endpoints.py` 与 `doc/dev/history/PLAN_AI2PPT_TO_TEACHDO_2026-02.md`）。
