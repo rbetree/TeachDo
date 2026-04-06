@@ -529,6 +529,47 @@ class ProductionStarter:
         self._log_file_handles: Dict[str, io.TextIOWrapper] = {}
         # 运行期对环境变量的覆盖（仅对子进程生效，不修改用户的 Shell 环境）。
         self._runtime_env_overrides: Dict[str, str] = {}
+        self._sync_internal_service_env_overrides()
+
+    def _sync_internal_service_env_overrides(self) -> None:
+        """
+        同步“内部服务 URL/端口”到子进程环境变量。
+
+        背景：
+        - TeachDo 支持通过 `var/settings.json` 持久化 OUTLINE_API / CONTENT_API / PERSONAL_DB 等 URL；
+        - main_api 内部客户端会优先读取这些 URL（而不是 *_PORT）；
+        - 当用户临时通过环境变量改端口（例如 `OUTLINE_API_PORT=10034`）或 start.py 自动换端口时，
+          如果 URL 未同步更新，会出现 main_api 仍然请求旧端口的情况（典型报错：无法获取 agent card）。
+
+        约束：
+        - 只影响 start.py 启动的子进程，不污染用户 Shell 环境；
+        - 统一使用 access_host（通常为 127.0.0.1）拼接 URL，避免客户端误用 0.0.0.0。
+        """
+
+        def _service_port(service_name: str, default_port: int) -> int:
+            cfg = self.services.get(service_name) or {}
+            try:
+                return int(cfg.get("port") or default_port)
+            except Exception:
+                return int(default_port)
+
+        personaldb_port = _service_port("personal_db", 9100)
+        outline_port = _service_port("outline", 10001)
+        content_port = _service_port("content", 10011)
+        main_api_port = _service_port("main_api", 6800)
+
+        # 对齐端口类变量（用于服务自身启动，以及前端 proxy 的一致性）。
+        self._runtime_env_overrides["PERSONAL_DB_PORT"] = str(personaldb_port)
+        self._runtime_env_overrides["PERSONALDB_PORT"] = str(personaldb_port)
+        self._runtime_env_overrides["OUTLINE_API_PORT"] = str(outline_port)
+        self._runtime_env_overrides["CONTENT_API_PORT"] = str(content_port)
+        self._runtime_env_overrides["MAIN_API_PORT"] = str(main_api_port)
+        self._runtime_env_overrides["FRONTEND_PORT"] = str(self.frontend_port)
+
+        # 对齐 URL 类变量（main_api 等服务会优先读取这些 URL）。
+        self._runtime_env_overrides["PERSONAL_DB"] = f"http://{self.access_host}:{personaldb_port}"
+        self._runtime_env_overrides["OUTLINE_API"] = f"http://{self.access_host}:{outline_port}"
+        self._runtime_env_overrides["CONTENT_API"] = f"http://{self.access_host}:{content_port}"
 
     def setup_logging(self):
         """设置日志系统"""
@@ -657,11 +698,7 @@ TeachDo 生产环境启动器
         new_port = int(new_port)
         if "personal_db" in self.services:
             self.services["personal_db"]["port"] = new_port
-
-        # 同步端口与 URL，确保 main_api / slide_agent 等通过 PERSONAL_DB 访问时一致。
-        self._runtime_env_overrides["PERSONAL_DB_PORT"] = str(new_port)
-        self._runtime_env_overrides["PERSONALDB_PORT"] = str(new_port)
-        self._runtime_env_overrides["PERSONAL_DB"] = f"http://{self.access_host}:{new_port}"
+        self._sync_internal_service_env_overrides()
 
     def _maybe_autoswitch_personal_db_port(self, occupied: List[Tuple[str, int, str, Optional[int]]]) -> bool:
         """
