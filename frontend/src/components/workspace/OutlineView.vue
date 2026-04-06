@@ -32,6 +32,8 @@ const editorRef = ref<HTMLElement | null>(null);
 const editorFocused = ref(false);
 const editorFrozenHtml = ref('');
 const store = useAppStore();
+const outlineLength = ref<'short' | 'standard' | 'long'>('standard');
+const useWebSearch = ref(true);
 
 const hasUnsavedChanges = computed(() => (outlineText.value || '') !== (props.currentMaterial.outlineContent || ''));
 
@@ -44,6 +46,8 @@ watch(
     mode.value = 'PREVIEW';
     editorFocused.value = false;
     editorFrozenHtml.value = '';
+    outlineLength.value = 'standard';
+    useWebSearch.value = true;
   },
   { immediate: true },
 );
@@ -75,7 +79,7 @@ const handleGenerateWrapper = async () => {
         (text) => {
           newOutlineText.value = text;
         },
-        { signal: controller.signal },
+        { signal: controller.signal, outlineLength: outlineLength.value, useWebSearch: useWebSearch.value },
       );
       toast.success(t('outline.toast.new'));
     } catch (e) {
@@ -102,7 +106,7 @@ const handleGenerateWrapper = async () => {
         (text) => {
           outlineText.value = text;
         },
-        { signal: controller.signal },
+        { signal: controller.signal, outlineLength: outlineLength.value, useWebSearch: useWebSearch.value },
       );
       emit('updateMaterial', { outlineContent: finalText });
       vectorizeOutlineToKb(finalText);
@@ -379,6 +383,36 @@ const handleEditorInput = () => {
             <span>{{ t('common.cancel') }}</span>
           </button>
           <template v-if="mode !== 'COMPARE'">
+            <label
+              class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 select-none"
+              :class="loading ? 'opacity-60 cursor-not-allowed' : ''"
+            >
+              <span class="text-xs font-black text-slate-500 dark:text-slate-300">{{ t('outline.length') }}</span>
+              <select
+                v-model="outlineLength"
+                :disabled="loading"
+                class="bg-transparent outline-none text-slate-700 dark:text-slate-100 font-black text-sm"
+              >
+                <option value="short">{{ t('outline.length.short') }}</option>
+                <option value="standard">{{ t('outline.length.standard') }}</option>
+                <option value="long">{{ t('outline.length.long') }}</option>
+              </select>
+            </label>
+
+            <label
+              class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer select-none disabled:opacity-60"
+              :class="loading ? 'opacity-60 cursor-not-allowed' : ''"
+              :title="t('outline.web_search.desc')"
+            >
+              <input
+                v-model="useWebSearch"
+                type="checkbox"
+                class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
+                :disabled="loading"
+              />
+              <span>{{ t('outline.web_search') }}</span>
+            </label>
+
             <button
               :disabled="loading"
               class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-600 disabled:opacity-60"

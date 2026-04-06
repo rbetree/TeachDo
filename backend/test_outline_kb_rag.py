@@ -85,7 +85,7 @@ def test_outline_unified_enriches_prompt_with_kb_search_results(
 
     seen: Dict[str, Any] = {}
 
-    async def _fake_stream_outline_sse(prompt: str, language: str = "chinese"):
+    async def _fake_stream_outline_sse(prompt: str, language: str = "chinese", **_kwargs):
         seen["prompt"] = prompt
         seen["language"] = language
         yield b"data: [DONE]\n\n"
@@ -125,7 +125,7 @@ def test_outline_unified_skips_kb_when_personaldb_missing(main_api_client, monke
 
     seen: Dict[str, Any] = {}
 
-    async def _fake_stream_outline_sse(prompt: str, language: str = "chinese"):
+    async def _fake_stream_outline_sse(prompt: str, language: str = "chinese", **_kwargs):
         seen["prompt"] = prompt
         yield b"data: [DONE]\n\n"
 

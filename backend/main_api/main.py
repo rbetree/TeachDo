@@ -792,14 +792,20 @@ async def stream_lesson_plan_sse(req: LessonPlanRequest) -> AsyncGenerator[bytes
     finally:
         yield b"data: [DONE]\n\n"
 
-async def iter_outline_text_chunks(prompt: str, language: str = "chinese"):
+async def iter_outline_text_chunks(
+    prompt: str,
+    language: str = "chinese",
+    *,
+    user_id: str = "default_user",
+    metadata: dict[str, Any] | None = None,
+):
     """
     抽象出大纲 Agent 的文本增量迭代器：
     - 只关心 chunk_data["type"] == "text" 的部分
     - 统一日志与空文本过滤
     """
     outline_wrapper = A2AOutlineClientWrapper(session_id=uuid.uuid4().hex, agent_url=_get_outline_api())
-    async for chunk_data in outline_wrapper.generate(prompt, language=language):
+    async for chunk_data in outline_wrapper.generate(prompt, language=language, user_id=user_id, metadata=metadata):
         logger.info(f"生成大纲输出的chunk_data: {chunk_data}")
         chunk_type = chunk_data.get("type")
 
@@ -810,7 +816,13 @@ async def iter_outline_text_chunks(prompt: str, language: str = "chinese"):
             yield text
 
 
-async def stream_outline_sse(prompt: str, language: str = "chinese"):
+async def stream_outline_sse(
+    prompt: str,
+    language: str = "chinese",
+    *,
+    user_id: str = "default_user",
+    metadata: dict[str, Any] | None = None,
+):
     """
     将大纲 Agent 的响应以 SSE 形式向前端流式输出。
     - media_type: text/event-stream
@@ -818,7 +830,7 @@ async def stream_outline_sse(prompt: str, language: str = "chinese"):
     - 如 text 内部包含换行，按 SSE 规范拆成多行 data:
     - 结束时发送 data: [DONE]
     """
-    async for text in iter_outline_text_chunks(prompt, language):
+    async for text in iter_outline_text_chunks(prompt, language, user_id=user_id, metadata=metadata):
             # 按行拆分，遵守 SSE 规范：一条事件内多行 data:
             lines = text.splitlines()
             # 如果 text 以换行结尾，splitlines() 会吞掉末尾空行，这里记录一下
@@ -896,6 +908,8 @@ async def aippt_outline_unified(
     folder_id: int | str = Form(0),
     file_type: str | None = Form(None),
     kb_file_ids: list[str] | None = Form(None),  # 可选：限定从哪些 KB 文件检索参考片段
+    outline_length: str = Form("standard"),  # short | standard | long
+    use_web_search: bool = Form(True),
 ):
     """
     统一的大纲生成 API，支持两种模式：
@@ -1009,10 +1023,33 @@ async def aippt_outline_unified(
         prompt_parts.append(f"参考资料检索片段（RAG）：\n{kb_context}")
     prompt = "\n\n".join(prompt_parts)
 
-    logger.info(f"统一大纲API*outline***=====>：language={language}, has_file={has_file}, has_content={has_content}")
+    outline_length_norm = (outline_length or "").strip().lower() or "standard"
+    if outline_length_norm not in {"short", "standard", "long"}:
+        logger.info("outline_length 非法，回落为 standard: %s", outline_length)
+        outline_length_norm = "standard"
+
+    outline_metadata = {
+        "outline_length": outline_length_norm,
+        "use_web_search": bool(use_web_search),
+        "user_id": str(user_id),
+    }
+
+    logger.info(
+        "统一大纲API*outline***=====>：language=%s, has_file=%s, has_content=%s, outline_length=%s, use_web_search=%s",
+        language,
+        has_file,
+        has_content,
+        outline_length_norm,
+        bool(use_web_search),
+    )
 
     async def event_generator():
-        async for chunk in stream_outline_sse(prompt, language):
+        async for chunk in stream_outline_sse(
+            prompt,
+            language,
+            user_id=str(user_id),
+            metadata=outline_metadata,
+        ):
             yield chunk
 
     return StreamingResponse(

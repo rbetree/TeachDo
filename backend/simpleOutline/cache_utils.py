@@ -15,7 +15,11 @@ import asyncio
 from functools import wraps
 
 # random.seed(42)
-from runtime_paths import get_cache_dir
+try:
+    # 兼容“脚本方式”运行（在 backend/simpleOutline 目录下直接启动）
+    from runtime_paths import get_cache_dir
+except ImportError:  # pragma: no cover - 单测/包导入场景
+    from .runtime_paths import get_cache_dir
 
 def cal_md5(content):
     content = str(content)

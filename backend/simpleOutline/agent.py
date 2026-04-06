@@ -14,6 +14,22 @@ from create_model import create_model
 from tools import DocumentSearch
 import prompt
 
+
+def _coerce_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in {"1", "true", "yes", "y", "on"}:
+            return True
+        if v in {"0", "false", "no", "n", "off"}:
+            return False
+    return bool(value)
+
 def before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest) -> Optional[LlmResponse]:
     # 1. 检查用户输入
     agent_name = callback_context.agent_name
@@ -90,18 +106,31 @@ class OutlineAgent(LlmAgent):
 
     def _get_dynamic_instruction(self, ctx: InvocationContext) -> str:
         """动态整合所有研究发现并生成指令"""
-        # 从metadata中获取language
-        metadata = ctx.state.get("metadata", {})
+        # 从 metadata 中读取控制参数
+        metadata = ctx.state.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
         language = metadata.get("language", "chinese")  # 默认中文
-        
-        # 根据不同的情况选择不同的prompt
+        outline_length = str(metadata.get("outline_length") or "standard").strip().lower() or "standard"
+
         user_input = self._get_user_content_from_context(ctx)
-        # 根据不同的的输入长度，形成不同的prompt
-        if len(user_input) > prompt.USER_INPUT_NUMBER:
-            prompt_instruction = prompt.OUTLINE_INSTRUCTION_NO_SEARCH.format(language=language)
+        user_text = user_input or ""
+
+        explicit_use_web_search: bool | None = None
+        if isinstance(metadata, dict) and "use_web_search" in metadata:
+            explicit_use_web_search = _coerce_bool(metadata.get("use_web_search"))
+
+        if explicit_use_web_search is None:
+            # 保持原有启发式：输入长文优先不联网；短主题可联网补全
+            use_web_search = len(user_text) <= prompt.USER_INPUT_NUMBER
         else:
-            prompt_instruction = prompt.OUTLINE_INSTRUCTION_WITH_SEARCH.format(language=language)
-        return prompt_instruction
+            use_web_search = bool(explicit_use_web_search)
+
+        return prompt.build_outline_instruction(
+            language=language,
+            outline_length=outline_length,
+            use_web_search=use_web_search,
+        )
 
 def build_root_agent() -> OutlineAgent:
     """

@@ -9,7 +9,11 @@ import { KB_USER_ID } from '@/stores/appStore';
 export async function generateOutline(
   material: TeachingMaterial,
   onStream?: (text: string) => void,
-  opts: { signal?: AbortSignal } = {},
+  opts: {
+    signal?: AbortSignal;
+    outlineLength?: 'short' | 'standard' | 'long';
+    useWebSearch?: boolean;
+  } = {},
 ): Promise<string> {
   if (opts.signal?.aborted) {
     throw new ApiError('abort', 'Request aborted.');
@@ -32,6 +36,9 @@ export async function generateOutline(
   formData.append('content', content);
   formData.append('language', 'chinese');
   formData.append('user_id', KB_USER_ID);
+  const outlineLength = opts.outlineLength ?? 'standard';
+  formData.append('outline_length', ['short', 'standard', 'long'].includes(outlineLength) ? outlineLength : 'standard');
+  formData.append('use_web_search', String(opts.useWebSearch ?? true));
   for (const fileId of new Set((material.kbFileIds ?? []).map((id) => id.trim()).filter(Boolean))) {
     formData.append('kb_file_ids', fileId);
   }

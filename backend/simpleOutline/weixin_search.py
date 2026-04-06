@@ -11,7 +11,11 @@ from typing import Any, Dict, List, Optional
 import requests
 from lxml import html
 from urllib.parse import quote
-from cache_utils import cache_decorator
+try:
+    # 兼容“脚本方式”运行（在 backend/simpleOutline 目录下直接启动）
+    from cache_utils import cache_decorator
+except ImportError:  # pragma: no cover - 单测/包导入场景
+    from .cache_utils import cache_decorator
 import time
 
 @cache_decorator

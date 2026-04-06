@@ -64,7 +64,13 @@ class A2AOutlineClientWrapper:
             except Exception as e:
                 self.logger.error(f'获取 AgentCard 失败: {e}', exc_info=True)
                 raise RuntimeError('无法获取 agent card，无法继续运行。') from e
-    async def generate(self, user_question: str, language="Chinese", user_id="") -> None:
+    async def generate(
+        self,
+        user_question: str,
+        language: str = "Chinese",
+        user_id: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         """
         user_question: 用户问题
         history： 历史对话消息
@@ -80,12 +86,19 @@ class A2AOutlineClientWrapper:
 
             # === 多轮对话 示例 ===
             self.logger.info("开始进行对话...")
+            # 注意：保留原有 language/user_id 字段；额外 metadata 允许透传更多控制参数
+            merged_metadata: dict[str, Any] = {}
+            if isinstance(metadata, dict):
+                merged_metadata.update({k: v for k, v in metadata.items() if v is not None})
+            merged_metadata["language"] = language
+            merged_metadata["user_id"] = user_id
+
             message_data: dict[str, Any] = {
                 'message': {
                     'role': 'user',
                     'parts': [{'kind': 'text', 'text': user_question}],
                     'messageId': uuid4().hex,
-                    'metadata': {'language': language, "user_id": user_id},
+                    'metadata': merged_metadata,
                     'contextId': self.session_id,
                 },
             }

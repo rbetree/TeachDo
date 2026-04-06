@@ -7,19 +7,37 @@
 # @Desc  :
 
 import logging
-# 避免从 `google.adk.tools` 包级导入（该包在本项目中会被 stub 以加速冷启动）。
-from google.adk.tools.tool_context import ToolContext
-from google.adk.tools.agent_tool import AgentTool
-from weixin_search import sogou_weixin_search,get_real_url,get_article_content
+from typing import Any
+try:
+    # 兼容“脚本方式”运行（在 backend/simpleOutline 目录下直接启动）
+    from weixin_search import sogou_weixin_search, get_real_url, get_article_content
+except ImportError:  # pragma: no cover - 单测/包导入场景
+    from .weixin_search import sogou_weixin_search, get_real_url, get_article_content
 import time
 from datetime import datetime
 import random
 
 logger = logging.getLogger(__name__)
 
+
+def _coerce_bool(value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in {"1", "true", "yes", "y", "on"}:
+            return True
+        if v in {"0", "false", "no", "n", "off"}:
+            return False
+    return bool(value)
+
 async def DocumentSearch(
     keyword: str,
-    tool_context: ToolContext,
+    tool_context: Any,
 ):
     """
     根据关键词搜索文档
@@ -33,6 +51,14 @@ async def DocumentSearch(
     if metadata is None:
         metadata = {}
     logger.info(f"调用工具：DocumentSearch时传入的metadata: {metadata}")
+
+    use_web_search = None
+    if isinstance(metadata, dict) and "use_web_search" in metadata:
+        use_web_search = _coerce_bool(metadata.get("use_web_search"))
+    if use_web_search is False:
+        logger.info("DocumentSearch 已关闭(use_web_search=false)，跳过检索：%s", keyword)
+        return f"已关闭联网检索（use_web_search=false），跳过搜索：{keyword}"
+
     logger.info("文档检索: " + keyword)
     start_time = time.time()
     results = sogou_weixin_search(keyword)
