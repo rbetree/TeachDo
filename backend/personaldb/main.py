@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import time
 import uuid
@@ -31,6 +32,12 @@ if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 
 from backend.common.env_loader import load_env_files
+from backend.common.url_security import (
+    REDIRECT_STATUS_CODES,
+    UrlAccessError,
+    resolve_and_validate_redirect_url,
+    validate_public_http_url,
+)
 
 # 注意：必须在 import embedding_utils 之前调用；
 # embedding_utils 里存在模块级缓存目录计算（依赖 TEACHDO_CACHE_DIR 等配置）。
@@ -113,6 +120,18 @@ async def admin_reload(request: Request):  # noqa: ANN001 - FastAPI handler
 
 # 创建临时下载目录（集中到 var/tmp）
 TEMP_DIR = str(get_tmp_dir("personaldb"))
+
+
+def _basename_filename(name: str | None) -> str:
+    raw = str(name or "").replace("\\", "/").split("/")[-1].strip()
+    return raw or "uploaded_file"
+
+
+def _sanitize_temp_filename(name: str | None) -> str:
+    base = _basename_filename(name)
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", base)
+    safe = safe.strip("._")
+    return safe or "uploaded_file"
 
 # RabbitMQ消息处理类
 
@@ -272,32 +291,54 @@ def process_file_sync(
         logger.error("url为空")
         raise ValueError("url不能为空")
 
-    # 验证URL格式
-    if not url.startswith(("http://", "https://")):
-        logger.error(f"无效的URL格式: {url}")
-        raise ValueError("url必须以http://或https://开头")
+    try:
+        current_url = validate_public_http_url(url)
+    except UrlAccessError as exc:
+        logger.error("URL 安全校验失败: %s", exc)
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
-    parsed_url = urlparse(url)
+    parsed_url = urlparse(current_url)
+    display_file_name = _basename_filename(file_name)
+    temp_safe_name = _sanitize_temp_filename(display_file_name)
     logger.info(f"解析后的URL: {parsed_url.geturl()}")
     temp_file_path = None
     try:
         # 步骤1: 下载文件
-        # file_name = os.path.basename(parsed_url.path) or f"downloaded_file_{user_id}"
-        temp_file_path = os.path.join(TEMP_DIR, file_name)
-        logger.info(f"开始下载文件: {url}")
-        response = requests.get(url, timeout=60, proxies=None)
-        response.raise_for_status()
-        with open(temp_file_path, 'wb') as f:
-            f.write(response.content)
+        temp_file_path = os.path.join(TEMP_DIR, temp_safe_name)
+        logger.info(f"开始下载文件: {current_url}")
+        session = requests.Session()
+        try:
+            for _ in range(4):
+                response = session.get(current_url, timeout=60, proxies=None, allow_redirects=False, stream=True)
+                if response.status_code in REDIRECT_STATUS_CODES:
+                    location = response.headers.get("Location")
+                    if not location:
+                        response.close()
+                        raise ValueError("下载文件失败: 上游重定向缺少 Location")
+                    next_url = resolve_and_validate_redirect_url(current_url, location)
+                    response.close()
+                    current_url = next_url
+                    continue
+                response.raise_for_status()
+                with open(temp_file_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+                response.close()
+                break
+            else:
+                raise ValueError("下载文件失败: 重定向次数过多")
+        finally:
+            session.close()
         logger.info(f"文件下载成功: {temp_file_path}")
 
         return process_and_vectorize_local_file(
-            file_name=file_name,
+            file_name=display_file_name,
             temp_file_path=temp_file_path,
             id=id,
             user_id=user_id,
             file_type=file_type,
-            url=url,
+            url=current_url,
             folder_id=folder_id,
             created_at=created_at,
             source_type=source_type,
@@ -311,6 +352,8 @@ def process_file_sync(
     except requests.exceptions.RequestException as e:
         logger.error(f"下载文件失败: {str(e)}", exc_info=True)
         raise ValueError(f"下载文件失败: {str(e)}")
+    except HTTPException:
+        raise
     except ValueError as e:
         logger.error(f"处理失败: {str(e)}", exc_info=True)
         raise
@@ -410,7 +453,8 @@ async def upload_and_vectorize_endpoint(request: Request):
             if not fileType and upload_file and upload_file.filename:
                 fileType = upload_file.filename.split(".")[-1] if "." in upload_file.filename else "unknown"
 
-            temp_file_name = f"{uuid.uuid4()}_{upload_file.filename or 'uploaded_file'}"
+            display_file_name = _basename_filename(upload_file.filename)
+            temp_file_name = f"{uuid.uuid4()}_{_sanitize_temp_filename(upload_file.filename)}"
             temp_file_path = os.path.join(TEMP_DIR, temp_file_name)
             # 保存上传内容
             content_bytes = await upload_file.read()
@@ -419,7 +463,7 @@ async def upload_and_vectorize_endpoint(request: Request):
             logger.info(f"文件上传成功: {temp_file_path}")
 
             return process_and_vectorize_local_file(
-                file_name=upload_file.filename or "uploaded_file",
+                file_name=display_file_name,
                 temp_file_path=temp_file_path,
                 id=fileId,
                 user_id=userId,
@@ -434,7 +478,7 @@ async def upload_and_vectorize_endpoint(request: Request):
 
         # 分支：URL 下载处理
         else:
-            file_name = os.path.basename(urlparse(url).path) or f"downloaded_file_{userId}"
+            file_name = _basename_filename(urlparse(url).path or f"downloaded_file_{userId}")
             return process_file_sync(
                 file_name=file_name,
                 id=fileId,
@@ -454,10 +498,12 @@ async def upload_and_vectorize_endpoint(request: Request):
         logger.error(f"上传和向量化失败: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        pass
-        # if temp_file_path and os.path.exists(temp_file_path):
-        #     os.remove(temp_file_path)
-        #     logger.info(f"临时文件已删除: {temp_file_path}")
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+                logger.info(f"临时文件已删除: {temp_file_path}")
+            except OSError:
+                logger.warning(f"清理临时文件失败: {temp_file_path}", exc_info=True)
 
 
 class TextVectorizeBody(BaseModel):

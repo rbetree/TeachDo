@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi import UploadFile, File, HTTPException, Form
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from typing import AsyncGenerator, Literal, Any
+from starlette.background import BackgroundTask
 try:
     # 兼容在 `backend/main_api` 目录下直接运行（例如 `uvicorn main:app`）
     from outline_client import A2AOutlineClientWrapper
@@ -63,6 +64,13 @@ from backend.common.course_outputs_injection import (
     COURSE_OUTPUTS_START_MARKER,
     build_course_outputs_injection_markdown,
 )
+from backend.common.settings_store import access_host_for_bind_host
+from backend.common.url_security import (
+    REDIRECT_STATUS_CODES,
+    UrlAccessError,
+    resolve_and_validate_redirect_url,
+    validate_public_http_url,
+)
 
 load_env_files(repo_root=_repo_root, service_dir=Path(__file__).resolve().parent)
 
@@ -70,15 +78,51 @@ load_env_files(repo_root=_repo_root, service_dir=Path(__file__).resolve().parent
 def _get_outline_api() -> str:
     return os.environ.get(
         "OUTLINE_API",
-        f"http://{os.environ.get('HOST', '127.0.0.1')}:{os.environ.get('OUTLINE_API_PORT', '10001')}",
+        f"http://{access_host_for_bind_host(os.environ.get('HOST', '127.0.0.1'))}:{os.environ.get('OUTLINE_API_PORT', '10001')}",
     )
 
 
 def _get_content_api() -> str:
     return os.environ.get(
         "CONTENT_API",
-        f"http://{os.environ.get('HOST', '127.0.0.1')}:{os.environ.get('CONTENT_API_PORT', '10011')}",
+        f"http://{access_host_for_bind_host(os.environ.get('HOST', '127.0.0.1'))}:{os.environ.get('CONTENT_API_PORT', '10011')}",
     )
+
+
+async def _aclose_httpx_stream(response: httpx.Response, client: httpx.AsyncClient) -> None:
+    await response.aclose()
+    await client.aclose()
+
+
+async def _open_validated_proxy_stream(
+    target_url: str,
+    *,
+    headers: dict[str, str],
+    max_redirects: int = 3,
+) -> tuple[httpx.AsyncClient, httpx.Response]:
+    """
+    以“每次跳转都校验目标地址”的方式打开上游流，避免 SSRF 通过重定向绕过。
+    调用方负责在返回后关闭 response/client。
+    """
+    current_url = validate_public_http_url(target_url)
+    client = httpx.AsyncClient(timeout=httpx.Timeout(30.0), follow_redirects=False)
+
+    try:
+        for _ in range(max_redirects + 1):
+            request = client.build_request("GET", current_url, headers=headers)
+            response = await client.send(request, stream=True)
+            if response.status_code in REDIRECT_STATUS_CODES and "location" in response.headers:
+                next_url = resolve_and_validate_redirect_url(current_url, response.headers["location"])
+                await response.aclose()
+                current_url = next_url
+                continue
+            return client, response
+    except Exception:
+        await client.aclose()
+        raise
+
+    await client.aclose()
+    raise HTTPException(status_code=502, detail="上游重定向次数过多")
 app = FastAPI()
 
 # settings API（允许在前端“设置”页写入 var/settings.json）
@@ -921,9 +965,8 @@ async def aippt_outline_unified(
     has_content = bool(content_text)
     has_file = file is not None
 
-    # 主题是必填的
-    if not has_content:
-        raise HTTPException(status_code=400, detail="请提供主题")
+    if not has_content and not has_file:
+        raise HTTPException(status_code=400, detail="请提供主题或文件")
 
     file_content = ""
     personaldb_url = _get_personaldb_url()
@@ -1010,7 +1053,9 @@ async def aippt_outline_unified(
         else:
             logger.info("personaldb 不可用，跳过 kb_file_ids 检索增强：%s", personaldb_url)
 
-    prompt_parts: list[str] = [content_text]
+    prompt_parts: list[str] = []
+    if content_text:
+        prompt_parts.append(content_text)
     if file_content:
         prompt_parts.append(f"参考文档内容（来自你上传的文件）：\n{file_content}")
     if full_context:
@@ -3319,13 +3364,16 @@ async def proxy(request: Request, url: str = Query(..., description="Target abso
         if v:
             forward_headers[h] = v
 
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        try:
-            upstream = await client.get(url, headers=forward_headers)
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=502, detail=f"Upstream fetch error: {e!s}")
+    try:
+        client, upstream = await _open_validated_proxy_stream(url, headers=forward_headers)
+    except UrlAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Upstream fetch error: {exc!s}") from exc
 
     if upstream.status_code >= 400:
+        await upstream.aclose()
+        await client.aclose()
         raise HTTPException(status_code=upstream.status_code, detail="Upstream error")
 
     headers = {}
@@ -3343,6 +3391,7 @@ async def proxy(request: Request, url: str = Query(..., description="Target abso
         status_code=upstream.status_code,
         headers=headers,
         media_type=upstream.headers.get("Content-Type"),
+        background=BackgroundTask(_aclose_httpx_stream, upstream, client),
     )
 
 @app.get("/healthz")

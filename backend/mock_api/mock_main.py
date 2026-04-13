@@ -10,6 +10,14 @@ from fastapi.responses import FileResponse
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from pathlib import Path
+from starlette.background import BackgroundTask
+
+from backend.common.url_security import (
+    REDIRECT_STATUS_CODES,
+    UrlAccessError,
+    resolve_and_validate_redirect_url,
+    validate_public_http_url,
+)
 
 app = FastAPI()
 TEMPLATE_DIR = Path(__file__).resolve().parent / "template"
@@ -22,6 +30,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+async def _aclose_httpx_stream(response: httpx.Response, client: httpx.AsyncClient) -> None:
+    await response.aclose()
+    await client.aclose()
+
+
+async def _open_validated_proxy_stream(
+    target_url: str,
+    *,
+    headers: dict[str, str],
+    max_redirects: int = 3,
+) -> tuple[httpx.AsyncClient, httpx.Response]:
+    current_url = validate_public_http_url(target_url)
+    client = httpx.AsyncClient(timeout=httpx.Timeout(30.0), follow_redirects=False)
+
+    try:
+        for _ in range(max_redirects + 1):
+            request = client.build_request("GET", current_url, headers=headers)
+            response = await client.send(request, stream=True)
+            if response.status_code in REDIRECT_STATUS_CODES and "location" in response.headers:
+                next_url = resolve_and_validate_redirect_url(current_url, response.headers["location"])
+                await response.aclose()
+                current_url = next_url
+                continue
+            return client, response
+    except Exception:
+        await client.aclose()
+        raise
+
+    await client.aclose()
+    raise HTTPException(status_code=502, detail="上游重定向次数过多")
 
 class AipptRequest(BaseModel):
     content: str
@@ -508,13 +548,16 @@ async def proxy(request: Request, url: str = Query(..., description="Target abso
         if v:
             forward_headers[h] = v
 
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        try:
-            upstream = await client.get(url, headers=forward_headers)
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=502, detail=f"Upstream fetch error: {e!s}")
+    try:
+        client, upstream = await _open_validated_proxy_stream(url, headers=forward_headers)
+    except UrlAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Upstream fetch error: {exc!s}") from exc
 
     if upstream.status_code >= 400:
+        await upstream.aclose()
+        await client.aclose()
         raise HTTPException(status_code=upstream.status_code, detail="Upstream error")
 
     headers = {}
@@ -532,6 +575,7 @@ async def proxy(request: Request, url: str = Query(..., description="Target abso
         status_code=upstream.status_code,
         headers=headers,
         media_type=upstream.headers.get("Content-Type"),
+        background=BackgroundTask(_aclose_httpx_stream, upstream, client),
     )
 
 @app.get("/healthz")
