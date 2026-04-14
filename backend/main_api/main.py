@@ -64,6 +64,7 @@ from backend.common.course_outputs_injection import (
     COURSE_OUTPUTS_START_MARKER,
     build_course_outputs_injection_markdown,
 )
+from backend.common.cors import get_cors_middleware_kwargs
 from backend.common.settings_store import access_host_for_bind_host
 from backend.common.url_security import (
     REDIRECT_STATUS_CODES,
@@ -136,10 +137,7 @@ except Exception:  # pragma: no cover - 单服务打包/裁剪场景允许缺失
 # Allow CORS for the frontend development server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **get_cors_middleware_kwargs(allow_credentials=True),
 )
 
 class AipptRequest(BaseModel):

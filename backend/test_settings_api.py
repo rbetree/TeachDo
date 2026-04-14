@@ -53,6 +53,24 @@ def test_settings_get_returns_config_and_secret_flags(client: TestClient):
     assert isinstance(body["data"]["secrets"]["outlineApiKey"], bool)
 
 
+def test_settings_requires_loopback_or_token_when_not_pytest(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    # settings API 默认仅允许本机回环；测试环境下放行 "testclient"
+    # 这里手动取消 PYTEST 标记，确保守卫逻辑生效
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("TEACHDO_ADMIN_TOKEN", raising=False)
+
+    resp = client.get("/settings")
+    assert resp.status_code == 403
+
+
+def test_settings_allows_admin_token_when_not_pytest(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setenv("TEACHDO_ADMIN_TOKEN", "test-token")
+
+    resp = client.get("/settings", headers={"x-teachdo-admin-token": "test-token"})
+    assert resp.status_code == 200
+
+
 def test_settings_put_updates_file_without_writing_empty_secrets(client: TestClient, settings_file: Path):
     payload = {
         "outlineType": "openai",

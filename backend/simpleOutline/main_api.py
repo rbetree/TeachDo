@@ -15,6 +15,7 @@ if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 
 from backend.common.env_loader import load_env_files
+from backend.common.cors import get_cors_middleware_kwargs
 
 load_env_files(repo_root=_repo_root, service_dir=Path(__file__).resolve().parent)
 
@@ -211,9 +212,7 @@ def main(host: str, port: int, agent_url: str=""):
     # CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
+        **get_cors_middleware_kwargs(),
     )
     logger.info(f"服务启动中，监听地址: http://{host}:{port}")
     # 启动 uvicorn 服务器

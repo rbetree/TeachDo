@@ -18,6 +18,7 @@ from backend.common.url_security import (
     resolve_and_validate_redirect_url,
     validate_public_http_url,
 )
+from backend.common.cors import get_cors_middleware_kwargs
 
 app = FastAPI()
 TEMPLATE_DIR = Path(__file__).resolve().parent / "template"
@@ -25,10 +26,7 @@ TEMPLATE_DIR = Path(__file__).resolve().parent / "template"
 # Allow CORS for the frontend development server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **get_cors_middleware_kwargs(allow_credentials=True),
 )
 
 

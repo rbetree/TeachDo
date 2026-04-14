@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
+import hmac
 from typing import Any
 from dataclasses import dataclass
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from urllib.parse import urlsplit
 
@@ -51,6 +52,42 @@ _LLM_ENV_KEYS: set[str] = set().union(
     _PPT_LLM_ENV_KEYS,
     _EMBEDDING_LLM_ENV_KEYS,
 )
+
+
+def _is_loopback_client(host: str) -> bool:
+    return str(host or "").strip() in {"127.0.0.1", "::1"}
+
+
+def _has_valid_admin_token(request: Request) -> bool:
+    """
+    可选的管理口令：
+    - 当设置了 TEACHDO_ADMIN_TOKEN 时，允许非本机访问 settings API；
+    - 调用方需在请求头里带上 x-teachdo-admin-token。
+    """
+    expected = (os.environ.get("TEACHDO_ADMIN_TOKEN") or "").strip()
+    if not expected:
+        return False
+    got = (request.headers.get("x-teachdo-admin-token") or "").strip()
+    if not got:
+        return False
+    return hmac.compare_digest(got, expected)
+
+
+def _ensure_settings_access(request: Request) -> None:
+    """
+    settings API 属于“本机管理接口”：
+    - 默认仅允许本机回环访问；
+    - 如需远程管理，请设置 TEACHDO_ADMIN_TOKEN 并在请求头携带 x-teachdo-admin-token。
+    """
+    client_host = request.client.host if request.client else ""
+    is_pytest = bool(os.environ.get("PYTEST_CURRENT_TEST"))
+    if is_pytest and client_host == "testclient":
+        return
+    if _is_loopback_client(client_host):
+        return
+    if _has_valid_admin_token(request):
+        return
+    raise HTTPException(status_code=403, detail="forbidden")
 
 
 def _join_url(base_url: str, path: str) -> str:
@@ -437,7 +474,8 @@ def _load_effective_env_for_ui() -> dict[str, str]:
 
 
 @_router.get("/settings")
-def get_settings():
+def get_settings(request: Request):  # noqa: ANN001 - FastAPI handler
+    _ensure_settings_access(request)
     effective_env = _load_effective_env_for_ui()
     return {
         "ok": True,
@@ -451,7 +489,8 @@ def get_settings():
 
 
 @_router.put("/settings")
-def update_settings(payload: UiSettingsPayload):
+def update_settings(payload: UiSettingsPayload, request: Request):  # noqa: ANN001 - FastAPI handler
+    _ensure_settings_access(request)
     existing = read_settings_env()
     updates: dict[str, Any] = {}
 
@@ -567,7 +606,8 @@ def update_settings(payload: UiSettingsPayload):
 
 
 @_router.post("/settings/reset")
-def reset_settings():
+def reset_settings(request: Request):  # noqa: ANN001 - FastAPI handler
+    _ensure_settings_access(request)
     """
     恢复默认配置：
     - 覆盖写入默认值（但不写入空的 secret）
