@@ -200,12 +200,7 @@ class UiSettingsPayload(BaseModel):
     embeddingMaxRetries: str | None = None
     embeddingDim: str | None = None
 
-    # Service endpoints + proxy
-    outlineApi: str | None = None
-    contentApi: str | None = None
-    personalDb: str | None = None
-    httpProxy: str | None = None
-    httpsProxy: str | None = None
+    # Service endpoints / proxy：不再通过设置页修改（避免误配；开发时改 var/settings.json 或环境变量）
     pexelsApiKey: str | None = Field(default=None, description="留空表示不修改")
 
     # runtime behavior
@@ -252,11 +247,6 @@ _UI_TO_ENV: dict[str, str] = {
     "embeddingTimeoutS": "EMBEDDING_TIMEOUT_S",
     "embeddingMaxRetries": "EMBEDDING_MAX_RETRIES",
     "embeddingDim": "EMBEDDING_DIM",
-    "outlineApi": "OUTLINE_API",
-    "contentApi": "CONTENT_API",
-    "personalDb": "PERSONAL_DB",
-    "httpProxy": "HTTP_PROXY",
-    "httpsProxy": "HTTPS_PROXY",
     "pexelsApiKey": "PEXELS_API_KEY",
     "useChart": "USE_CHART",
     "outlineStreaming": "OUTLINE_STREAMING",
@@ -425,11 +415,6 @@ def _build_ui_config(effective_env: dict[str, str]) -> dict[str, Any]:
         "embeddingTimeoutS": effective_env.get("EMBEDDING_TIMEOUT_S", ""),
         "embeddingMaxRetries": effective_env.get("EMBEDDING_MAX_RETRIES", ""),
         "embeddingDim": effective_env.get("EMBEDDING_DIM", ""),
-        "outlineApi": effective_env.get("OUTLINE_API", DEFAULT_SETTINGS_ENV["OUTLINE_API"]),
-        "contentApi": effective_env.get("CONTENT_API", DEFAULT_SETTINGS_ENV["CONTENT_API"]),
-        "personalDb": effective_env.get("PERSONAL_DB", DEFAULT_SETTINGS_ENV["PERSONAL_DB"]),
-        "httpProxy": effective_env.get("HTTP_PROXY", ""),
-        "httpsProxy": effective_env.get("HTTPS_PROXY", ""),
         "pexelsApiKey": "",
         "useChart": is_truthy_env(effective_env.get("USE_CHART")),
         "outlineStreaming": is_truthy_env(effective_env.get("OUTLINE_STREAMING")),
@@ -543,10 +528,13 @@ def update_settings(payload: UiSettingsPayload):
     # 这些不应影响前端的“是否需要重启”提示。
     requested_update_keys = set(updates.keys())
 
-    # 端口 <-> URL 联动（只在用户未显式改 URL 时自动同步）
-    existing_effective: dict[str, Any] = dict(DEFAULT_SETTINGS_ENV)
-    existing_effective.update(existing)
-    _apply_ports_link_service_urls(existing_effective, updates)
+    # 端口 <-> URL 联动：
+    # - 设置页不再直接暴露 OUTLINE_API/CONTENT_API/PERSONAL_DB 的编辑能力；
+    # - 仅当用户本次确实修改了 host/port 时，才做“派生 URL 自动同步”，避免保存其它字段时意外覆盖 .env 中的自定义值。
+    if {"HOST", "OUTLINE_API_PORT", "CONTENT_API_PORT", "PERSONAL_DB_PORT"} & set(updates.keys()):
+        existing_effective: dict[str, Any] = dict(DEFAULT_SETTINGS_ENV)
+        existing_effective.update(existing)
+        _apply_ports_link_service_urls(existing_effective, updates)
 
     merged = dict(existing)
     merged.update(updates)

@@ -45,6 +45,11 @@ def test_settings_get_returns_config_and_secret_flags(client: TestClient):
     assert "data" in body
     assert "config" in body["data"]
     assert "secrets" in body["data"]
+    assert "outlineApi" not in body["data"]["config"]
+    assert "contentApi" not in body["data"]["config"]
+    assert "personalDb" not in body["data"]["config"]
+    assert "httpProxy" not in body["data"]["config"]
+    assert "httpsProxy" not in body["data"]["config"]
     assert isinstance(body["data"]["secrets"]["outlineApiKey"], bool)
 
 
@@ -66,12 +71,7 @@ def test_settings_put_updates_file_without_writing_empty_secrets(client: TestCli
         "embeddingBaseUrl": "https://example.com/v1",
         "embeddingModel": "emb",
         "embeddingApiKey": "",
-        "outlineApi": "http://127.0.0.1:10001",
-        "contentApi": "http://127.0.0.1:10011",
-        "personalDb": "http://127.0.0.1:9100",
         "personalDbPort": "9100",
-        "httpProxy": "",
-        "httpsProxy": "",
         "useChart": False,
     }
 
@@ -114,12 +114,7 @@ def test_settings_put_writes_secret_when_provided(client: TestClient, settings_f
             "embeddingBaseUrl": "https://example.com/v1",
             "embeddingModel": "emb",
             "embeddingApiKey": "",
-            "outlineApi": "http://127.0.0.1:10001",
-            "contentApi": "http://127.0.0.1:10011",
-            "personalDb": "http://127.0.0.1:9100",
             "personalDbPort": "9100",
-            "httpProxy": "",
-            "httpsProxy": "",
             "useChart": True,
         },
     )
@@ -206,13 +201,7 @@ def test_settings_put_full_coverage_fields_persist(client: TestClient, settings_
             "embeddingTimeoutS": "30",
             "embeddingMaxRetries": "0",
             "embeddingDim": "0",
-            # endpoints + proxy
-            "outlineApi": "http://127.0.0.1:10001",
-            "contentApi": "http://127.0.0.1:10011",
-            "personalDb": "http://127.0.0.1:9100",
             "personalDbPort": "9101",
-            "httpProxy": "",
-            "httpsProxy": "",
             "pexelsApiKey": "pexels-xxx",
             # behavior
             "useChart": False,
@@ -301,11 +290,6 @@ def test_settings_reset_clears_secrets_in_file_and_response(client: TestClient, 
             "embeddingBaseUrl": "https://example.com/v1",
             "embeddingModel": "emb",
             "embeddingApiKey": "",
-            "outlineApi": "http://127.0.0.1:10001",
-            "contentApi": "http://127.0.0.1:10011",
-            "personalDb": "http://127.0.0.1:9100",
-            "httpProxy": "",
-            "httpsProxy": "",
             "useChart": True,
         },
     )

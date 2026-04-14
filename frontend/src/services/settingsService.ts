@@ -24,12 +24,7 @@ export type UiSettingsConfig = {
   embeddingTimeoutS: string;
   embeddingMaxRetries: string;
   embeddingDim: string;
-  outlineApi: string;
-  contentApi: string;
-  personalDb: string;
   personalDbPort: string;
-  httpProxy: string;
-  httpsProxy: string;
   pexelsApiKey: string;
   useChart: boolean;
   outlineStreaming: boolean;

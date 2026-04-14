@@ -8,7 +8,7 @@ TeachDo 是面向教师的智能备课平台，主链路为 Outline -> 教案/PP
 - 后端全服务：`cd backend && pip install -r requirements.txt && python3 start_backend.py`
 - TeachDo 前端开发：`cd frontend && npm i && npm run dev`
 - 前端质量校验：`cd frontend && npm run typecheck && npm run lint && npm run build`
-- 后端测试：`venv/bin/pytest backend -q`（或激活 venv 后执行 `pytest backend -q`）
+- 后端测试：`venv/bin/python -m pytest backend -q`（或激活 venv 后执行 `pytest backend -q`）
 - 接口冒烟：`python3 scripts/verify_endpoints.py`
 
 ## Repository Structure
