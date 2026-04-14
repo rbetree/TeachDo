@@ -19,6 +19,7 @@ import requests
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ValidationError
+from starlette.concurrency import run_in_threadpool
 
 try:
     # 兼容在 `backend/personaldb` 目录下直接运行（例如 `python main.py`）
@@ -122,6 +123,25 @@ async def admin_reload(request: Request):  # noqa: ANN001 - FastAPI handler
 TEMP_DIR = str(get_tmp_dir("personaldb"))
 
 
+def _get_upload_max_bytes() -> int:
+    """
+    上传/下载文件大小上限（字节）。
+    - 覆盖范围：multipart 上传文件体、URL 下载累计写入
+    - 默认：30MB
+    """
+    default = 30 * 1024 * 1024
+    raw = (os.environ.get("TEACHDO_UPLOAD_MAX_BYTES") or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except Exception:
+        return default
+    if value <= 0:
+        return default
+    return value
+
+
 def _basename_filename(name: str | None) -> str:
     raw = str(name or "").replace("\\", "/").split("/")[-1].strip()
     return raw or "uploaded_file"
@@ -167,7 +187,7 @@ def search_personal_knowledge_base(query: SearchQuery):
         raise HTTPException(status_code=500, detail=f"搜索失败: {str(e)}")
 
 @cache_decorator
-def _get_markdown_content(file_path: str, file_name: str) -> str:
+def _get_markdown_content(file_path: str, file_name: str) -> tuple[bool, str]:
     """
     根据文件类型选择合适的转换器，将文件内容转换为Markdown格式。
     PDF文件使用MagicPDFConverter（MinerU），其他文件使用MarkitdownConverter。
@@ -184,7 +204,9 @@ def _get_markdown_content(file_path: str, file_name: str) -> str:
     if CAN_USE_MINERU and file_extension == '.pdf':
         # 使用 MinerU (MagicPDFConverter) 处理PDF
         logger.info(f"使用PDF转换器(MinerU)处理文件: {file_path}")
-        converter = MagicPDFConverter(output_dir="./output_pdf")
+        output_dir = get_tmp_dir("personaldb") / "output_pdf"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        converter = MagicPDFConverter(output_dir=str(output_dir))
         content, _ = converter.convert_pdf_file(file_path)
         return True, content
     else:
@@ -274,7 +296,7 @@ def process_and_vectorize_local_file(
 
 def process_file_sync(
     file_name: str,
-    id: int,
+    id: int | str,
     user_id: int | str,
     file_type: str,
     url: str,
@@ -302,6 +324,7 @@ def process_file_sync(
     temp_safe_name = _sanitize_temp_filename(display_file_name)
     logger.info(f"解析后的URL: {parsed_url.geturl()}")
     temp_file_path = None
+    max_bytes = _get_upload_max_bytes()
     try:
         # 步骤1: 下载文件
         temp_file_path = os.path.join(TEMP_DIR, temp_safe_name)
@@ -320,10 +343,24 @@ def process_file_sync(
                     current_url = next_url
                     continue
                 response.raise_for_status()
+                content_length = response.headers.get("Content-Length")
+                if content_length:
+                    try:
+                        if int(content_length) > max_bytes:
+                            response.close()
+                            raise HTTPException(status_code=413, detail="下载文件过大")
+                    except ValueError:
+                        pass
                 with open(temp_file_path, 'wb') as f:
+                    written = 0
                     for chunk in response.iter_content(chunk_size=1024 * 1024):
                         if chunk:
+                            next_total = written + len(chunk)
+                            if next_total > max_bytes:
+                                response.close()
+                                raise HTTPException(status_code=413, detail="下载文件过大")
                             f.write(chunk)
+                            written = next_total
                 response.close()
                 break
             else:
@@ -456,13 +493,24 @@ async def upload_and_vectorize_endpoint(request: Request):
             display_file_name = _basename_filename(upload_file.filename)
             temp_file_name = f"{uuid.uuid4()}_{_sanitize_temp_filename(upload_file.filename)}"
             temp_file_path = os.path.join(TEMP_DIR, temp_file_name)
-            # 保存上传内容
-            content_bytes = await upload_file.read()
+            # 保存上传内容（分块落盘 + 大小上限）
+            max_bytes = _get_upload_max_bytes()
+            chunk_size = 1024 * 1024  # 1MB
+            written = 0
             with open(temp_file_path, "wb") as buffer:
-                buffer.write(content_bytes)
+                while True:
+                    chunk = await upload_file.read(chunk_size)
+                    if not chunk:
+                        break
+                    next_total = written + len(chunk)
+                    if next_total > max_bytes:
+                        raise HTTPException(status_code=413, detail="上传文件过大")
+                    buffer.write(chunk)
+                    written = next_total
             logger.info(f"文件上传成功: {temp_file_path}")
 
-            return process_and_vectorize_local_file(
+            return await run_in_threadpool(
+                process_and_vectorize_local_file,
                 file_name=display_file_name,
                 temp_file_path=temp_file_path,
                 id=fileId,
@@ -479,7 +527,8 @@ async def upload_and_vectorize_endpoint(request: Request):
         # 分支：URL 下载处理
         else:
             file_name = _basename_filename(urlparse(url).path or f"downloaded_file_{userId}")
-            return process_file_sync(
+            return await run_in_threadpool(
+                process_file_sync,
                 file_name=file_name,
                 id=fileId,
                 user_id=userId,
