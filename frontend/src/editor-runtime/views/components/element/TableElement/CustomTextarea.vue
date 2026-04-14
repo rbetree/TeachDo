@@ -6,7 +6,7 @@
     @focus="handleFocus()"
     @blur="handleBlur()"
     @input="handleInput()"
-    v-html="text"
+    v-text="text"
   ></div>
 </template>
 
@@ -33,14 +33,13 @@ const isFocus = ref(false)
 // 当文本框聚焦时，不执行数据同步
 watch(() => props.value, () => {
   if (isFocus.value) return
-  text.value = props.value
-  if (textareaRef.value) textareaRef.value.innerHTML = props.value
+  text.value = props.value.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
 }, { immediate: true })
 
 const handleInput = () => {
   if (!textareaRef.value) return
-  const text = textareaRef.value.innerHTML
-  emit('updateValue', text)
+  const value = textareaRef.value.innerText.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  emit('updateValue', value)
 }
 
 // 聚焦时更新焦点标记，并监听粘贴事件
@@ -63,7 +62,7 @@ const handleFocus = () => {
           const excelData = pasteExcelClipboardString(text)
           if (excelData) {
             emit('insertExcelData', excelData)
-            if (textareaRef.value) textareaRef.value.innerHTML = excelData[0][0]
+            if (textareaRef.value) textareaRef.value.innerText = excelData[0][0]
             return
           }
   
@@ -75,7 +74,7 @@ const handleFocus = () => {
           const htmlData = pasteHTMLTableClipboardString(html)
           if (htmlData) {
             emit('insertExcelData', htmlData)
-            if (textareaRef.value) textareaRef.value.innerHTML = htmlData[0][0]
+            if (textareaRef.value) textareaRef.value.innerText = htmlData[0][0]
           }
         }) 
       }
@@ -100,5 +99,6 @@ onBeforeUnmount(() => {
   border: 0;
   outline: 0;
   -webkit-user-modify: read-write-plaintext-only;
+  white-space: pre-wrap;
 }
 </style>

@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'vue'
 import type { TableCellStyle } from '@editor/types/slides'
 
+import { escapeHtml } from '@/utils/safeHtml'
 /**
  * 计算单元格文本样式
  * @param style 单元格文本样式原数据
@@ -35,5 +36,7 @@ export const getTextStyle = (style?: TableCellStyle): CSSProperties => {
 }
 
 export const formatText = (text: string) => {
-  return text.replace(/\n/g, '</br>').replace(/ /g, '&nbsp;')
+  return escapeHtml(text)
+    .replace(/\r\n|\r|\n/g, '<br />')
+    .replace(/ /g, '&nbsp;')
 }
