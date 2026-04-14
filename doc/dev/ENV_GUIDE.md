@@ -53,3 +53,11 @@ cp env_template.txt .env
 ### 3.5 可选：图片素材
 
 - `PEXELS_API_KEY`：Pexels 图片搜索 Key（可选）
+
+### 3.6 安全与资源限制（推荐生产环境启用）
+
+- `/proxy` 资源代理：
+  - `TEACHDO_PROXY_ALLOWED_HOSTS`：允许代理的域名白名单（逗号分隔，支持子域）。留空表示不启用白名单（兼容现有行为）。
+  - `TEACHDO_PROXY_MAX_BYTES`：上游响应体大小上限（字节），默认 `26214400`（25MB）。
+- PersonalDB 上传/URL 下载：
+  - `TEACHDO_UPLOAD_MAX_BYTES`：上传文件体与 URL 下载累计写入的大小上限（字节），默认 `31457280`（30MB）。

@@ -9,9 +9,10 @@
 
 ## P0（必须优先）安全硬化
 
-### 1) `/data/{filename}` 可能存在目录穿越（Path Traversal）
+### 1) `/data/{filename}` 目录穿越（Path Traversal）（已修复）
 
-- 现象：接口直接用 `os.path.join("./template", filename)` 拼路径并返回文件（位置：`backend/main_api/main.py` 的 `/data/{filename}`）。
+- 现象（旧）：接口直接拼路径并返回文件（例如 `os.path.join("./template", filename)`），存在目录穿越风险。
+- 修复（新）：统一改为 `backend/common/static_files.py` 做「文件名正则 + 后缀白名单 + resolve 后仍在模板目录内」校验，并以 `Path(__file__).resolve().parent / "template"` 作为模板基准目录（覆盖 `main_api` 与 `mock_api`）。
 - 风险：攻击者可通过 `../` 或绝对路径读到非模板目录的任意文件（取决于部署环境权限），属于高危信息泄露。
 - 建议修复：
   - 使用 `pathlib.Path` 做路径归一化：`(TEMPLATE_DIR / filename).resolve()`。
