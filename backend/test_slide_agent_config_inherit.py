@@ -10,6 +10,12 @@ def _get_writer_config():
     return get_ppt_writer_agent_config()
 
 
+def _get_checker_config():
+    from backend.slide_agent.slide_agent.config import get_ppt_checker_agent_config
+
+    return get_ppt_checker_agent_config()
+
+
 def test_ppt_writer_inherits_outline_when_blank(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("OUTLINE_TYPE", "openai")
     monkeypatch.setenv("OUTLINE_MODEL", "gpt-4o-mini")
@@ -63,6 +69,62 @@ def test_ppt_writer_defaults_when_all_missing(monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv(k, raising=False)
 
     cfg = _get_writer_config()
+    assert cfg["provider"] == "openai"
+    assert cfg["model"] == "qwen-turbo-latest"
+    assert cfg["api_key"] is None
+    assert cfg["base_url"] is None
+
+
+def test_ppt_checker_inherits_outline_when_blank(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("OUTLINE_TYPE", "openai")
+    monkeypatch.setenv("OUTLINE_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("OUTLINE_API_KEY", "sk-outline")
+    monkeypatch.setenv("OUTLINE_BASE_URL", "https://example.com/v1")
+
+    monkeypatch.setenv("PPT_CHECKER_TYPE", "")
+    monkeypatch.setenv("PPT_CHECKER_MODEL", "")
+    monkeypatch.setenv("PPT_CHECKER_BASE_URL", "")
+    monkeypatch.delenv("PPT_CHECKER_API_KEY", raising=False)
+
+    cfg = _get_checker_config()
+    assert cfg["provider"] == "openai"
+    assert cfg["model"] == "gpt-4o-mini"
+    assert cfg["api_key"] == "sk-outline"
+    assert cfg["base_url"] == "https://example.com/v1"
+
+
+def test_ppt_checker_overrides_outline_when_set(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("OUTLINE_TYPE", "openai")
+    monkeypatch.setenv("OUTLINE_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("OUTLINE_API_KEY", "sk-outline")
+    monkeypatch.setenv("OUTLINE_BASE_URL", "https://example.com/v1")
+
+    monkeypatch.setenv("PPT_CHECKER_TYPE", "claude")
+    monkeypatch.setenv("PPT_CHECKER_MODEL", "claude-sonnet-4-20250514")
+    monkeypatch.setenv("PPT_CHECKER_API_KEY", "sk-checker")
+    monkeypatch.setenv("PPT_CHECKER_BASE_URL", "https://checker.example.com")
+
+    cfg = _get_checker_config()
+    assert cfg["provider"] == "claude"
+    assert cfg["model"] == "claude-sonnet-4-20250514"
+    assert cfg["api_key"] == "sk-checker"
+    assert cfg["base_url"] == "https://checker.example.com"
+
+
+def test_ppt_checker_defaults_when_all_missing(monkeypatch: pytest.MonkeyPatch):
+    for k in [
+        "OUTLINE_TYPE",
+        "OUTLINE_MODEL",
+        "OUTLINE_API_KEY",
+        "OUTLINE_BASE_URL",
+        "PPT_CHECKER_TYPE",
+        "PPT_CHECKER_MODEL",
+        "PPT_CHECKER_API_KEY",
+        "PPT_CHECKER_BASE_URL",
+    ]:
+        monkeypatch.delenv(k, raising=False)
+
+    cfg = _get_checker_config()
     assert cfg["provider"] == "openai"
     assert cfg["model"] == "qwen-turbo-latest"
     assert cfg["api_key"] is None

@@ -13,7 +13,12 @@ from .image_enricher import maybe_attach_images_to_slide
 from ...config import get_ppt_writer_agent_config
 from ...create_model import create_model
 from . import prompt
-from .utils import validate_slide
+from .utils import (
+    advance_or_retry_after_validation,
+    apply_checker_outcome_to_state,
+    ensure_loop_state_initialized,
+    evaluate_checker_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -183,37 +188,37 @@ class PPTWriterSubAgent(LlmAgent):
         )
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
-        slides_plan_num: int = ctx.session.state.get("slides_plan_num")
         current_slide_index: int = ctx.session.state.get("current_slide_index", 0)
 
         # 根据上一次Checker校验结果决定是否清空 / 追加内消息 == =
         st = ctx.session.state
+        ensure_loop_state_initialized(st)
         last_passed = st.get("last_validation_passed")  # 可能为 None / True / False
         feedback_text = st.get("last_validation_feedback")
+        should_clear = bool(st.get("writer_should_clear_history", False))
 
-        # 首轮（index==0 且还未校验）视为需要清空；若上次通过，也清空；若上次失败，则不清空并注入反馈。
-        should_clear = (current_slide_index == 0 and last_passed is None) or (last_passed is True)
+        # 首轮默认清空；若上次失败，则保留必要上下文并注入反馈帮助重写。
+        if current_slide_index == 0 and last_passed is None:
+            should_clear = True
 
         if should_clear:
-            # 只有在“通过校验”或“首轮未校验”时才清空
             ctx.session.events = []
-            # 使用一次后复位，避免“旧的通过”状态影响后续判断
-            st["last_validation_passed"] = None
+            st["writer_should_clear_history"] = False
         else:
-            # 上次未通过：不清空，并把错误反馈加入上下文，帮助模型修正
-            # if feedback_text:
-            #     ctx.session.events.append(
-            #         Event(
-            #             author="CheckerAgent",
-            #             content=types.Content(parts=[types.Part(text=feedback_text)])
-            #         )
-            #     )
             logger.info(f"=====>>>6. 当前正在进行对: 第{current_slide_index}个块重新生成")
-            del_history = ctx.session.events.pop()
-            logger.info(f"=============>>>删除了最后1个内容块：\n{del_history}")
-            del_history = ctx.session.events.pop()
-            logger.info(f"=============>>>删除了倒数第2个内容块：\n{del_history}")
-            logger.info(f"=============>>>删除后的历史记录为：\n{ctx.session.events}")
+            if len(ctx.session.events) >= 2:
+                del_history = ctx.session.events.pop()
+                logger.info(f"=============>>>删除了最后1个内容块：\n{del_history}")
+                del_history = ctx.session.events.pop()
+                logger.info(f"=============>>>删除了倒数第2个内容块：\n{del_history}")
+                logger.info(f"=============>>>删除后的历史记录为：\n{ctx.session.events}")
+            if feedback_text:
+                ctx.session.events.append(
+                    Event(
+                        author="CheckerAgent",
+                        content=types.Content(parts=[types.Part(text=feedback_text)])
+                    )
+                )
         if current_slide_index == 0:
             print(f"正在生成第{current_slide_index}页幻灯片...")
 
@@ -286,13 +291,13 @@ class PPTWriterSubAgent(LlmAgent):
         print(f"第{current_slide_index}页的prompt是：{prompt_instruction}")
         return prompt_instruction
 
-# ========== Checker（规则校验 JSON，不调用大模型） ==========
+# ========== Checker（规则 + 质量双阶段校验，不调用大模型） ==========
 class CheckerAgent(BaseAgent):
     """
-    仅用规则判断 Writer 的输出是否为 JSON：
-    - 截取首个 '{' 到最后一个 '}' 的子串尝试 json.loads
-    - 成功：state['is_valid_json']=True，state['last_slide_json']=obj
-    - 失败：state['is_valid_json']=False
+    规则：
+    - 先解析 JSON
+    - 再做 schema / 结构校验
+    - 最后做内容质量校验
     """
     def __init__(self, **kwargs):
         super().__init__(
@@ -301,63 +306,16 @@ class CheckerAgent(BaseAgent):
             **kwargs
         )
 
-    def _try_parse_json(self, text: str) -> Optional[dict]:
-        if not text:
-            return None
-        s = text.strip()
-        if s.startswith("```json"):
-            s = s[len("```json"):].strip()
-        if s.startswith("```"):
-            s = s[len("```"):].strip()
-        if s.endswith("```"):
-            s = s[: -len("```")].strip()
-        try:
-            start = s.find("{")
-            end = s.rfind("}")
-            if start != -1 and end != -1 and end > start:
-                s = s[start:end+1]
-            return json.loads(s)
-        except Exception:
-            return None
-
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
-        raw = ctx.session.state.get("last_written_raw")  # Writer 存入
-        data = self._try_parse_json(raw)
-        if data is None:
-            ctx.session.state["is_valid_json"] = False
-            ctx.session.state["last_slide_json"] = None
-            fail_msg = "校验结果：❌ 非 JSON。将触发重试或跳过策略。"
-            ctx.session.state["last_validation_passed"] = False
-            ctx.session.state["last_validation_feedback"] = fail_msg
-            # yield Event(
-            #     author=self.name,
-            #     content=types.Content(parts=[types.Part(text="校验结果：❌ 非 JSON。将触发重试或跳过策略。")])
-            # )
-            return
+        raw = ctx.session.state.get("last_written_raw")
         current_slide_index: int = ctx.session.state.get("current_slide_index", 0)
         outline_json: list = ctx.session.state.get("outline_json")
         current_slide_schema = outline_json[current_slide_index]
-        is_valid, error_messages = validate_slide(data, current_slide_schema)
-        if not is_valid:
-            ctx.session.state["is_valid_json"] = False
-            ctx.session.state["last_slide_json"] = None
-            # === ：记录“未通过校验”的状态与错误信息 ===
-            fail_msg = f"校验结果：❌ JSON。将触发重试或跳过策略。缺少了部分字段: {error_messages}"
-            ctx.session.state["last_validation_passed"] = False
-            ctx.session.state["last_validation_feedback"] = fail_msg
-            yield Event(
-                author=self.name,
-                content=types.Content(parts=[types.Part(text=f"校验结果：❌ JSON。将触发重试或跳过策略。缺少了部分字段: {error_messages}")])
-            )
-            return
-        ctx.session.state["is_valid_json"] = True
-        ctx.session.state["last_slide_json"] = data
-        # === 记录“通过校验”的状态，并清空反馈文本 ===
-        ctx.session.state["last_validation_passed"] = True
-        # ctx.session.state["last_validation_feedback"] = None
+        outcome = evaluate_checker_result(raw, current_slide_schema)
+        apply_checker_outcome_to_state(ctx.session.state, outcome)
         yield Event(
             author=self.name,
-            content=types.Content(parts=[types.Part(text="校验结果：✅ 有效 JSON。")])
+            content=types.Content(parts=[types.Part(text=outcome.summary_text)])
         )
         return
 
@@ -392,84 +350,47 @@ class ControllerAgent(BaseAgent):
         acc.append(item)
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
-        max_retries: int = 3
         st = ctx.session.state
-        slides_plan_num: int = int(st.get("slides_plan_num", 0))
+        ensure_loop_state_initialized(st)
         current_slide_index: int = int(st.get("current_slide_index", 0))
-        is_valid: bool = bool(st.get("is_valid_json", False))
-        retry_map = self._get_retry_map(st)
-        current_retries = int(retry_map.get(current_slide_index, 0))
 
-        if is_valid:
+        if bool(st.get("last_validation_passed")):
             data = st.get("last_slide_json")
             if isinstance(data, dict):
                 try:
                     data = await maybe_attach_images_to_slide(data, state=st, search_image=SearchImage)
                     st["last_slide_json"] = data
                 except Exception as exc:
-                    # 配图失败不应阻断主链路（仍返回文本/结构）
                     logger.warning("自动配图失败，将跳过 images 注入：%s", exc, exc_info=True)
-            # 累计保存
-            self._append_accumulated(st, data if data is not None else st.get("last_written_raw"))
-            # 清理本页中间态
-            last_written_raw = st.get("last_written_raw")
-            last_slide_json = st.get("last_slide_json")
-            if last_slide_json:
-                return_slide_json = json.dumps(last_slide_json, ensure_ascii=False)
-            else:
-                return_slide_json = last_written_raw
-            st["last_written_raw"] = None
-            st["last_slide_json"] = None
-            st["is_valid_json"] = False
-            retry_map[current_slide_index] = 0
 
-            # 推进页码
-            st["current_slide_index"] = current_slide_index + 1
+        decision = advance_or_retry_after_validation(st, max_retries=3)
+
+        if decision.action == "retry":
+            print(
+                f"第 {current_slide_index} 页{decision.failure_stage or '校验'}失败，准备第 {decision.retry_count} 次重试。"
+            )
+            return
+
+        if decision.output_text is not None:
             yield Event(
                 author=self.name,
-                content=types.Content(parts=[types.Part(text=return_slide_json)])
+                content=types.Content(parts=[types.Part(text=decision.output_text)])
             )
-            print(f"第 {current_slide_index} 页已通过校验，进入下一页。")
-        else:
-            # 失败：尝试重试或跳过
-            current_retries += 1
-            retry_map[current_slide_index] = current_retries
-            if current_retries <= max_retries:
-                print(f"第 {current_slide_index} 页非 JSON，准备第 {current_retries} 次重试。")
-                # 不推进页码，由 LoopAgent 触发下一轮 Writer
-                return
-            else:
-                # 超过重试阈值，选择跳过此页，推进
-                print(f"第 {current_slide_index} 页重试超过 {max_retries} 次，跳过并进入下一页。")
-                st["current_slide_index"] = current_slide_index + 1
-                last_written_raw = st.get("last_written_raw")
-                last_slide_json = st.get("last_slide_json")
-                if last_slide_json:
-                    return_slide_json = json.dumps(last_slide_json, ensure_ascii=False)
-                else:
-                    return_slide_json = last_written_raw
-                # 清理中间态
-                st["last_written_raw"] = None
-                st["last_slide_json"] = None
-                st["is_valid_json"] = False
-                retry_map[current_slide_index] = 0
-                # 即使失败，也返回last_written_raw
-                yield Event(
-                    author=self.name,
-                    content=types.Content(parts=[types.Part(text=return_slide_json)])
-                )
 
-        # 终止判断：到达最后一页后输出汇总并 escalate
-        new_index = int(st.get("current_slide_index", 0))
-        if slides_plan_num > 0 and new_index >= slides_plan_num:
-            # 汇总输出
+        if decision.action == "advance":
+            print(f"第 {current_slide_index} 页已通过校验，进入下一页。")
+        elif decision.action == "degrade":
+            print(
+                f"第 {current_slide_index} 页在 {decision.failure_stage or 'unknown'} 阶段重试超过 3 次，降级跳过并进入下一页。"
+            )
+
+        if decision.should_escalate:
             accumulated = st.get("generated_slides_content") or []
             try:
                 pretty = json.dumps(accumulated, ensure_ascii=False, indent=2)
             except Exception:
                 pretty = str(accumulated)
             print(f"全部页处理完成。汇总如下：\n\n{pretty}")
-            # 结束循环
             yield Event(author=self.name, actions=EventActions(escalate=True))
 
         return
@@ -480,12 +401,7 @@ def my_super_before_agent_callback(callback_context: CallbackContext):
     Loop 启动前的初始化（仅一次）
     """
     st = callback_context.state
-    # 初始化重试计数 map、累计结果
-    if st.get("retry_count_map") is None:
-        st["retry_count_map"] = {}
-    if st.get("generated_slides_content") is None:
-        st["generated_slides_content"] = []
-    # attempts 不是必须，这里不做。
+    ensure_loop_state_initialized(st)
     return None
 
 
