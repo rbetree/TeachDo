@@ -962,7 +962,7 @@ readStream()
 
 > 确保现有编辑器页面不受重构影响，保持完整功能
 >
-> **技术说明**: 现有编辑器基于Canvas实现(见 `frontend/doc/Canvas.md`),使用自定义元素系统(见 `frontend/doc/CustomElement.md`)进行幻灯片元素管理
+> **技术说明**: 现有编辑器基于 Canvas 渲染与自定义元素体系实现，相关细节以 `frontend/src/editor-runtime/` 下的运行时代码与组件实现为准。
 
 ### 集合 7.1: 编辑器集成验证 ✅
 
@@ -1234,7 +1234,8 @@ she
 
 ### 现有功能参考
 - `frontend/`: 现有前端代码库
-- `doc/`: 项目文档
+- `docs/`: 用户文档（VitePress 站点）
+- `doc/`: 开发者文档
 - API文档（维护版）：`doc/backend/backend_api_reference.md`
 - 抓包/历史记录（可能过时）：`doc/legacy/API_*.md`
 

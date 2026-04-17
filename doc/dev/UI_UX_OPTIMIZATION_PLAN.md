@@ -60,7 +60,7 @@
 
 ## frontend/src/layouts/MainLayout.vue
 - `frontend/src/layouts/MainLayout.vue:12` - 增加 Skip Link
-- `frontend/src/layouts/MainLayout.vue:18` - `<main id="main-content" tabindex="-1">`
+- `frontend/src/layouts/MainLayout.vue:18` - ``<main id="main-content" tabindex="-1">``
 
 ## frontend/src/components/workspace/AssistantView.vue
 - `frontend/src/components/workspace/AssistantView.vue:300` - Enter 发送、Shift+Enter 换行（不再 `.prevent`）
@@ -84,25 +84,25 @@
 ## frontend/src/components/workspace/KnowledgeBaseView.vue
 - `frontend/src/components/workspace/KnowledgeBaseView.vue:586` - 导出/删除按钮命中区提升到 44×44（`w-11 h-11`）
 - `frontend/src/components/workspace/KnowledgeBaseView.vue:613` - 进度条仅对 width 动画（`transition-[width]`）
-- `frontend/src/components/workspace/KnowledgeBaseView.vue:624` - 上传 dropzone 改为 `<button type="button">`（键盘可达 + focus-visible）
+- `frontend/src/components/workspace/KnowledgeBaseView.vue:624` - 上传 dropzone 改为 ``<button type="button">``（键盘可达 + focus-visible）
 
 ## frontend/src/utils/focusTrap.ts
 - `frontend/src/utils/focusTrap.ts:9` - 统一 focus trap 工具（Dialog 的 Tab/Shift+Tab 循环）
 
 ## frontend/src/components/workspace/TeachingMaterialCreateDialog.vue
-- `frontend/src/components/workspace/TeachingMaterialCreateDialog.vue:105` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
+- `frontend/src/components/workspace/TeachingMaterialCreateDialog.vue:105` - backdrop 改为全屏 ``<button>``（键盘等价）并提供 `aria-label`
 - `frontend/src/components/workspace/TeachingMaterialCreateDialog.vue:65` - Tab focus trap（`trapTabKey`）
 
 ## frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue
-- `frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue:91` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
+- `frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue:91` - backdrop 改为全屏 ``<button>``（键盘等价）并提供 `aria-label`
 - `frontend/src/components/workspace/TeachingMaterialDeleteDialog.vue:46` - Tab focus trap（`trapTabKey`）
 
 ## frontend/src/components/workspace/ppt/PptAdvancedDialog.vue
-- `frontend/src/components/workspace/ppt/PptAdvancedDialog.vue:88` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
+- `frontend/src/components/workspace/ppt/PptAdvancedDialog.vue:88` - backdrop 改为全屏 ``<button>``（键盘等价）并提供 `aria-label`
 - `frontend/src/components/workspace/ppt/PptAdvancedDialog.vue:51` - Tab focus trap（`trapTabKey`）
 
 ## frontend/src/components/workspace/KbFilePickerDialog.vue
-- `frontend/src/components/workspace/KbFilePickerDialog.vue:312` - backdrop 改为全屏 `<button>`（键盘等价）并提供 `aria-label`
+- `frontend/src/components/workspace/KbFilePickerDialog.vue:312` - backdrop 改为全屏 ``<button>``（键盘等价）并提供 `aria-label`
 - `frontend/src/components/workspace/KbFilePickerDialog.vue:269` - Tab focus trap（`trapTabKey`）
 
 ## frontend/src/views/SettingsView.vue
@@ -116,7 +116,7 @@
 - `frontend/src/components/common/ToastContainer.vue:76` - 动效从 `transition: all` 改为仅 `opacity, transform`
 
 ## frontend/index.html
-- `frontend/index.html:7` - 增加 `color-scheme` / `theme-color`，并将字体加载移到 `<head><link rel=\"stylesheet\">` + `preconnect`
+- `frontend/index.html:7` - 增加 `color-scheme` / `theme-color`，并将字体加载移到 ``<head><link rel=\"stylesheet\">`` + `preconnect`
 
 ## frontend/src/style.css
 - `frontend/src/style.css:33` - `color-scheme`（浅/深）与暗色原生控件一致性
@@ -149,10 +149,10 @@
 - 对所有在小屏会变成“纯图标”的按钮：增加 `aria-label`（或 `sr-only` 文本）。
 - 内部导航（workspace/about/settings）改用 `RouterLink`（支持 Cmd/Ctrl+Click / 中键）。
 - 状态文案 `Checking…/System/Online/Offline` 全量 i18n 化。
-- 补充 Skip Link：在 `MainLayout.vue` 顶部加入 “跳到主内容” 链接，`<main>` 增加 `id`。
+- 补充 Skip Link：在 `MainLayout.vue` 顶部加入 “跳到主内容” 链接，``<main>`` 增加 `id`。
 
 **验收**
-- <lg 屏幕读屏能读出每个导航按钮名称；键盘 Tab 可跳过导航直接到主内容。
+- ` <lg ` 屏幕读屏能读出每个导航按钮名称；键盘 Tab 可跳过导航直接到主内容。
 
 ---
 
@@ -216,7 +216,7 @@
 **要点**
 - 导出/删除按钮由 `w-7 h-7` 提升到 ≥44×44（如 `w-11 h-11`）。
 - 进度条动画仅对 width 生效（`transition-[width]`）。
-- 上传 dropzone 从 clickable `<div>` 改为 `<button>` 或 `<label for=file>`，并保证键盘可达。
+- 上传 dropzone 从 clickable ``<div>`` 改为 ``<button>`` 或 ``<label for=file>``，并保证键盘可达。
 
 **验收**
 - 移动端易点；键盘可操作；进度动画不触发布局属性。
@@ -236,7 +236,7 @@
 **要点**
 - `trapTabKey()`：Tab/Shift+Tab 循环。
 - 打开时聚焦首个输入或主要操作按钮；关闭后 restore focus（现已有）。
-- backdrop 改为全屏 `<button type="button" :aria-label="t('common.close')">`（并阻止冒泡）。
+- backdrop 改为全屏 ``<button type="button" :aria-label="t('common.close')">``（并阻止冒泡）。
 
 **验收**
 - Tab 不逃逸；Esc 可关；关闭后焦点回到触发按钮。
@@ -294,9 +294,9 @@
 - `frontend/src/style.css`
 
 **要点**
-- 将 Google Fonts 从 `@import` 移到 `<head><link rel="stylesheet">`，并加入 `preconnect`。
+- 将 Google Fonts 从 `@import` 移到 ``<head><link rel="stylesheet">``，并加入 `preconnect`。
 - 增加 `color-scheme`（浅/深）以改善原生控件与滚动条。
-- 增加 `<meta name="theme-color">`（至少提供与背景匹配的默认值；如需动态切换可后续增强）。
+- 增加 ``<meta name="theme-color">``（至少提供与背景匹配的默认值；如需动态切换可后续增强）。
 
 ---
 

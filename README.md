@@ -85,7 +85,8 @@ TeachDo/
 │   └── mock_api/            # 可选：mock SSE 联调用
 ├── frontend/                # TeachDo 项目的前端应用（Vue 3 + Vite + TS）
 ├── scripts/                 # 验证脚本与工具
-└── doc/                     # 项目文档（含迁移说明）
+├── docs/                    # 用户文档（VitePress 站点）
+└── doc/                     # 开发者文档（仓库内原始文档）
 ```
 
 ## 快速开始

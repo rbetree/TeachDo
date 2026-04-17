@@ -155,7 +155,8 @@ TeachDo 是面向教师的智能备课平台，围绕教学资料的全流程工
 TeachDo/
 ├── backend/               # FastAPI 多服务与后端测试
 ├── frontend/              # Vue 3 前端（唯一前端入口）
-├── doc/                   # 项目文档（开发计划、后端架构、环境说明）
+├── docs/                  # 用户文档（VitePress 站点）
+├── doc/                   # 开发者文档（原始维护文档）
 ├── scripts/               # 冒烟校验与辅助脚本
 ├── template/              # 模板资源
 ├── var/                   # 运行期数据（缓存/临时/产物）

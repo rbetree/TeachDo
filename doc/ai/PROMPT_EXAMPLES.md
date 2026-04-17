@@ -24,6 +24,8 @@ AIPPTContentChartItem → isChartItem → getNewChartElement → PPTChartElement
 
 
 数据：
+
+```json
 [
     {
         "kind": "chart",
@@ -75,9 +77,12 @@ AIPPTContentChartItem → isChartItem → getNewChartElement → PPTChartElement
         }
     }
 ]
+```
 
 
 匹配的模版
+
+```json
 {
     "id": "gLwjShOKqV",
     "elements": [
@@ -265,13 +270,17 @@ AIPPTContentChartItem → isChartItem → getNewChartElement → PPTChartElement
     },
     "type": "content"
 }
+```
 
 
 
 
 
 文件名: frontend/src/editor-runtime/types/AIPPT.ts
-内容: // 图片信息接口
+内容:
+
+```ts
+// 图片信息接口
 export interface AIPPTImage {
   id: string
   src: string
@@ -437,9 +446,13 @@ export const SUPPORTED_CHART_TYPES = ['line', 'bar', 'pie'] as const
 export function isSupportedChartType(t: any): t is AIPPTChartType {
   return (SUPPORTED_CHART_TYPES as readonly string[]).includes(t)
 }
+```
 
 文件名: frontend/src/editor-runtime/hooks/useAIPPT.ts
-内容: import { ref } from 'vue'
+内容:
+
+```ts
+import { ref } from 'vue'
 import { nanoid } from 'nanoid'
 import type {
   ImageClipDataRange,
@@ -1327,9 +1340,13 @@ export default () => {
     AIPPTGenerator,
   }
 }
+```
 
 文件名: frontend/src/editor-runtime/views/components/element/ChartElement/index.vue
-内容: <template>
+内容:
+
+```vue
+<template>
   <div class="editable-element-chart"
     :class="{ 'lock': elementInfo.lock }"
     :style="{
@@ -1418,9 +1435,13 @@ const openDataEditor = () => {
   cursor: move;
 }
 </style>
+```
 
 文件名: frontend/src/editor-runtime/views/components/element/ChartElement/BaseChartElement.vue
-内容: <template>
+内容:
+
+```vue
+<template>
   <div class="base-element-chart"
     :class="{ 'is-thumbnail': target === 'thumbnail' }"
     :style="{
@@ -1489,8 +1510,13 @@ defineProps<{
   height: 100%;
 }
 </style>
+```
+
 文件名: frontend/src/editor-runtime/views/components/element/ChartElement/Chart.vue
-内容: <template>
+内容:
+
+```vue
+<template>
   <div class="chart" ref="chartRef"></div>
 </template>
 
@@ -1575,8 +1601,13 @@ watch(() => props.textColor, updateOption)
   height: 100%;
 }
 </style>
+```
+
 文件名: frontend/src/editor-runtime/views/components/element/ChartElement/chartOption.ts
-内容: import type { ComposeOption } from 'echarts/core'
+内容:
+
+```ts
+import type { ComposeOption } from 'echarts/core'
 import type {
   BarSeriesOption,
   LineSeriesOption,
@@ -1609,6 +1640,7 @@ export const getChartOption = ({
 }: ChartOptionPayload): EChartOption | null => {
   // ... 图表配置生成逻辑
 }
+```
 
 ---
 
@@ -1621,7 +1653,7 @@ export const getChartOption = ({
 
 设计说明:
 - 当用户输入长度 > 1000 字符时，使用 OUTLINE_INSTRUCTION_NO_SEARCH（不搜索）
-- 当用户输入长度 <= 1000 字符时，���用 OUTLINE_INSTRUCTION_WITH_SEARCH（带搜索）
+- 当用户输入长度 <= 1000 字符时，使用 OUTLINE_INSTRUCTION_WITH_SEARCH（带搜索）
 - 原因：长文本通常是用户上传的文档，应基于文档内容生成；短文本可能只是主题，需要搜索补充
 
 内容:

@@ -86,3 +86,6 @@ logs
 /scripts/align_opening_report_ppt.py
 /.venv
 /skills
+docs/.vitepress/dist
+docs/.vitepress/dist-*
+docs/.vitepress/cache

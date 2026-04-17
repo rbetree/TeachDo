@@ -30,7 +30,7 @@
 6) 依赖与启动链不一致
    - 现象：`start.py` 仅安装 `backend/requirements.txt`，未覆盖子服务独立 `requirements.txt`，导致功能缺失风险。
 7) 文档与组织
-   - `doc/` 与 `docs/` 双目录并存，信息分散；部分链接指向不同目录，认知成本高。
+   - 此前旧维护文档目录与 VitePress 站点目录双轨并存，信息分散；部分链接指向不同入口，认知成本高。
 8) 测试策略不足
    - 现象：集成测试依赖多服务同时在线；缺少对 `/proxy`、上传、SSE 终止协议的契约与安全用例。
 
@@ -102,7 +102,7 @@ async def lifespan(app):
 - 统一端口与环境变量命名。
 
 5.11 文档与目录
-- 合并 `doc/` 与 `docs/`（单一入口），更新 README 链接；新增“架构与运维”索引。
+- 历史方案曾尝试统一为单一 `docs/` 入口；当前已恢复为 `docs/`（用户文档）+ `doc/`（开发文档）双目录结构。
 
 ## 6. 实施计划（交付物 + DoD）
 1) Centralize settings module
@@ -154,7 +154,7 @@ async def lifespan(app):
 - DoD：编排启动稳定、异常可恢复。
 
 13) Consolidate docs structure
-- 交付：合并 `doc/`→`docs/` 或反向（需确认）；更新 README 链接。
+- 交付：完成文档目录治理并更新 README 链接。
 - DoD：文档路径唯一，无死链。
 
 14) Draft migration notes/PR checklist

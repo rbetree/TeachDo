@@ -1,4 +1,6 @@
 # 获取模版
+
+```text
 curl 'https://asset.pptist.cn/data/template_2.json' \
   -H 'accept: application/json, text/plain, */*' \
   -H 'accept-language: en,zh-CN;q=0.9,zh;q=0.8' \
@@ -9262,3 +9264,4 @@ curl 'https://asset.pptist.cn/data/template_2.json' \
         }
     ]
 }
+```

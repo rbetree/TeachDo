@@ -2,7 +2,7 @@
 
 > 注意：本文为历史记录，包含旧版路径/旧版页面与旧项目命名，不再保证与现行 TeachDo 一致。  
 > 现行能力边界与对接入口请优先阅读：
-> - `doc/README.md`
+> - `README.md`
 > - `doc/architecture/FEATURE_API_OVERVIEW.md`
 > - `doc/backend/backend_api_reference.md`
 

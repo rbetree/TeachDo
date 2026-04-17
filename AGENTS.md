@@ -15,7 +15,8 @@ TeachDo 是面向教师的智能备课平台，主链路为 Outline -> 教案/PP
 
 - `backend/`: FastAPI 多服务（`main_api`、`simpleOutline`、`slide_agent`、`personaldb`、`mock_api`）
 - `frontend/`: TeachDo 唯一前端入口（Vue 3 + Vite + TS）
-- `doc/`: 项目文档与开发计划
+- `docs/`: 用户文档（VitePress 站点）
+- `doc/`: 开发者文档（原始维护文档）
 - `scripts/`: 校验与辅助脚本
 - `template/`: PPT 模板资源
 - `var/`、`logs/`、`notes/`: 运行时数据与本地记录（含 gitignore）
