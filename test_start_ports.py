@@ -106,3 +106,124 @@ def test_check_ports_autoswitch_personal_db_port_when_unbindable(monkeypatch):
     assert env["PERSONAL_DB_PORT"] == "9101"
     assert env["PERSONALDB_PORT"] == "9101"
     assert env["PERSONAL_DB"] == "http://127.0.0.1:9101"
+
+
+def test_check_ports_autoswitch_main_api_port_when_unbindable(monkeypatch):
+    import start
+
+    def fake_check_tcp_port_bindable(_host: str, port: int):
+        if int(port) == 6800:
+            return False, errno.EADDRINUSE
+        if int(port) == 6801:
+            return True, None
+        return True, None
+
+    monkeypatch.setattr(start, "check_tcp_port_bindable", fake_check_tcp_port_bindable)
+    monkeypatch.setattr(start.ProductionStarter, "kill_processes_on_ports", lambda _self, _ports: 0)
+
+    # 显式指定为默认端口，避免本机 settings.json/.env 干扰测试。
+    monkeypatch.setenv("HOST", "0.0.0.0")
+    monkeypatch.setenv("MAIN_API_PORT", "6800")
+
+    starter = start.ProductionStarter(no_install=True)
+    starter.setup_logging()
+
+    starter.check_ports()
+
+    assert int(starter.services["main_api"]["port"]) == 6801
+    env = starter._build_subprocess_env()
+    assert env["MAIN_API_PORT"] == "6801"
+
+
+def test_check_ports_autoswitch_outline_port_when_unbindable(monkeypatch):
+    import start
+
+    def fake_check_tcp_port_bindable(_host: str, port: int):
+        if int(port) == 10001:
+            return False, errno.EADDRINUSE
+        if int(port) == 10002:
+            return True, None
+        return True, None
+
+    monkeypatch.setattr(start, "check_tcp_port_bindable", fake_check_tcp_port_bindable)
+    monkeypatch.setattr(start.ProductionStarter, "kill_processes_on_ports", lambda _self, _ports: 0)
+    monkeypatch.setenv("HOST", "0.0.0.0")
+    monkeypatch.setenv("OUTLINE_API_PORT", "10001")
+    monkeypatch.setenv("OUTLINE_API", "http://127.0.0.1:10001")
+
+    starter = start.ProductionStarter(no_install=True)
+    starter.setup_logging()
+
+    starter.check_ports()
+
+    assert int(starter.services["outline"]["port"]) == 10002
+    assert starter.services["outline"]["args"] == [
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "10002",
+        "--agent_url",
+        "http://127.0.0.1:10002/",
+    ]
+    env = starter._build_subprocess_env()
+    assert env["OUTLINE_API_PORT"] == "10002"
+    assert env["OUTLINE_API"] == "http://127.0.0.1:10002"
+
+
+def test_check_ports_autoswitch_content_port_when_unbindable(monkeypatch):
+    import start
+
+    def fake_check_tcp_port_bindable(_host: str, port: int):
+        if int(port) == 10011:
+            return False, errno.EADDRINUSE
+        if int(port) == 10012:
+            return True, None
+        return True, None
+
+    monkeypatch.setattr(start, "check_tcp_port_bindable", fake_check_tcp_port_bindable)
+    monkeypatch.setattr(start.ProductionStarter, "kill_processes_on_ports", lambda _self, _ports: 0)
+    monkeypatch.setenv("HOST", "0.0.0.0")
+    monkeypatch.setenv("CONTENT_API_PORT", "10011")
+    monkeypatch.setenv("CONTENT_API", "http://127.0.0.1:10011")
+
+    starter = start.ProductionStarter(no_install=True)
+    starter.setup_logging()
+
+    starter.check_ports()
+
+    assert int(starter.services["content"]["port"]) == 10012
+    assert starter.services["content"]["args"] == [
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "10012",
+        "--agent_url",
+        "http://127.0.0.1:10012/",
+    ]
+    env = starter._build_subprocess_env()
+    assert env["CONTENT_API_PORT"] == "10012"
+    assert env["CONTENT_API"] == "http://127.0.0.1:10012"
+
+
+def test_check_ports_autoswitch_frontend_port_when_unbindable(monkeypatch):
+    import start
+
+    def fake_check_tcp_port_bindable(host: str, port: int):
+        if host == "127.0.0.1" and int(port) == 5174:
+            return False, errno.EADDRINUSE
+        if host == "127.0.0.1" and int(port) == 5175:
+            return True, None
+        return True, None
+
+    monkeypatch.setattr(start, "check_tcp_port_bindable", fake_check_tcp_port_bindable)
+    monkeypatch.setattr(start.ProductionStarter, "kill_processes_on_ports", lambda _self, _ports: 0)
+    monkeypatch.setenv("FRONTEND_PORT", "5174")
+
+    starter = start.ProductionStarter(no_install=True)
+    starter.setup_logging()
+
+    starter.check_ports()
+
+    assert int(starter.frontend_port) == 5175
+    env = starter._build_subprocess_env()
+    assert env["FRONTEND_PORT"] == "5175"

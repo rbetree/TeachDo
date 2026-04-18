@@ -308,7 +308,7 @@ def find_listening_pids_on_tcp_port(port: int) -> Set[int]:
     尽力定位正在监听（TCP LISTEN）指定端口的进程 PID。
 
     注意：
-    - 在 WSL mirrored networking、宿主机端口占用、或权限受限时，可能无法返回 PID。
+    - 在 WSL mirrored networking、宿主机端口占用、非 LISTEN 连接占用本地端口、或权限受限时，可能无法返回 PID。
     - 本函数用于“最佳努力”的诊断与清理，不应作为端口占用判断的唯一依据。
     """
 
@@ -694,10 +694,39 @@ TeachDo 生产环境启动器
                 return int(p)
         return None
 
-    def _override_personal_db_port(self, new_port: int) -> None:
+    def _apply_service_runtime_port(self, service_name: str, new_port: int) -> None:
         new_port = int(new_port)
-        if "personal_db" in self.services:
-            self.services["personal_db"]["port"] = new_port
+        if service_name not in self.services:
+            return
+        self.services[service_name]["port"] = new_port
+
+        # outline/content 的启动参数在初始化时写死了端口，这里需要同步刷新。
+        if service_name in {"outline", "content"}:
+            self.services[service_name]["args"] = [
+                "--host",
+                self.bind_host,
+                "--port",
+                str(new_port),
+                "--agent_url",
+                f"http://{self.access_host}:{new_port}/",
+            ]
+
+        self._sync_internal_service_env_overrides()
+
+    def _override_personal_db_port(self, new_port: int) -> None:
+        self._apply_service_runtime_port("personal_db", new_port)
+
+    def _override_outline_port(self, new_port: int) -> None:
+        self._apply_service_runtime_port("outline", new_port)
+
+    def _override_content_port(self, new_port: int) -> None:
+        self._apply_service_runtime_port("content", new_port)
+
+    def _override_main_api_port(self, new_port: int) -> None:
+        self._apply_service_runtime_port("main_api", new_port)
+
+    def _override_frontend_port(self, new_port: int) -> None:
+        self.frontend_port = int(new_port)
         self._sync_internal_service_env_overrides()
 
     def _maybe_autoswitch_personal_db_port(self, occupied: List[Tuple[str, int, str, Optional[int]]]) -> bool:
@@ -737,6 +766,128 @@ TeachDo 生产环境启动器
         if self._is_wsl():
             self._print_warn("检测到 WSL 环境：若 9100 由 Windows 宿主机占用，WSL 内可能无法定位/终止对应进程。")
         self._override_personal_db_port(new_port)
+        return True
+
+    def _maybe_autoswitch_main_api_port(self, occupied: List[Tuple[str, int, str, Optional[int]]]) -> bool:
+        """
+        尝试在端口无法释放时自动为“主 API”服务换一个可用端口。
+
+        典型场景：
+        - WSL2 mirrored networking 下，Windows 宿主机上的普通客户端连接可能占用本地源端口；
+        - 此时 WSL 内 `lsof -sTCP:LISTEN` / `ss -ltnp` 查不到监听进程，但 bind(0.0.0.0:6800) 仍会失败。
+        """
+        import errno
+
+        if "main_api" not in self.services:
+            return False
+
+        current_port = int(self.services["main_api"]["port"])
+        hit = False
+        for _host, port, name, err in occupied:
+            if name != "主API服务":
+                continue
+            if int(port) != current_port:
+                continue
+            if err not in {None, errno.EADDRINUSE}:
+                continue
+            hit = True
+            break
+
+        if not hit:
+            return False
+
+        new_port = self._pick_bindable_tcp_port(self.bind_host, current_port + 1, max_tries=200)
+        if new_port is None:
+            return False
+
+        self._print_warn(f"主API服务端口 {current_port} 无法使用，自动切换到 {new_port}（仅本次启动生效）")
+        if self._is_wsl():
+            self._print_warn("检测到 WSL 环境：若 Windows 宿主机的非 LISTEN 连接占用了该本地端口，WSL 内可能无法定位/终止对应进程。")
+        self._override_main_api_port(new_port)
+        return True
+
+    def _maybe_autoswitch_outline_port(self, occupied: List[Tuple[str, int, str, Optional[int]]]) -> bool:
+        import errno
+
+        if "outline" not in self.services:
+            return False
+
+        current_port = int(self.services["outline"]["port"])
+        hit = False
+        for _host, port, name, err in occupied:
+            if name != "大纲生成服务":
+                continue
+            if int(port) != current_port:
+                continue
+            if err not in {None, errno.EADDRINUSE}:
+                continue
+            hit = True
+            break
+
+        if not hit:
+            return False
+
+        new_port = self._pick_bindable_tcp_port(self.bind_host, current_port + 1, max_tries=200)
+        if new_port is None:
+            return False
+
+        self._print_warn(f"大纲生成服务端口 {current_port} 无法使用，自动切换到 {new_port}（仅本次启动生效）")
+        self._override_outline_port(new_port)
+        return True
+
+    def _maybe_autoswitch_content_port(self, occupied: List[Tuple[str, int, str, Optional[int]]]) -> bool:
+        import errno
+
+        if "content" not in self.services:
+            return False
+
+        current_port = int(self.services["content"]["port"])
+        hit = False
+        for _host, port, name, err in occupied:
+            if name != "内容生成服务":
+                continue
+            if int(port) != current_port:
+                continue
+            if err not in {None, errno.EADDRINUSE}:
+                continue
+            hit = True
+            break
+
+        if not hit:
+            return False
+
+        new_port = self._pick_bindable_tcp_port(self.bind_host, current_port + 1, max_tries=200)
+        if new_port is None:
+            return False
+
+        self._print_warn(f"内容生成服务端口 {current_port} 无法使用，自动切换到 {new_port}（仅本次启动生效）")
+        self._override_content_port(new_port)
+        return True
+
+    def _maybe_autoswitch_frontend_port(self, occupied: List[Tuple[str, int, str, Optional[int]]]) -> bool:
+        import errno
+
+        current_port = int(self.frontend_port)
+        hit = False
+        for _host, port, name, err in occupied:
+            if name != "前端":
+                continue
+            if int(port) != current_port:
+                continue
+            if err not in {None, errno.EADDRINUSE}:
+                continue
+            hit = True
+            break
+
+        if not hit:
+            return False
+
+        new_port = self._pick_bindable_tcp_port(self.frontend_host, current_port + 1, max_tries=200)
+        if new_port is None:
+            return False
+
+        self._print_warn(f"前端端口 {current_port} 无法使用，自动切换到 {new_port}（仅本次启动生效）")
+        self._override_frontend_port(new_port)
         return True
 
     def _run_command(
@@ -921,6 +1072,26 @@ TeachDo 生产环境启动器
                     still_ports = sorted({p for _h, p, _n, _e in still_occupied})
                     if not still_ports:
                         return
+                if self._maybe_autoswitch_outline_port(still_occupied):
+                    still_occupied = _occupied_targets()
+                    still_ports = sorted({p for _h, p, _n, _e in still_occupied})
+                    if not still_ports:
+                        return
+                if self._maybe_autoswitch_content_port(still_occupied):
+                    still_occupied = _occupied_targets()
+                    still_ports = sorted({p for _h, p, _n, _e in still_occupied})
+                    if not still_ports:
+                        return
+                if self._maybe_autoswitch_main_api_port(still_occupied):
+                    still_occupied = _occupied_targets()
+                    still_ports = sorted({p for _h, p, _n, _e in still_occupied})
+                    if not still_ports:
+                        return
+                if self._maybe_autoswitch_frontend_port(still_occupied):
+                    still_occupied = _occupied_targets()
+                    still_ports = sorted({p for _h, p, _n, _e in still_occupied})
+                    if not still_ports:
+                        return
 
                 self._print_error(f"端口仍被占用: {still_ports}（已尝试终止 {killed} 个进程）")
                 for host, port, name, err in still_occupied:
@@ -989,7 +1160,7 @@ TeachDo 生产环境启动器
             pids = sorted(find_listening_pids_on_tcp_port(port))
             if not pids:
                 self._print_warn(
-                    f"无法定位占用端口 {port} 的监听进程（可能由宿主机占用/非 LISTEN 状态/权限或工具限制）"
+                    f"无法定位占用端口 {port} 的监听进程（可能由宿主机占用/非 LISTEN 连接占用本地端口/权限或工具限制）"
                 )
                 continue
 
