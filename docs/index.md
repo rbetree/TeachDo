@@ -1,9 +1,11 @@
 ---
 layout: home
+title: TeachDo
+titleTemplate: false
 
 hero:
   name: TeachDo
-  text: 面向教师的智能备课平台
+  text: 教师备课工作台
   tagline: 以课程与单元为工作流单元，串联大纲、教案、PPT 的流式生成，并结合知识库增强、助教问答与独立编辑器导出能力。
   image:
     src: /images/01-workspace.png
@@ -32,7 +34,7 @@ features:
 
 ## 平台概览
 
-TeachDo 是面向教师的智能备课平台。系统以“课程 / 单元”为工作流单元，支持大纲、教案、PPT 的流式生成，以及知识库增强、助教问答和独立编辑器导出。
+TeachDo 是教师备课工作台。系统以“课程 / 单元”为工作流单元，支持大纲、教案、PPT 的流式生成，以及知识库增强、助教问答和独立编辑器导出。
 
 主链路聚焦在教师真实备课场景：
 
