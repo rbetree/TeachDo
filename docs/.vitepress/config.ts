@@ -1,5 +1,7 @@
 import { defineConfig, type DefaultTheme } from 'vitepress'
 
+const base = '/TeachDo/'
+
 const guideGroup: DefaultTheme.SidebarItem = {
   text: '指南',
   items: [
@@ -26,9 +28,12 @@ const docsGroup: DefaultTheme.SidebarItem = {
 
 export default defineConfig({
   title: 'TeachDo',
-  description: '面向教师的智能备课平台',
+  description: '教师备课工作台',
   lang: 'zh-CN',
-  base: '/TeachDo/',
+  base,
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}teachdo-logo.svg` }]
+  ],
   srcExclude: ['legacy/**', 'dev/history/**', 'dev/prototypes/**'],
   ignoreDeadLinks: [
     /^\.\/\.\.\/\.\.\/frontend\//,
@@ -43,6 +48,7 @@ export default defineConfig({
   lastUpdated: true,
   themeConfig: {
     siteTitle: 'TeachDo',
+    logo: '/teachdo-logo.svg',
     nav: [
       { text: '首页', link: '/' },
       { text: '指南', link: '/guide/getting-started' },
