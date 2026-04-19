@@ -81,6 +81,7 @@ logs
 
 # Codex 本地临时目录（默认不提交）
 /temp/
+**/.temp/
 
 # 临时脚本（本地用，不提交）
 /scripts/align_opening_report_ppt.py
