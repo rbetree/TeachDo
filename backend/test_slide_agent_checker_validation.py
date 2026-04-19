@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+
+from backend.slide_agent.slide_agent.utils import parse_markdown_to_slides
+
 from backend.slide_agent.slide_agent.sub_agents.ppt_writer.utils import (
     FAILURE_STAGE_PARSE,
     FAILURE_STAGE_QUALITY,
@@ -23,6 +27,24 @@ CONTENT_SCHEMA = {
         ],
     },
 }
+
+COVER_SCHEMA = {
+    "type": "cover",
+    "data": {
+        "title": "AI 备课助手",
+        "text": "聚焦课堂设计与内容组织，帮助教师高效完成备课演示。",
+    },
+}
+
+TRANSITION_SCHEMA = {
+    "type": "transition",
+    "data": {
+        "title": "课堂目标",
+        "text": "本章先明确学习目标，再梳理教学重点与课堂推进方式。",
+    },
+}
+
+END_SCHEMA = {"type": "end"}
 
 
 def _valid_slide() -> dict:
@@ -68,6 +90,61 @@ def test_validate_slide_quality_rejects_placeholder_content():
 
     assert passed is False
     assert any("占位" in issue for issue in issues)
+
+
+def test_validate_cover_like_quality_requires_cover_text():
+    passed, issues = validate_slide_quality({"type": "cover", "data": {"title": "AI 备课助手", "text": ""}}, COVER_SCHEMA)
+
+    assert passed is False
+    assert "data.text 为空或过短" in issues
+
+
+def test_validate_cover_like_quality_rejects_transition_placeholder_text():
+    passed, issues = validate_slide_quality(
+        {
+            "type": "transition",
+            "data": {"title": "课堂目标", "text": "Exploring the topic of 课堂目标"},
+        },
+        TRANSITION_SCHEMA,
+    )
+
+    assert passed is False
+    assert "data.text 含占位或模板化表述" in issues
+
+
+def test_validate_cover_like_quality_allows_end_without_data():
+    passed, issues = validate_slide_quality({"type": "end"}, END_SCHEMA)
+
+    assert passed is True
+    assert issues == []
+
+
+def test_validate_slide_allows_end_without_data_when_schema_has_no_data():
+    passed, issues = validate_slide({"type": "end"}, END_SCHEMA)
+
+    assert passed is True
+    assert issues == []
+
+
+def test_parse_markdown_to_slides_keeps_cover_transition_end_contract_consistent():
+    slides = parse_markdown_to_slides(
+        "# AI 备课助手\n\n## 课堂目标\n### 核心能力\n- 教学设计\n- 课堂互动\n"
+    )
+
+    assert slides[0] == {"type": "cover", "data": {"title": "AI 备课助手", "text": ""}}
+    assert any(
+        slide == {"type": "transition", "data": {"title": "课堂目标", "text": ""}}
+        for slide in slides
+    )
+    assert slides[-1] == {"type": "end"}
+
+
+def test_checker_accepts_end_without_data():
+    outcome = evaluate_checker_result(json.dumps({"type": "end"}, ensure_ascii=False), END_SCHEMA)
+
+    assert outcome.passed is True
+    assert outcome.failure_stage is None
+    assert outcome.parsed_data == {"type": "end"}
 
 
 def test_checker_marks_parse_failure_when_writer_output_is_not_json():
