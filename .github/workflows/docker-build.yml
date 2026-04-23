@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   packages: write
+  security-events: write
 
 concurrency:
   group: docker-images-${{ github.ref }}
@@ -71,15 +72,39 @@ jobs:
             type=ref,event=tag
             type=sha
 
-      - name: Build & (maybe) push
+      - name: Build image locally
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: false
+          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             PIP_INDEX_URL=https://pypi.org/simple
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Scan image with Trivy
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v ${{ github.workspace }}:/workspace \
+            aquasecurity/trivy:latest image \
+            -f sarif \
+            -o /workspace/trivy-results-${{ matrix.name }}.sarif \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+
+      - name: Upload Trivy scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-results-${{ matrix.name }}.sarif'
+          category: 'trivy-${{ matrix.name }}'
+
+      - name: Push image to GHCR
+        if: github.event_name != 'pull_request'
+        run: docker push --all-tags ${{ matrix.image }}

@@ -20,6 +20,16 @@ RUN python -m pip install --no-cache-dir -r requirements.txt -i "${PIP_INDEX_URL
 # Copy the rest of the application's code into the container at /app
 COPY . .
 
+# Create non-root user and ensure write permissions for mounted volumes
+RUN groupadd -r appuser && useradd -r -g appuser appuser \
+    && mkdir -p /app/var /app/logs \
+    && chown -R appuser:appuser /app/var /app/logs
+USER appuser
+
+# Health check using the A2A agent card endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:10001/.well-known/agent.json', timeout=2).read()"
+
 # Expose port 10001 to the outside world
 EXPOSE 10001
 
