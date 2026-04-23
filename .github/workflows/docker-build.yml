@@ -72,42 +72,44 @@ jobs:
             type=ref,event=tag
             type=sha
 
-      - name: Build image locally
+      - name: Build image for scanning
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: false
           load: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ matrix.name }}:scan
           build-args: |
             PIP_INDEX_URL=https://pypi.org/simple
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Scan image with Trivy
-        run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v ${{ github.workspace }}:/workspace \
-            aquasecurity/trivy:latest image \
-            -f sarif \
-            -o /workspace/trivy-results-${{ matrix.name }}.sarif \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+        uses: aquasecurity/trivy-action@v0.30.0
+        with:
+          image-ref: ${{ matrix.name }}:scan
+          format: sarif
+          output: trivy-results-${{ matrix.name }}.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
 
       - name: Upload Trivy scan results to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: 'trivy-results-${{ matrix.name }}.sarif'
-          category: 'trivy-${{ matrix.name }}'
+          sarif_file: trivy-results-${{ matrix.name }}.sarif
+          category: trivy-${{ matrix.name }}
 
-      - name: Push image to GHCR
+      - name: Build and push image
         if: github.event_name != 'pull_request'
-        run: |
-          echo '${{ steps.meta.outputs.tags }}' | while read -r tag; do
-            docker push "$tag"
-          done
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PIP_INDEX_URL=https://pypi.org/simple
+          cache-from: type=gha
