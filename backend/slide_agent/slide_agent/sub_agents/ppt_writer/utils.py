@@ -8,9 +8,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 ALLOWED_CHART_TYPES = {"line", "bar", "pie", "column", "ring", "area", "radar"}
 PLACEHOLDER_PATTERNS = (
@@ -63,6 +66,7 @@ def only_json(text: str) -> Optional[dict]:
             text = text[start : end + 1]
         return json.loads(text)
     except Exception:
+        logger.debug("JSON 解析失败，返回 None", exc_info=True)
         return None
 
 

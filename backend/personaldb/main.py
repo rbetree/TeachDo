@@ -90,6 +90,7 @@ async def admin_reload(request: Request):  # noqa: ANN001 - FastAPI handler
     try:
         payload = await request.json()
     except Exception:
+        logger.debug("解析请求 JSON 失败，使用空 payload", exc_info=True)
         payload = {}
 
     clear_secrets = bool((payload or {}).get("clearSecrets", False))
@@ -136,6 +137,7 @@ def _get_upload_max_bytes() -> int:
     try:
         value = int(raw)
     except Exception:
+        logger.debug(f"解析上传大小限制失败: {raw!r}，使用默认值", exc_info=True)
         return default
     if value <= 0:
         return default
@@ -350,7 +352,7 @@ def process_file_sync(
                             response.close()
                             raise HTTPException(status_code=413, detail="下载文件过大")
                     except ValueError:
-                        pass
+                        logger.debug(f"解析 Content-Length 失败: {content_length!r}", exc_info=True)
                 with open(temp_file_path, 'wb') as f:
                     written = 0
                     for chunk in response.iter_content(chunk_size=1024 * 1024):
@@ -623,6 +625,7 @@ def process_text_content(
     try:
         file_size = len((text or "").encode("utf-8"))
     except Exception:
+        logger.warning("计算文本字节大小失败，使用 0", exc_info=True)
         file_size = 0
     embedding_result = chroma.insert_file_vectors(
         file_name=file_name,
@@ -771,6 +774,7 @@ if __name__ == "__main__":
         log_config = build_uvicorn_log_config()
         apply_logging_config(log_config)
     except Exception:
+        logger.warning("加载日志配置失败，使用默认配置", exc_info=True)
         log_config = None
         logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 

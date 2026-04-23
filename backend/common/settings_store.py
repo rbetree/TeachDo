@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 from pathlib import Path
 from typing import Any, Mapping
+
+logger = logging.getLogger(__name__)
 
 # =========================
 # TeachDo 运行期设置持久化
@@ -208,6 +211,7 @@ def read_settings_env(path: Path | None = None) -> dict[str, Any]:
             cleaned[key] = v
         return cleaned
     except Exception:
+        logger.warning("读取 settings.json 失败", exc_info=True)
         return {}
 
 
@@ -312,7 +316,7 @@ def access_host_for_bind_host(bind_host: str) -> str:
             parsed = urlsplit(host)
             host = parsed.hostname or host
         except Exception:
-            pass
+            logger.warning("解析 URL host 失败", exc_info=True)
 
     host_lower = host.lower()
     if host_lower in {"0.0.0.0", "::", "localhost"}:

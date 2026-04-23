@@ -122,6 +122,7 @@ class ChromaDB(object):
         try:
             ts = int(float(value))
         except Exception:
+            logger.debug(f"时间戳归一化失败: {value!r}", exc_info=True)
             return None
         if ts <= 0:
             return None
@@ -239,6 +240,7 @@ class ChromaDB(object):
         try:
             resolved_topk = int(topk) if topk is not None else 3
         except Exception:
+            logger.debug(f"解析 topk 失败: {topk!r}，使用默认值 3", exc_info=True)
             resolved_topk = 3
         if resolved_topk <= 0:
             resolved_topk = 3
@@ -272,6 +274,7 @@ class ChromaDB(object):
         try:
             return _query(where={"file_id": {"$in": resolved_file_ids}})
         except Exception:
+            logger.warning("Chroma $in 查询失败，回退到逐个 file_id 查询", exc_info=True)
             results = []
             for fid in resolved_file_ids:
                 results.append(_query(where={"file_id": fid}))
@@ -343,7 +346,7 @@ class ChromaDB(object):
                 if file_id_str.isdigit():
                     col.delete(where={"file_id": int(file_id_str)})
             except Exception:
-                pass
+                logger.debug(f"兼容删除旧 int 类型 file_id 失败: {file_id_str}", exc_info=True)
 
             logger.info(f"成功删除用户 {user_id_str} 的文件 {file_id_str} 对应的向量")
             return "success"
@@ -402,6 +405,7 @@ class ChromaDB(object):
                     if resolved_file_size < 0:
                         resolved_file_size = 0
                 except Exception:
+                    logger.debug(f"解析 file_size 失败: {file_size!r}", exc_info=True)
                     resolved_file_size = None
 
             resolved_created_at = self._normalize_timestamp_ms(created_at) or int(time.time() * 1000)
@@ -411,6 +415,7 @@ class ChromaDB(object):
                 try:
                     folder_id_int = int(folder_id) if folder_id is not None else 0
                 except Exception:
+                    logger.debug(f"解析 folder_id 失败: {folder_id!r}，使用默认值 0", exc_info=True)
                     folder_id_int = 0
                 if file_id_str.startswith("upload:") or folder_id_int == 0:
                     resolved_source_type = "upload"
@@ -572,7 +577,7 @@ class ChromaDB(object):
                                     unique_files[file_id_key]["file_size"] = size_int
                             except Exception:
                                 # 忽略非法值，继续走兜底估算
-                                pass
+                                logger.debug(f"解析 file_size 元数据失败: {size_val!r}", exc_info=True)
                         else:
                             doc = documents[idx] if idx < len(documents) else None
                             if isinstance(doc, str) and doc:
@@ -584,6 +589,7 @@ class ChromaDB(object):
                     try:
                         folder_id_int = int(info.get("folder_id")) if info.get("folder_id") is not None else 0
                     except Exception:
+                        logger.debug(f"解析 folder_id 失败: {info.get('folder_id')!r}", exc_info=True)
                         folder_id_int = 0
                     if fid.startswith("upload:") or folder_id_int == 0:
                         info["source_type"] = "upload"
@@ -658,6 +664,7 @@ class ChromaDB(object):
         try:
             result = col.get(where={"file_id": file_id_str})
         except Exception:
+            logger.warning(f"按 string file_id 查询失败，尝试兼容 int: {file_id_str}", exc_info=True)
             # 兼容旧数据：曾以 int 形式写入 file_id
             if file_id_str.isdigit():
                 result = col.get(where={"file_id": int(file_id_str)})
@@ -722,6 +729,7 @@ class ChromaDB(object):
             try:
                 file_size = len(content.encode("utf-8"))
             except Exception:
+                logger.debug("计算 content 字节大小失败，使用 0", exc_info=True)
                 file_size = 0
         else:
             try:
@@ -729,6 +737,7 @@ class ChromaDB(object):
                 if file_size < 0:
                     file_size = 0
             except Exception:
+                logger.debug(f"解析 raw_size 失败: {raw_size!r}，使用 0", exc_info=True)
                 file_size = 0
 
         return {
@@ -783,10 +792,12 @@ class EmbeddingModel(object):
             try:
                 timeout_s = float(os.getenv("EMBEDDING_TIMEOUT_S", "60"))
             except Exception:
+                logger.debug("解析 EMBEDDING_TIMEOUT_S 失败，使用默认 60.0", exc_info=True)
                 timeout_s = 60.0
             try:
                 max_retries = int(os.getenv("EMBEDDING_MAX_RETRIES", "2"))
             except Exception:
+                logger.debug("解析 EMBEDDING_MAX_RETRIES 失败，使用默认 2", exc_info=True)
                 max_retries = 2
             self.client = OpenAI(
                 api_key=api_key,

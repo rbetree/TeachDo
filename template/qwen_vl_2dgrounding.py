@@ -18,7 +18,10 @@ import time
 import copy
 import base64
 import argparse
+import logging
 import traceback
+
+logger = logging.getLogger(__name__)
 from io import BytesIO
 from typing import List, Tuple, Optional, Dict, Any
 
@@ -82,9 +85,11 @@ def safe_json_loads(text: str):
     try:
         return json.loads(raw)
     except Exception:
+        logger.debug("json.loads 失败，尝试 ast.literal_eval", exc_info=True)
         try:
             return ast.literal_eval(raw)
         except Exception:
+            logger.debug("ast.literal_eval 也失败，返回 None", exc_info=True)
             return None
 
 def load_image_any(path_or_url: str) -> Image.Image:
@@ -107,6 +112,7 @@ def pick_font(size: int = 16) -> ImageFont.FreeTypeFont:
         try:
             return ImageFont.truetype(p, size=size)
         except Exception:
+            logger.debug(f"加载字体失败: {p}", exc_info=True)
             continue
     return ImageFont.load_default()
 

@@ -19,6 +19,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import logging
+
+logger = logging.getLogger(__name__)
 import re
 import sys
 import textwrap
@@ -79,6 +82,7 @@ def main() -> int:
                     title = _extract_title(schema)
                 except Exception:
                     # schema 解析失败时不阻断，只记录 idx/type
+                    logger.debug(f"解析 schema 失败: {schema_raw[:200]!r}", exc_info=True)
                     title = ""
 
                 slides.setdefault(idx, SlideLog(idx=idx))
@@ -100,6 +104,7 @@ def main() -> int:
                 try:
                     n = int(m.group("n"))
                 except Exception:
+                    logger.debug(f"解析搜索结果数量失败: {m.group('n')!r}", exc_info=True)
                     n = -1
                 slides.setdefault(current_idx, SlideLog(idx=current_idx)).ok_counts.append(n)
                 continue

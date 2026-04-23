@@ -27,6 +27,8 @@ import glob
 import threading
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 # -----------------------------
 #多文件 tail -f 的实现
 # -----------------------------
@@ -107,7 +109,7 @@ class MultiLogTailer:
                         if path.stat().st_size < f.tell():
                             f.seek(0, os.SEEK_SET)
                     except Exception:
-                        pass
+                        logger.debug(f"调整日志文件读取位置失败: {path}", exc_info=True)
                     time.sleep(0.1)
         except Exception as e:
             with self._print_lock:
@@ -118,7 +120,7 @@ class MultiLogTailer:
                 if f:
                     f.close()
             except Exception:
-                pass
+                logger.debug(f"关闭日志文件失败: {path}", exc_info=True)
             # 线程退出时从线程表删除
             self.threads.pop(path, None)
 
@@ -167,20 +169,20 @@ class MultiLogTailer:
             if hasattr(self, 'watcher_thread'):
                 self.watcher_thread.join(timeout=2)
         except Exception:
-            pass
+            logger.debug("等待 watcher 线程退出失败", exc_info=True)
         # 关闭所有文件
         for f in list(self.opened.values()):
             try:
                 f.close()
             except Exception:
-                pass
+                logger.debug("关闭已打开日志文件失败", exc_info=True)
         self.opened.clear()
         # 等待子线程退出
         for t in list(self.threads.values()):
             try:
                 t.join(timeout=2)
             except Exception:
-                pass
+                logger.debug("等待 tail 线程退出失败", exc_info=True)
         self.threads.clear()
 
 
@@ -229,16 +231,17 @@ def _http_get_status(url: str, *, timeout_s: float = 2.0) -> Optional[int]:
         try:
             resp.read()
         except Exception:
-            pass
+            logger.debug("读取 HTTP 响应体失败", exc_info=True)
         return resp.status
     except Exception:
+        logger.debug(f"探测 HTTP 状态失败: {host}:{port}{path}", exc_info=True)
         return None
     finally:
         try:
             if conn is not None:
                 conn.close()
         except Exception:
-            pass
+            logger.debug("关闭 HTTP 连接失败", exc_info=True)
 
 
 def wait_for_http_ready(
@@ -289,17 +292,18 @@ def check_tcp_port_bindable(host: str, port: int) -> Tuple[bool, Optional[int]]:
             try:
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             except Exception:
-                pass
+                logger.debug("设置 SO_REUSEADDR 失败", exc_info=True)
             s.bind((host, int(port)))
             # 进一步贴近实际：确保该端口可进入 LISTEN。
             try:
                 s.listen(1)
             except Exception:
-                pass
+                logger.debug("设置 socket listen 失败", exc_info=True)
         return True, None
     except OSError as e:
         return False, getattr(e, "errno", None)
     except Exception:
+        logger.debug(f"检查端口可绑定性失败: {host}:{port}", exc_info=True)
         return False, None
 
 
@@ -316,6 +320,7 @@ def find_listening_pids_on_tcp_port(port: int) -> Set[int]:
         try:
             import psutil  # type: ignore
         except Exception:
+            logger.debug("导入 psutil 失败", exc_info=True)
             return set()
 
         wanted: Set[int] = set()
@@ -332,8 +337,10 @@ def find_listening_pids_on_tcp_port(port: int) -> Set[int]:
                     if pid:
                         wanted.add(int(pid))
                 except Exception:
+                    logger.debug("解析 net_connection 条目失败", exc_info=True)
                     continue
         except Exception:
+            logger.debug("psutil 查询网络连接失败", exc_info=True)
             return set()
         return wanted
 
@@ -352,6 +359,7 @@ def find_listening_pids_on_tcp_port(port: int) -> Set[int]:
                 return set()
             return {int(x) for x in out.splitlines() if x.strip().isdigit()}
         except Exception:
+            logger.debug("lsof 查询端口占用失败", exc_info=True)
             return set()
 
     def _via_fuser() -> Set[int]:
@@ -367,6 +375,7 @@ def find_listening_pids_on_tcp_port(port: int) -> Set[int]:
             out = (result.stdout or "") + (result.stderr or "")
             return {int(x) for x in re.findall(r"\b\d+\b", out)}
         except Exception:
+            logger.debug("fuser 查询端口占用失败", exc_info=True)
             return set()
 
     def _via_ss() -> Set[int]:
@@ -382,6 +391,7 @@ def find_listening_pids_on_tcp_port(port: int) -> Set[int]:
             out = (result.stdout or "") + (result.stderr or "")
             return {int(x) for x in re.findall(r"pid=(\d+)", out)}
         except Exception:
+            logger.debug("ss 查询端口占用失败", exc_info=True)
             return set()
 
     for getter in (_via_psutil, _via_lsof, _via_fuser, _via_ss):
@@ -397,6 +407,7 @@ def _tail_last_lines(path: Path, *, max_lines: int = 80) -> List[str]:
             lines = f.readlines()
         return [line.rstrip("\n") for line in lines[-max_lines:]]
     except Exception:
+        logger.debug(f"读取日志尾部失败: {path}", exc_info=True)
         return []
 
 
@@ -427,7 +438,7 @@ class ProductionStarter:
 
             load_and_apply_settings(overwrite=False, repo_root=self.project_root)
         except Exception:
-            pass
+            self.logger.debug("加载 settings.json 失败，将使用 .env 配置", exc_info=True)
 
         # 加载环境配置
         env_file = self.project_root / ".env"
@@ -551,6 +562,7 @@ class ProductionStarter:
             try:
                 return int(cfg.get("port") or default_port)
             except Exception:
+                self.logger.debug(f"解析 {service_name} 端口失败，使用默认值 {default_port}", exc_info=True)
                 return int(default_port)
 
         personaldb_port = _service_port("personal_db", 9100)
@@ -684,6 +696,7 @@ TeachDo 生产环境启动器
             with open("/proc/version", "r", encoding="utf-8", errors="ignore") as f:
                 return "microsoft" in (f.read() or "").lower()
         except Exception:
+            self.logger.debug("读取 /proc/version 失败", exc_info=True)
             return False
 
     def _pick_bindable_tcp_port(self, host: str, start_port: int, *, max_tries: int = 200) -> Optional[int]:
@@ -1117,6 +1130,7 @@ TeachDo 生产环境启动器
             except PermissionError:
                 return True
             except Exception:
+                self.logger.debug(f"检查 PID {pid} 是否存在时出错", exc_info=True)
                 return True
             return True
 
@@ -1132,6 +1146,7 @@ TeachDo 生产环境启动器
             except PermissionError:
                 return False
             except Exception:
+                self.logger.debug(f"发送 SIGTERM 到 PID {pid} 失败", exc_info=True)
                 return False
 
             deadline = time.monotonic() + 3.0
@@ -1145,6 +1160,7 @@ TeachDo 生产环境启动器
             except ProcessLookupError:
                 return True
             except Exception:
+                self.logger.debug(f"发送 SIGKILL 到 PID {pid} 失败", exc_info=True)
                 return False
 
             deadline = time.monotonic() + 2.0
@@ -1292,7 +1308,7 @@ TeachDo 生产环境启动器
         except subprocess.TimeoutExpired:
             process.kill()
         except Exception:
-            pass
+            self.logger.debug("终止进程失败", exc_info=True)
 
     def _print_service_fail_tail(self, log_file: Path) -> None:
         tail = _tail_last_lines(log_file, max_lines=80)
@@ -1474,7 +1490,7 @@ TeachDo 生产环境启动器
                             try:
                                 f.close()
                             except Exception:
-                                pass
+                                self.logger.debug(f"关闭 {service_name} 日志文件句柄失败", exc_info=True)
 
                         del self.processes[service_name]
                 time.sleep(5)
@@ -1505,7 +1521,7 @@ TeachDo 生产环境启动器
             try:
                 f.close()
             except Exception:
-                pass
+                self.logger.debug("关闭日志文件句柄失败", exc_info=True)
         self._log_file_handles.clear()
 
         self.logger.info("所有服务已停止")

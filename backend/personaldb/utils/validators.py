@@ -66,6 +66,7 @@ def validate_url(url: str) -> bool:
             len(url) < 2048  # URL长度限制
         ])
     except Exception:
+        logger.debug(f"URL 验证失败: {url!r}", exc_info=True)
         return False
 
 

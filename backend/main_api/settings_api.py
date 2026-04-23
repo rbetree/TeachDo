@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import hmac
 from typing import Any
@@ -24,6 +25,7 @@ from backend.common.settings_store import (
 
 _router = APIRouter(tags=["settings"])
 
+logger = logging.getLogger(__name__)
 
 _OUTLINE_LLM_ENV_KEYS: set[str] = {"OUTLINE_TYPE", "OUTLINE_BASE_URL", "OUTLINE_MODEL", "OUTLINE_API_KEY"}
 _LESSON_LLM_ENV_KEYS: set[str] = {"LESSON_TYPE", "LESSON_BASE_URL", "LESSON_MODEL", "LESSON_API_KEY"}
@@ -107,6 +109,7 @@ def _resolve_service_base_url(*, url_key: str, port_key: str) -> str:
     try:
         port = int(str(os.environ.get(port_key) or DEFAULT_SETTINGS_ENV.get(port_key) or "").strip())
     except Exception:
+        logger.debug("解析 %s 端口失败，使用默认端口", port_key, exc_info=True)
         port = int(DEFAULT_SETTINGS_ENV.get(port_key) or 0) or 0
     if port <= 0:
         # 最后的兜底：避免拼出非法 URL
@@ -143,12 +146,14 @@ def _safe_extract_httpx_error_message(response) -> str:  # noqa: ANN001 - httpx.
             if isinstance(msg, str) and msg.strip():
                 return msg.strip()
     except Exception:
+        logger.debug("解析响应 JSON 失败", exc_info=True)
         pass
     try:
         text = (response.text or "").strip()
         if text:
             return text[:500]
     except Exception:
+        logger.debug("读取响应文本失败", exc_info=True)
         pass
     return f"HTTP {getattr(response, 'status_code', 'unknown')}"
 
@@ -306,6 +311,7 @@ def _coerce_int(value: Any, *, default: int) -> int:
         v = int(str(value).strip())
         return v
     except Exception:
+        logger.debug("将 %r 转为 int 失败，使用默认值 %s", value, default, exc_info=True)
         return int(default)
 
 
@@ -355,6 +361,7 @@ def _normalize_base_url_for_compare(url: str) -> str:
             return f"{scheme}://{host}:{port}"
         return f"{scheme}://{host}"
     except Exception:
+        logger.debug("URL 归一化失败: %r", raw, exc_info=True)
         return raw.rstrip("/")
 
 

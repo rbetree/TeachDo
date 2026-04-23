@@ -54,6 +54,7 @@ class FileHandler:
             result = urlparse(path)
             return all([result.scheme, result.netloc])
         except Exception:
+            logger.debug(f"解析 URL 失败: {path!r}", exc_info=True)
             return False
     
     def _download_from_url(self, url: str, temp_dir: Optional[str] = None) -> str:
@@ -133,7 +134,7 @@ class FileHandler:
                 if filename:
                     return filename
             except Exception:
-                pass
+                logger.debug(f"解析 Content-Disposition 失败: {content_disposition!r}", exc_info=True)
         
         # 从URL路径获取
         parsed_url = urlparse(url)

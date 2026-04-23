@@ -23,7 +23,7 @@ try:
 
     patch_google_adk_imports()
 except Exception:  # pragma: no cover - 极端场景下不影响服务启动
-    pass
+    logger.debug("patch_google_adk_imports 失败，将使用默认导入路径", exc_info=True)
 
 try:
     from backend.common.logging_utils import build_uvicorn_log_config, apply_logging_config

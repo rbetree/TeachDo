@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_PROXY_MAX_BYTES = 25 * 1024 * 1024  # 25MB
 
@@ -53,6 +56,7 @@ def get_proxy_max_bytes() -> int:
     try:
         value = int(raw)
     except Exception:
+        logger.debug("TEACHDO_PROXY_MAX_BYTES 解析失败，使用默认值", exc_info=True)
         return DEFAULT_PROXY_MAX_BYTES
     if value <= 0:
         return DEFAULT_PROXY_MAX_BYTES

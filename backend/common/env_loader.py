@@ -6,6 +6,10 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def ensure_repo_root_on_sys_path(repo_root: Path) -> None:
     """
@@ -51,7 +55,7 @@ def load_env_files(
             load_and_apply_settings(overwrite=False, repo_root=repo_root)
         except Exception:
             # settings.json 读取失败不应影响服务启动
-            pass
+            logger.warning("加载 settings.json 失败", exc_info=True)
 
     merged: dict[str, str] = {}
 

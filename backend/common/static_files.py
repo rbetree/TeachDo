@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 _FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -56,6 +59,7 @@ def resolve_safe_static_file(
     try:
         candidate.relative_to(base)
     except Exception:
+        logger.debug("静态文件路径安全检查失败", exc_info=True)
         return None
 
     if not candidate.is_file():

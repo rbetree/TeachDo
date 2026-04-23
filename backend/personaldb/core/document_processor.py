@@ -254,6 +254,7 @@ class DocumentProcessor:
             else:
                 return "网络文档"
         except Exception:
+            logger.debug(f"解析 URL 失败: {url!r}", exc_info=True)
             return "网络文档"
     
     def _extract_text(self, file_path: str, file_type: str, encoding: Optional[str]) -> Tuple[str, str]:

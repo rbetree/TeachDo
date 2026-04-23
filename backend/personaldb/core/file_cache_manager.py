@@ -225,7 +225,8 @@ class FileCacheManager:
         try:
             file_size = Path(file_path).stat().st_size
             return file_size < 10 * 1024 * 1024  # 10MB
-        except:
+        except Exception:
+            logger.debug(f"获取文件大小失败: {file_path}", exc_info=True)
             return False
     
     def _backup_original_file(self, file_path: str, md5_hash: str):
@@ -316,8 +317,8 @@ class FileCacheManager:
             for file_path in [*metadata_files, *markdown_files, *backup_files]:
                 try:
                     total_size += file_path.stat().st_size
-                except:
-                    pass
+                except Exception:
+                    logger.debug(f"获取缓存文件大小失败: {file_path}", exc_info=True)
             
             return {
                 'cache_dir': str(self.cache_dir),

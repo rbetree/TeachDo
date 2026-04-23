@@ -5,6 +5,7 @@ TeachDo 后端服务启动脚本
 支持一键启动所有后端服务，包括端口清理和环境检查
 """
 
+import logging
 import os
 import sys
 import time
@@ -15,6 +16,8 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
 from dotenv import dotenv_values
+
+logger = logging.getLogger(__name__)
 
 class BackendStarter:
     def __init__(self):
@@ -203,7 +206,7 @@ class BackendStarter:
                     if s.connect_ex(('localhost', port)) == 0:
                         occupied_ports.append(port)
             except Exception:
-                pass
+                logger.warning(f"端口 {port} 检查失败", exc_info=True)
         return occupied_ports
         
     def kill_processes_on_ports(self, ports: List[int]):

@@ -237,6 +237,7 @@ def KnowledgeBaseSearch(keyword: str, tool_context: ToolContext):
             try:
                 allowed_folder_ids.add(int(one))
             except Exception:
+                logger.debug(f"kb_folder_ids 中的值 '{one}' 无法转为 int，已跳过", exc_info=True)
                 continue
 
     try:
@@ -267,6 +268,7 @@ def KnowledgeBaseSearch(keyword: str, tool_context: ToolContext):
                     try:
                         folder_id = int(meta.get("folder_id", -1))
                     except Exception:
+                        logger.debug(f"meta 中的 folder_id 无法转为 int，已跳过: {meta}", exc_info=True)
                         continue
                     if folder_id in allowed_folder_ids:
                         row_docs.append(doc)

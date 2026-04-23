@@ -1355,6 +1355,7 @@ def _load_artifact_index(material_dir: Path) -> list[dict[str, Any]]:
         raw = path.read_text("utf-8")
         obj = json.loads(raw)
     except Exception:
+        logger.warning("读取 artifact 索引失败: %s", path, exc_info=True)
         return []
 
     items: Any = None
@@ -1386,12 +1387,14 @@ def _artifact_public_meta(item: dict[str, Any]) -> dict[str, Any]:
         try:
             meta["created_at"] = int(created_at)
         except Exception:
+            logger.debug("忽略非法 created_at: %r", created_at, exc_info=True)
             pass
     size = item.get("size")
     if size is not None:
         try:
             meta["size"] = int(size)
         except Exception:
+            logger.debug("忽略非法 size: %r", size, exc_info=True)
             pass
     return meta
 
@@ -1448,6 +1451,7 @@ async def _is_personaldb_ready(personaldb_url: str) -> bool:
             resp = await client.get(f"{personaldb_url}/healthz")
             return resp.status_code == 200
     except Exception:
+        logger.debug("检查 personaldb 健康状态失败", exc_info=True)
         return False
 
 
@@ -1555,6 +1559,7 @@ def _format_personaldb_search_context(
             try:
                 meta_bits.append(f"folder_id={int(folder_id)}")
             except Exception:
+                logger.debug("忽略非法 folder_id: %r", folder_id, exc_info=True)
                 pass
         if dist_str:
             meta_bits.append(f"distance={dist_str}")
@@ -1911,6 +1916,7 @@ async def iter_assistant_text_chunks(
                     obj = json.loads(data)
                 except Exception:
                     # 某些网关可能夹杂非 JSON 行，忽略
+                    logger.debug("忽略非 JSON SSE 数据行: %r", data, exc_info=True)
                     continue
 
                 # OpenAI 标准：choices[0].delta.content
@@ -1926,6 +1932,7 @@ async def iter_assistant_text_chunks(
                             msg_obj = choice0.get("message") if isinstance(choice0.get("message"), dict) else {}
                             delta = msg_obj.get("content")
                 except Exception:
+                    logger.debug("提取 SSE delta 失败", exc_info=True)
                     delta = None
 
                 if isinstance(delta, str) and delta:
@@ -2191,6 +2198,7 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
         try:
             return float(value)
         except Exception:
+            logger.debug("将 %r 转为 float 失败，使用 fallback %s", value, fallback, exc_info=True)
             return fallback
 
     def _safe_text(value: Any, fallback: str) -> str:
@@ -2201,12 +2209,14 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
         try:
             st = doc.styles[style_name]
         except Exception:
+            logger.debug("获取样式 %s 失败", style_name, exc_info=True)
             return
         st.font.name = style.fontZh
         st.font.size = Pt(int(size_pt))
         try:
             st._element.rPr.rFonts.set(qn("w:eastAsia"), style.fontZh)
         except Exception:
+            logger.debug("设置样式 %s 中文字体失败", style_name, exc_info=True)
             pass
 
     def _set_run_font(run: Any, *, size_pt: int, bold: bool = False):
@@ -2216,6 +2226,7 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
         try:
             run._element.rPr.rFonts.set(qn("w:eastAsia"), style.fontZh)
         except Exception:
+            logger.debug("设置 run 中文字体失败", exc_info=True)
             pass
 
     def _add_paragraph(doc: Any, text: str, *, size_pt: int, bold: bool = False, style_name: str | None = None, alignment: Any | None = None):
@@ -2224,17 +2235,20 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
             try:
                 p.style = style_name
             except Exception:
+                logger.debug("设置段落样式 %s 失败", style_name, exc_info=True)
                 pass
         if alignment is not None:
             try:
                 p.alignment = alignment
             except Exception:
+                logger.debug("设置段落对齐失败", exc_info=True)
                 pass
         run = p.add_run(_safe_text(text, "N/A" if want_english else "—"))
         _set_run_font(run, size_pt=size_pt, bold=bold)
         try:
             p.paragraph_format.line_spacing = float(style.lineSpacing)
         except Exception:
+            logger.debug("设置段落行距失败", exc_info=True)
             pass
         return p
 
@@ -2246,12 +2260,14 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
             try:
                 p.alignment = alignment
             except Exception:
+                logger.debug("设置单元格对齐失败", exc_info=True)
                 pass
         run = p.add_run(_safe_text(text, "N/A" if want_english else "—"))
         _set_run_font(run, size_pt=size_pt, bold=bold)
         try:
             p.paragraph_format.line_spacing = float(style.lineSpacing)
         except Exception:
+            logger.debug("设置单元格行距失败", exc_info=True)
             pass
         return p
 
@@ -2263,7 +2279,7 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
         alignment: Any | None = None,
     ):
         """
-        以“多段落”方式写入单元格，便于实现“标签（加粗）+ 内容（多行）”的表单样式。
+        以"多段落"方式写入单元格，便于实现"标签（加粗）+ 内容（多行）"的表单样式。
         - paragraphs: [(text, bold), ...]
         """
         # cell.text 会重置段落，这里借助它清空后再逐段写入
@@ -2275,6 +2291,7 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
                 try:
                     p.alignment = alignment
                 except Exception:
+                    logger.debug("设置单元格段落对齐失败", exc_info=True)
                     pass
             raw = str(text or "")
             if raw:
@@ -2283,6 +2300,230 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
             try:
                 p.paragraph_format.line_spacing = float(style.lineSpacing)
             except Exception:
+                logger.debug("设置单元格段落行距失败", exc_info=True)
+                pass
+
+    def _set_run_font(run: Any, *, size_pt: int, bold: bool = False):
+        run.font.name = style.fontZh
+        run.font.size = Pt(int(size_pt))
+        run.bold = bool(bold)
+        try:
+            run._element.rPr.rFonts.set(qn("w:eastAsia"), style.fontZh)
+        except Exception:
+            logger.debug("设置 run 中文字体失败", exc_info=True)
+            pass
+
+    def _add_paragraph(doc: Any, text: str, *, size_pt: int, bold: bool = False, style_name: str | None = None, alignment: Any | None = None):
+        p = doc.add_paragraph()
+        if style_name:
+            try:
+                p.style = style_name
+            except Exception:
+                logger.debug("设置段落样式 %s 失败", style_name, exc_info=True)
+                pass
+        if alignment is not None:
+            try:
+                p.alignment = alignment
+            except Exception:
+                logger.debug("设置段落对齐失败", exc_info=True)
+                pass
+        run = p.add_run(_safe_text(text, "N/A" if want_english else "—"))
+        _set_run_font(run, size_pt=size_pt, bold=bold)
+        try:
+            p.paragraph_format.line_spacing = float(style.lineSpacing)
+        except Exception:
+            logger.debug("设置段落行距失败", exc_info=True)
+            pass
+        return p
+
+    def _set_cell_text(cell: Any, text: str, *, size_pt: int, bold: bool = False, alignment: Any | None = None):
+        # cell.text 会重置段落样式，这里用 paragraph/run 精细控制字体
+        p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+        p.text = ""
+        if alignment is not None:
+            try:
+                p.alignment = alignment
+            except Exception:
+                logger.debug("设置单元格对齐失败", exc_info=True)
+                pass
+        run = p.add_run(_safe_text(text, "N/A" if want_english else "—"))
+        _set_run_font(run, size_pt=size_pt, bold=bold)
+        try:
+            p.paragraph_format.line_spacing = float(style.lineSpacing)
+        except Exception:
+            logger.debug("设置单元格行距失败", exc_info=True)
+            pass
+        return p
+
+    def _set_cell_paragraphs(
+        cell: Any,
+        paragraphs: list[tuple[str, bool]],
+        *,
+        size_pt: int,
+        alignment: Any | None = None,
+    ):
+        """
+        以"多段落"方式写入单元格，便于实现"标签（加粗）+ 内容（多行）"的表单样式。
+        - paragraphs: [(text, bold), ...]
+        """
+        # cell.text 会重置段落，这里借助它清空后再逐段写入
+        cell.text = ""
+        for idx, (text, bold) in enumerate(paragraphs):
+            p = cell.paragraphs[0] if idx == 0 else cell.add_paragraph()
+            p.text = ""
+            if alignment is not None:
+                try:
+                    p.alignment = alignment
+                except Exception:
+                    logger.debug("设置单元格段落对齐失败", exc_info=True)
+                    pass
+            raw = str(text or "")
+            if raw:
+                run = p.add_run(raw)
+                _set_run_font(run, size_pt=size_pt, bold=bool(bold))
+            try:
+                p.paragraph_format.line_spacing = float(style.lineSpacing)
+            except Exception:
+                logger.debug("设置单元格段落行距失败", exc_info=True)
+                pass
+
+    def _add_paragraph(doc: Any, text: str, *, size_pt: int, bold: bool = False, style_name: str | None = None, alignment: Any | None = None):
+        p = doc.add_paragraph()
+        if style_name:
+            try:
+                p.style = style_name
+            except Exception:
+                logger.debug("设置段落样式 %s 失败", style_name, exc_info=True)
+                pass
+        if alignment is not None:
+            try:
+                p.alignment = alignment
+            except Exception:
+                logger.debug("设置段落对齐失败", exc_info=True)
+                pass
+        run = p.add_run(_safe_text(text, "N/A" if want_english else "—"))
+        _set_run_font(run, size_pt=size_pt, bold=bold)
+        try:
+            p.paragraph_format.line_spacing = float(style.lineSpacing)
+        except Exception:
+            logger.debug("设置段落行距失败", exc_info=True)
+            pass
+        return p
+
+    def _set_cell_text(cell: Any, text: str, *, size_pt: int, bold: bool = False, alignment: Any | None = None):
+        # cell.text 会重置段落样式，这里用 paragraph/run 精细控制字体
+        p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+        p.text = ""
+        if alignment is not None:
+            try:
+                p.alignment = alignment
+            except Exception:
+                logger.debug("设置单元格对齐失败", exc_info=True)
+                pass
+        run = p.add_run(_safe_text(text, "N/A" if want_english else "—"))
+        _set_run_font(run, size_pt=size_pt, bold=bold)
+        try:
+            p.paragraph_format.line_spacing = float(style.lineSpacing)
+        except Exception:
+            logger.debug("设置单元格行距失败", exc_info=True)
+            pass
+        return p
+
+    def _set_cell_paragraphs(
+        cell: Any,
+        paragraphs: list[tuple[str, bool]],
+        *,
+        size_pt: int,
+        alignment: Any | None = None,
+    ):
+        """
+        以"多段落"方式写入单元格，便于实现"标签（加粗）+ 内容（多行）"的表单样式。
+        - paragraphs: [(text, bold), ...]
+        """
+        # cell.text 会重置段落，这里借助它清空后再逐段写入
+        cell.text = ""
+        for idx, (text, bold) in enumerate(paragraphs):
+            p = cell.paragraphs[0] if idx == 0 else cell.add_paragraph()
+            p.text = ""
+            if alignment is not None:
+                try:
+                    p.alignment = alignment
+                except Exception:
+                    logger.debug("设置单元格段落对齐失败", exc_info=True)
+                    pass
+            raw = str(text or "")
+            if raw:
+                run = p.add_run(raw)
+                _set_run_font(run, size_pt=size_pt, bold=bool(bold))
+            try:
+                p.paragraph_format.line_spacing = float(style.lineSpacing)
+            except Exception:
+                logger.debug("设置单元格段落行距失败", exc_info=True)
+                pass
+        if alignment is not None:
+            try:
+                p.alignment = alignment
+            except Exception:
+                logger.debug("设置段落对齐失败", exc_info=True)
+                pass
+        run = p.add_run(_safe_text(text, "N/A" if want_english else "—"))
+        _set_run_font(run, size_pt=size_pt, bold=bold)
+        try:
+            p.paragraph_format.line_spacing = float(style.lineSpacing)
+        except Exception:
+            logger.debug("设置段落行距失败", exc_info=True)
+            pass
+        return p
+
+    def _set_cell_text(cell: Any, text: str, *, size_pt: int, bold: bool = False, alignment: Any | None = None):
+        # cell.text 会重置段落样式，这里用 paragraph/run 精细控制字体
+        p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+        p.text = ""
+        if alignment is not None:
+            try:
+                p.alignment = alignment
+            except Exception:
+                logger.debug("设置单元格对齐失败", exc_info=True)
+                pass
+        run = p.add_run(_safe_text(text, "N/A" if want_english else "—"))
+        _set_run_font(run, size_pt=size_pt, bold=bold)
+        try:
+            p.paragraph_format.line_spacing = float(style.lineSpacing)
+        except Exception:
+            logger.debug("设置单元格行距失败", exc_info=True)
+            pass
+        return p
+
+    def _set_cell_paragraphs(
+        cell: Any,
+        paragraphs: list[tuple[str, bool]],
+        *,
+        size_pt: int,
+        alignment: Any | None = None,
+    ):
+        """
+        以"多段落"方式写入单元格，便于实现"标签（加粗）+ 内容（多行）"的表单样式。
+        - paragraphs: [(text, bold), ...]
+        """
+        # cell.text 会重置段落，这里借助它清空后再逐段写入
+        cell.text = ""
+        for idx, (text, bold) in enumerate(paragraphs):
+            p = cell.paragraphs[0] if idx == 0 else cell.add_paragraph()
+            p.text = ""
+            if alignment is not None:
+                try:
+                    p.alignment = alignment
+                except Exception:
+                    logger.debug("设置单元格段落对齐失败", exc_info=True)
+                    pass
+            raw = str(text or "")
+            if raw:
+                run = p.add_run(raw)
+                _set_run_font(run, size_pt=size_pt, bold=bool(bold))
+            try:
+                p.paragraph_format.line_spacing = float(style.lineSpacing)
+            except Exception:
+                logger.debug("设置单元格段落行距失败", exc_info=True)
                 pass
 
     def _shade_cell(cell: Any, *, fill_hex: str):
@@ -2298,6 +2539,7 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
             shd.set(qn("w:fill"), fill_hex)
             tc_pr.append(shd)
         except Exception:
+            logger.debug("设置单元格底色失败", exc_info=True)
             return
 
     def _prepare_doc() -> Any:
@@ -2416,15 +2658,18 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
         try:
             meta.style = "Table Grid"
         except Exception:
+            logger.debug("设置 meta 表格样式失败", exc_info=True)
             pass
         try:
             meta.alignment = WD_TABLE_ALIGNMENT.CENTER
         except Exception:
+            logger.debug("设置 meta 表格对齐失败", exc_info=True)
             pass
         for cell in meta.rows[0].cells:
             try:
                 cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             except Exception:
+                logger.debug("设置 meta 单元格垂直对齐失败", exc_info=True)
                 pass
 
         meta_labels = [aud_label, (plan.targetAudience or "").strip() or ("Students" if want_english else "中学学生"), dur_label, (plan.duration or "").strip() or ("45 min" if want_english else "45分钟")]
@@ -2448,14 +2693,17 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
         try:
             table.style = "Table Grid"
         except Exception:
+            logger.debug("设置 procedure 表格样式失败", exc_info=True)
             pass
         try:
             table.alignment = WD_TABLE_ALIGNMENT.CENTER
         except Exception:
+            logger.debug("设置 procedure 表格对齐失败", exc_info=True)
             pass
         try:
             table.autofit = False
         except Exception:
+            logger.debug("设置 procedure 表格 autofit 失败", exc_info=True)
             pass
 
         # 尝试设置列宽（不保证所有 Word 版本完全一致，但可提升可读性）
@@ -2464,6 +2712,7 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
             table.columns[1].width = Cm(3)
             table.columns[2].width = Cm(10)
         except Exception:
+            logger.debug("设置 procedure 表格列宽失败", exc_info=True)
             pass
 
         headers = ["Step" if want_english else "环节", "Duration" if want_english else "时长", "Activity" if want_english else "活动"]
@@ -2473,6 +2722,7 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
             try:
                 cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             except Exception:
+                logger.debug("设置 procedure 表头垂直对齐失败", exc_info=True)
                 pass
             _set_cell_text(cell, headers[i], size_pt=style.bodySizePt, bold=True, alignment=WD_PARAGRAPH_ALIGNMENT.CENTER)
 
@@ -2486,6 +2736,7 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
                     try:
                         cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
                     except Exception:
+                        logger.debug("设置 procedure 单元格垂直对齐失败", exc_info=True)
                         pass
                 _set_cell_text(row.cells[0], f"{idx}. {step}", size_pt=style.bodySizePt, bold=True)
                 _set_cell_text(row.cells[1], duration, size_pt=style.bodySizePt, alignment=WD_PARAGRAPH_ALIGNMENT.CENTER)
@@ -2650,10 +2901,12 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
         try:
             table.style = "Table Grid"
         except Exception:
+            logger.debug("设置 JNU 表格样式失败", exc_info=True)
             pass
         try:
             table.autofit = False
         except Exception:
+            logger.debug("设置 JNU 表格 autofit 失败", exc_info=True)
             pass
 
         # 尝试设置列宽：A4 扣边距后约 15.9cm，可按需微调
@@ -2662,6 +2915,7 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
             table.columns[1].width = Cm(2.6)
             table.columns[2].width = Cm(4.3)
         except Exception:
+            logger.debug("设置 JNU 表格列宽失败", exc_info=True)
             pass
 
         # 合并单元格（python-docx 用矩形区域合并）
@@ -2677,6 +2931,7 @@ def _build_lesson_docx_bytes(*, plan: LessonPlan, style: LessonStyle, language: 
                 try:
                     cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
                 except Exception:
+                    logger.debug("设置 JNU 单元格垂直对齐失败", exc_info=True)
                     pass
 
         # Row 0-2: 授课题目 / 类型 / 时间
@@ -3012,6 +3267,7 @@ async def kb_list_files(user_id: str, folder_id: int | None = Query(None)):
                 if one_file_size_int < 0:
                     one_file_size_int = 0
             except Exception:
+                logger.debug("忽略非法 file_size: %r", one_file_size, exc_info=True)
                 one_file_size_int = 0
 
             raw_created_at = item.get("created_at") if item.get("created_at") is not None else item.get("createdAt")
@@ -3022,6 +3278,7 @@ async def kb_list_files(user_id: str, folder_id: int | None = Query(None)):
                     if created_at_ms > 0 and created_at_ms < 1_000_000_000_000:
                         created_at_ms *= 1000
                 except Exception:
+                    logger.debug("忽略非法 created_at: %r", raw_created_at, exc_info=True)
                     created_at_ms = None
 
             raw_source_type = item.get("source_type") if item.get("source_type") is not None else item.get("sourceType")
@@ -3062,6 +3319,7 @@ async def kb_list_files(user_id: str, folder_id: int | None = Query(None)):
                 }
             )
         except Exception:
+            logger.warning("解析 KB 文件项失败，跳过该项", exc_info=True)
             continue
 
     return _kb_ok(normalized)
@@ -3125,6 +3383,7 @@ async def list_artifacts(user_id: str, material_id: str):
         try:
             return int(raw)
         except Exception:
+            logger.debug("忽略非法 artifact created_at: %r", raw, exc_info=True)
             return 0
 
     items_sorted = sorted(items, key=_created_at, reverse=True)
@@ -3275,6 +3534,7 @@ async def kb_vectorize_text(request: KbVectorizeTextRequest):
         try:
             payload["createdAt"] = int(request.created_at)
         except Exception:
+            logger.debug("忽略非法 created_at: %r", request.created_at, exc_info=True)
             pass
     if request.source_type:
         payload["sourceType"] = str(request.source_type)

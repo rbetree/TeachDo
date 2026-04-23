@@ -20,9 +20,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import logging
 import sys
 import textwrap
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -207,6 +210,7 @@ def _post_sse(
         try:
             body = e.read(4000).decode("utf-8", errors="ignore")
         except Exception:
+            logger.debug("读取 HTTP 错误响应体失败", exc_info=True)
             body = ""
         raise SystemExit(f"ERROR: HTTP {e.code}: {body or e.reason}")
     except urllib.error.URLError as e:
@@ -267,6 +271,7 @@ def main() -> int:
                 obj = json.loads(candidate)
             except Exception:
                 # 非 JSON 事件（可能是零散文本 token），忽略
+                logger.debug(f"解析 SSE 事件 JSON 失败: {candidate[:200]!r}", exc_info=True)
                 continue
 
             # 有些事件可能是 JSON 字符串/数组等（例如模型输出被包成字符串），与 slide 无关，直接忽略

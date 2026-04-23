@@ -16,10 +16,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 import time
 import uuid
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
@@ -66,6 +69,7 @@ def _http_request(
         try:
             raw = e.read() or b""
         except Exception:
+            logger.debug("读取 HTTP 错误响应体失败", exc_info=True)
             raw = b""
         hdrs = {k.lower(): v for k, v in getattr(e, "headers", {}).items()}
         return HttpResult(status=int(e.code), body=raw, headers=hdrs)
@@ -172,7 +176,7 @@ def _sse_post_form(
         try:
             raw = e.read() or b""
         except Exception:
-            pass
+            logger.debug("读取 SSE HTTP 错误响应体失败", exc_info=True)
         raise RuntimeError(f"HTTP {e.code}: {raw[:500].decode('utf-8', errors='replace')}")
     except URLError as e:
         raise RuntimeError(f"request failed: {e}")
@@ -206,7 +210,7 @@ def _sse_post_json(
         try:
             raw = e.read() or b""
         except Exception:
-            pass
+            logger.debug("读取 SSE POST HTTP 错误响应体失败", exc_info=True)
         raise RuntimeError(f"HTTP {e.code}: {raw[:500].decode('utf-8', errors='replace')}")
     except URLError as e:
         raise RuntimeError(f"request failed: {e}")
@@ -449,6 +453,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 try:
                     obj = json.loads(candidate)
                 except Exception:
+                    logger.debug(f"解析 PPT SSE 事件 JSON 失败: {candidate[:200]!r}", exc_info=True)
                     continue
 
                 if isinstance(obj, dict) and obj.get("type") == "error":

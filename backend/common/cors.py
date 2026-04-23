@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Iterable
 
 from backend.common.settings_store import DEFAULT_SETTINGS_ENV, access_host_for_bind_host
+
+logger = logging.getLogger(__name__)
 
 
 def _split_csv(value: str) -> list[str]:
@@ -37,6 +40,7 @@ def get_cors_allow_origins() -> list[str]:
     try:
         port = int(str(os.environ.get("FRONTEND_PORT") or DEFAULT_SETTINGS_ENV.get("FRONTEND_PORT") or 5174).strip())
     except Exception:
+        logger.debug("FRONTEND_PORT 解析失败，使用默认值", exc_info=True)
         port = int(DEFAULT_SETTINGS_ENV.get("FRONTEND_PORT") or 5174)
 
     origins: set[str] = {
