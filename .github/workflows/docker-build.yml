@@ -107,4 +107,7 @@ jobs:
 
       - name: Push image to GHCR
         if: github.event_name != 'pull_request'
-        run: docker push --all-tags ${{ matrix.image }}
+        run: |
+          echo '${{ steps.meta.outputs.tags }}' | while read -r tag; do
+            docker push "$tag"
+          done
