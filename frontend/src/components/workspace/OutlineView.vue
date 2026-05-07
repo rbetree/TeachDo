@@ -5,6 +5,7 @@ import type { TeachingMaterial } from '#root/types';
 import { aiService } from '@/services/aiService';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
+import ToolbarMoreMenu from '@/components/common/ToolbarMoreMenu.vue';
 import { escapeHtml } from '@/utils/safeHtml';
 import { KB_USER_ID, useAppStore } from '@/stores/appStore';
 import { ApiError } from '@/services/apiClient';
@@ -354,12 +355,12 @@ const handleEditorInput = () => {
     <!-- Toolbar -->
     <Teleport :to="props.headerActionHost || 'body'" :disabled="!hasExternalToolbar">
       <div
-        class="flex items-center justify-between gap-2"
+        class="flex min-w-0 items-center justify-between gap-2"
         :class="hasExternalToolbar
-          ? 'w-full h-full'
+          ? 'w-full'
           : 'bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm sticky top-0 z-10 min-h-[44px]'"
       >
-        <div class="flex items-center gap-2 min-w-0 overflow-x-auto no-scrollbar">
+        <div class="flex min-w-0 items-center gap-2">
           <div class="toolbar-cluster shrink-0">
             <span class="toolbar-item text-slate-600 dark:text-slate-300">
               <LucideIcon name="layout-list" class="w-4 h-4" />
@@ -367,12 +368,12 @@ const handleEditorInput = () => {
             </span>
           </div>
 
-          <div v-if="mode === 'COMPARE'" class="toolbar-item text-indigo-600 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-sm shrink-0">
+          <div v-if="mode === 'COMPARE'" class="toolbar-item hidden 2xl:inline-flex text-indigo-600 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-sm shrink-0">
             <LucideIcon name="arrow-left-right" class="w-4 h-4" /> {{ t('outline.compare_banner') }}
           </div>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex min-w-0 shrink-0 items-center justify-end gap-2">
           <button
             v-if="loading"
             type="button"
@@ -383,39 +384,9 @@ const handleEditorInput = () => {
             <span>{{ t('common.cancel') }}</span>
           </button>
           <template v-if="mode !== 'COMPARE'">
-            <label
-              class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 select-none"
-              :class="loading ? 'opacity-60 cursor-not-allowed' : ''"
-            >
-              <span class="text-xs font-black text-slate-500 dark:text-slate-300">{{ t('outline.length') }}</span>
-              <select
-                v-model="outlineLength"
-                :disabled="loading"
-                class="bg-transparent outline-none text-slate-700 dark:text-slate-100 font-black text-sm"
-              >
-                <option value="short">{{ t('outline.length.short') }}</option>
-                <option value="standard">{{ t('outline.length.standard') }}</option>
-                <option value="long">{{ t('outline.length.long') }}</option>
-              </select>
-            </label>
-
-            <label
-              class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer select-none disabled:opacity-60"
-              :class="loading ? 'opacity-60 cursor-not-allowed' : ''"
-              :title="t('outline.web_search.desc')"
-            >
-              <input
-                v-model="useWebSearch"
-                type="checkbox"
-                class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
-                :disabled="loading"
-              />
-              <span>{{ t('outline.web_search') }}</span>
-            </label>
-
             <button
               :disabled="loading"
-              class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-600 disabled:opacity-60"
+              class="toolbar-item px-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-600 disabled:opacity-60"
               @click="handleGenerateWrapper"
             >
               <LucideIcon
@@ -433,6 +404,36 @@ const handleEditorInput = () => {
             >
               <LucideIcon name="save" class="w-4 h-4" /> {{ t('outline.save') }}
             </button>
+
+            <ToolbarMoreMenu :label="t('common.more')">
+              <div class="space-y-1 px-3 py-2">
+                <label class="block text-xs font-black text-slate-500 dark:text-slate-400">
+                  {{ t('outline.length') }}
+                </label>
+                <select
+                  v-model="outlineLength"
+                  :disabled="loading"
+                  class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="short">{{ t('outline.length.short') }}</option>
+                  <option value="standard">{{ t('outline.length.standard') }}</option>
+                  <option value="long">{{ t('outline.length.long') }}</option>
+                </select>
+              </div>
+              <label
+                class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/70"
+                :class="loading ? 'opacity-60 cursor-not-allowed' : ''"
+                :title="t('outline.web_search.desc')"
+              >
+                <input
+                  v-model="useWebSearch"
+                  type="checkbox"
+                  class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
+                  :disabled="loading"
+                />
+                <span>{{ t('outline.web_search') }}</span>
+              </label>
+            </ToolbarMoreMenu>
           </template>
         </div>
       </div>

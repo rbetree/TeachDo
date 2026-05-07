@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import type { LessonDocxTemplate, LessonPlan, LessonStyle, TeachingMaterial } from '#root/types';
 import { toast } from '@/utils/toast';
 import LucideIcon from '@/components/common/LucideIcon.vue';
+import ToolbarMoreMenu from '@/components/common/ToolbarMoreMenu.vue';
 import DocxPreview from '@/components/common/DocxPreview.vue';
 import WorkspaceNeedOutlineState from '@/components/workspace/WorkspaceNeedOutlineState.vue';
 import LessonStyleDialog from '@/components/workspace/lesson/LessonStyleDialog.vue';
@@ -207,8 +208,6 @@ const onTemplateUpdate = (id: string) => {
   selectedTemplateId.value = id;
 };
 
-const selectedTemplateName = computed(() => templates.value.find((t) => t.id === selectedTemplateId.value)?.name || '');
-
 const wantEnglish = computed(() => String(locale.value || '').toLowerCase().startsWith('en'));
 
 const goToTemplateSelect = () => {
@@ -244,17 +243,6 @@ ${plan.value.homework}
   } catch {
     toast.error(t('toast.error'));
   }
-};
-
-const downloadBlob = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
 };
 
 const uploadLessonDocxArtifact = async (input: { plan: LessonPlan; nowMs: number }) => {
@@ -537,42 +525,6 @@ watch(
   },
 );
 
-const exportDocx = async () => {
-  if (!plan.value) return;
-  if (exporting.value) return;
-  exporting.value = true;
-  try {
-    const materialId = props.currentMaterial?.id;
-    const { blob, filename, artifactId } = await aiService.exportLessonDocx({
-      lessonPlan: plan.value,
-      style: style.value,
-      templateId: selectedTemplateId.value,
-      language: locale.value,
-      persist: Boolean(materialId),
-      userId: KB_USER_ID,
-      materialId,
-    });
-    const safeName = (filename || `${plan.value.title || 'lesson_plan'}.docx`).replace(/\s+/g, '_');
-    downloadBlob(blob, safeName);
-    toast.success(artifactId ? `${t('lesson.toast.downloaded')} ${t('lesson.toast.saved_to_outputs')}` : t('lesson.toast.downloaded'));
-    if (artifactId && materialId && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('teachdo:artifacts-updated', { detail: { materialId } }));
-    }
-  } catch (e) {
-    if (e instanceof ApiError) {
-      if (e.kind === 'abort') return;
-      const detail = (e.message || '').trim();
-      if (detail) {
-        toast.error(`${t('lesson.toast.export_failed')}：${detail}`);
-        return;
-      }
-    }
-    toast.error(t('lesson.toast.export_failed'));
-  } finally {
-    exporting.value = false;
-  }
-};
-
 const cancelGenerate = () => {
   controllerRef.value?.abort();
 };
@@ -688,27 +640,21 @@ const goToOutline = () => {
   <div v-else class="h-full flex flex-col min-h-0" :class="hasExternalToolbar ? 'gap-0' : 'gap-6'">
     <Teleport :to="props.headerActionHost || 'body'" :disabled="!hasExternalToolbar">
       <div
-        class="flex items-center justify-between gap-2"
+        class="flex min-w-0 items-center justify-between gap-2"
         :class="hasExternalToolbar
-          ? 'w-full h-full'
+          ? 'w-full'
           : 'bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm min-h-[44px]'"
       >
-        <div class="flex items-center gap-2 min-w-0 overflow-x-auto no-scrollbar">
+        <div class="flex min-w-0 items-center gap-2">
           <div class="toolbar-cluster shrink-0">
             <span class="toolbar-item text-slate-600 dark:text-slate-300">
               <LucideIcon :name="viewState === 'SELECT_TEMPLATE' ? 'layout-grid' : 'file-text'" class="w-4 h-4" />
               <span>{{ viewState === 'SELECT_TEMPLATE' ? t('lesson.choose_template') : t('lesson.preview_title') }}</span>
             </span>
           </div>
-          <span
-            v-if="viewState !== 'SELECT_TEMPLATE' && selectedTemplateName"
-            class="toolbar-item text-slate-500 dark:text-slate-400"
-          >
-            {{ selectedTemplateName }}
-          </span>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex min-w-0 shrink-0 items-center justify-end gap-2">
           <button
             v-if="generating"
             type="button"
@@ -720,44 +666,36 @@ const goToOutline = () => {
           </button>
 
           <template v-else>
-	            <button
-	              ref="styleButtonRef"
-	              type="button"
-              class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+            <button
+              ref="styleButtonRef"
+              type="button"
+              class="toolbar-item px-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
               :disabled="exporting"
               @click="openStyleDialog"
             >
               <LucideIcon name="settings-2" class="w-4 h-4" /> {{ t('lesson.style.button') }}
-	            </button>
+            </button>
 
-	            <template v-if="viewState === 'SELECT_TEMPLATE'">
-	              <button
-	                type="button"
-	                class="toolbar-item bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
-	                :disabled="exporting || templatesLoading"
-	                @click="generateLesson"
-	              >
-	                <LucideIcon
-	                  :name="templatesLoading ? 'loader-2' : (plan ? 'refresh-cw' : 'sparkles')"
-	                  class="w-4 h-4"
-	                  :class="templatesLoading ? 'animate-spin' : ''"
-	                />
-	                <span>{{ templatesLoading ? t('common.loading') : (plan ? t('lesson.update') : t('lesson.generate')) }}</span>
-	              </button>
-	            </template>
+            <template v-if="viewState === 'SELECT_TEMPLATE'">
+              <button
+                type="button"
+                class="toolbar-item px-3 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
+                :disabled="exporting || templatesLoading"
+                @click="generateLesson"
+              >
+                <LucideIcon
+                  :name="templatesLoading ? 'loader-2' : (plan ? 'refresh-cw' : 'sparkles')"
+                  class="w-4 h-4"
+                  :class="templatesLoading ? 'animate-spin' : ''"
+                />
+                <span>{{ templatesLoading ? t('common.loading') : (plan ? t('lesson.update') : t('lesson.generate')) }}</span>
+              </button>
+            </template>
 
             <template v-else>
               <button
                 type="button"
-                class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-60"
-                :disabled="exporting"
-                @click="goToTemplateSelect"
-              >
-                {{ t('lesson.change_template') }}
-              </button>
-              <button
-                type="button"
-                class="toolbar-item bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                class="toolbar-item px-3 bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
                 :disabled="exporting"
                 @click="generateLesson"
               >
@@ -765,25 +703,28 @@ const goToOutline = () => {
                 {{ plan ? t('lesson.update') : t('lesson.generate') }}
               </button>
 
-              <button
-                v-if="plan"
-                type="button"
-                class="toolbar-item text-slate-500 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 disabled:opacity-50"
-                @click="copyToClipboard"
-              >
-                {{ copied ? t('lesson.copied') : t('lesson.copy') }}
-              </button>
-
-              <button
-                v-if="plan"
-                type="button"
-                class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
-                :disabled="exporting"
-                @click="exportDocx"
-              >
-                <LucideIcon :name="exporting ? 'loader-2' : 'download'" class="w-4 h-4" :class="exporting ? 'animate-spin' : ''" />
-                {{ t('lesson.download') }}
-              </button>
+              <ToolbarMoreMenu :label="t('common.more')">
+                <template #default="{ close }">
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/70 disabled:opacity-50"
+                    :disabled="exporting"
+                    @click="() => { close(); goToTemplateSelect(); }"
+                  >
+                    <LucideIcon name="layout-grid" class="w-4 h-4" />
+                    <span>{{ t('lesson.change_template') }}</span>
+                  </button>
+                  <button
+                    v-if="plan"
+                    type="button"
+                    class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/70"
+                    @click="() => { close(); void copyToClipboard(); }"
+                  >
+                    <LucideIcon name="copy" class="w-4 h-4" />
+                    <span>{{ copied ? t('lesson.copied') : t('lesson.copy') }}</span>
+                  </button>
+                </template>
+              </ToolbarMoreMenu>
             </template>
           </template>
         </div>

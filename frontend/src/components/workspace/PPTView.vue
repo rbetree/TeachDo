@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import type { TeachingMaterial } from '#root/types';
 import LucideIcon from '@/components/common/LucideIcon.vue';
+import ToolbarMoreMenu from '@/components/common/ToolbarMoreMenu.vue';
 import WorkspaceNeedOutlineState from '@/components/workspace/WorkspaceNeedOutlineState.vue';
 import PptPreviewPanel from '@/components/workspace/ppt/PptPreviewPanel.vue';
 import PptTemplateSelector from '@/components/workspace/ppt/PptTemplateSelector.vue';
@@ -168,13 +169,13 @@ const handleRegenerate = async () => {
   <div v-else class="h-full flex flex-col min-h-0" :class="hasExternalToolbar ? 'gap-0' : 'gap-6'">
     <Teleport :to="props.headerActionHost || 'body'" :disabled="!hasExternalToolbar">
       <div
-        class="flex items-center justify-between gap-2"
+        class="flex min-w-0 items-center justify-between gap-2"
         :class="hasExternalToolbar
-          ? 'w-full h-full'
+          ? 'w-full'
           : 'bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm min-h-[44px]'"
       >
-        <div class="flex items-center gap-2 min-w-0 overflow-x-auto no-scrollbar">
-          <div class="toolbar-cluster shrink-0">
+        <div class="hidden 2xl:flex items-center gap-2 shrink-0">
+          <div class="toolbar-cluster">
             <span class="toolbar-item text-slate-600 dark:text-slate-300">
               <LucideIcon :name="viewState === 'SELECT_TEMPLATE' ? 'layout-list' : 'presentation'" class="w-4 h-4" />
               <span>{{ viewState === 'SELECT_TEMPLATE' ? t('ppt.choose_template') : t('ppt.preview_title') }}</span>
@@ -182,98 +183,104 @@ const handleRegenerate = async () => {
           </div>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex min-w-0 shrink-0 items-center justify-end gap-2">
           <button
             v-if="loading"
             type="button"
-            class="toolbar-item bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800/40 hover:bg-red-100 dark:hover:bg-red-900/30"
+            class="toolbar-item shrink-0 px-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800/40 hover:bg-red-100 dark:hover:bg-red-900/30"
             @click="cancelGenerate"
           >
             <LucideIcon name="x" class="w-4 h-4" />
             <span>{{ t('common.cancel') }}</span>
           </button>
-          <label
-            class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer select-none disabled:opacity-60"
-            :class="loading ? 'opacity-60 cursor-not-allowed' : ''"
-          >
-            <input
-              v-model="generateFromWebSearch"
-              type="checkbox"
-              class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
-              :disabled="loading"
-            />
-            <span>{{ t('ppt.advanced.web_search') }}</span>
-          </label>
-          <div class="flex items-center gap-1.5">
-            <label
-              class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer select-none disabled:opacity-60"
-              :class="imagesToggleDisabled ? 'opacity-60 cursor-not-allowed' : ''"
-              :title="imagesToggleTitle"
-            >
-              <input
-                v-model="generateWithImages"
-                type="checkbox"
-                class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
-                :disabled="imagesToggleDisabled"
-              />
-              <span>{{ t('ppt.advanced.images') }}</span>
-            </label>
 
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-              :class="imagesToggleBlocked ? '' : 'invisible pointer-events-none'"
-              @click="goToSettings"
-            >
-              <LucideIcon name="settings" class="w-4 h-4" />
-              <span>{{ t('ppt.advanced.images_setup') }}</span>
-            </button>
+          <div class="flex min-w-0 items-center justify-end gap-2">
+            <template v-if="viewState === 'SELECT_TEMPLATE'">
+              <button
+                type="button"
+                :disabled="loading || !templates.length"
+                class="toolbar-item shrink-0 px-3 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
+                @click="handleGenerateFirst"
+              >
+                <LucideIcon :name="loading ? 'loader-2' : 'sparkles'" class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
+                <span>{{ loading ? t('ppt.generating') : t('ppt.generate') }}</span>
+              </button>
+            </template>
+
+            <template v-else>
+              <button
+                v-if="showEditButton"
+                type="button"
+                :disabled="loading"
+                class="toolbar-item shrink-0 px-3 bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
+                @mouseenter="prefetchPptEditor()"
+                @focus="prefetchPptEditor()"
+                @touchstart.passive="prefetchPptEditor({ eagerRuntime: true })"
+                @click="goToEditor"
+              >
+                <LucideIcon name="edit-3" class="w-4 h-4" />
+                <span>{{ t('ppt.edit') }}</span>
+              </button>
+              <button
+                type="button"
+                :disabled="loading"
+                class="toolbar-item shrink-0 px-3 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
+                @click="handleRegenerate"
+              >
+                <LucideIcon :name="loading ? 'loader-2' : 'refresh-cw'" class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
+                <span>{{ loading ? t('ppt.generating') : t('ppt.regenerate') }}</span>
+              </button>
+            </template>
           </div>
 
-          <template v-if="viewState === 'SELECT_TEMPLATE'">
-            <button
-              type="button"
-              :disabled="loading || !templates.length"
-              class="toolbar-item bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
-              @click="handleGenerateFirst"
-            >
-              <LucideIcon :name="loading ? 'loader-2' : 'sparkles'" class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
-              <span>{{ loading ? t('ppt.generating') : t('ppt.generate') }}</span>
-            </button>
-          </template>
-
-          <template v-else>
-            <button
-		              v-if="showEditButton"
-		              type="button"
-		              :disabled="loading"
-		              class="toolbar-item bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
-		              @mouseenter="prefetchPptEditor()"
-		              @focus="prefetchPptEditor()"
-		              @touchstart.passive="prefetchPptEditor({ eagerRuntime: true })"
-		              @click="goToEditor"
-		            >
-	              <LucideIcon name="edit-3" class="w-4 h-4" />
-              <span>{{ t('ppt.edit') }}</span>
-            </button>
-            <button
-              type="button"
-              :disabled="loading"
-              class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-60"
-              @click="goToTemplateSelect"
-            >
-              {{ t('ppt.change_template') }}
-            </button>
-            <button
-              type="button"
-              :disabled="loading"
-              class="toolbar-item bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-300 disabled:text-slate-500"
-              @click="handleRegenerate"
-            >
-              <LucideIcon :name="loading ? 'loader-2' : 'refresh-cw'" class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
-              <span>{{ loading ? t('ppt.generating') : t('ppt.regenerate') }}</span>
-            </button>
-          </template>
+          <ToolbarMoreMenu :label="t('common.more')">
+            <template #default="{ close }">
+              <label
+                class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/70"
+                :class="loading ? 'opacity-60 cursor-not-allowed' : ''"
+              >
+                <input
+                  v-model="generateFromWebSearch"
+                  type="checkbox"
+                  class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
+                  :disabled="loading"
+                />
+                <span>{{ t('ppt.advanced.web_search') }}</span>
+              </label>
+              <label
+                class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/70"
+                :class="imagesToggleDisabled ? 'opacity-60 cursor-not-allowed' : ''"
+                :title="imagesToggleTitle"
+              >
+                <input
+                  v-model="generateWithImages"
+                  type="checkbox"
+                  class="h-4 w-4 accent-indigo-600 disabled:opacity-50"
+                  :disabled="imagesToggleDisabled"
+                />
+                <span>{{ t('ppt.advanced.images') }}</span>
+              </label>
+              <button
+                v-if="imagesToggleBlocked"
+                type="button"
+                class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-slate-700/70"
+                @click="() => { close(); goToSettings(); }"
+              >
+                <LucideIcon name="settings" class="w-4 h-4" />
+                <span>{{ t('ppt.advanced.images_setup') }}</span>
+              </button>
+              <button
+                v-if="viewState !== 'SELECT_TEMPLATE'"
+                type="button"
+                :disabled="loading"
+                class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/70 disabled:opacity-50"
+                @click="() => { close(); goToTemplateSelect(); }"
+              >
+                <LucideIcon name="layout-list" class="w-4 h-4" />
+                <span>{{ t('ppt.change_template') }}</span>
+              </button>
+            </template>
+          </ToolbarMoreMenu>
         </div>
       </div>
     </Teleport>

@@ -184,30 +184,24 @@ const handleTextareaKeydown = (event: KeyboardEvent) => {
     <!-- Page Variant：把顶栏动作迁移到工作区操作栏（对齐大纲 / PPT / 教案） -->
     <Teleport v-if="!isPanel" :to="props.headerActionHost || 'body'" :disabled="!hasExternalToolbar">
       <div
-        class="flex items-center justify-between gap-2"
+        class="flex min-w-0 items-center justify-between gap-2"
         :class="hasExternalToolbar
-          ? 'w-full h-full'
+          ? 'w-full'
           : 'bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm min-h-[44px]'"
       >
-        <div class="flex items-center gap-2 min-w-0 overflow-x-auto no-scrollbar">
+        <div class="flex min-w-0 items-center gap-2">
           <div class="toolbar-cluster shrink-0">
             <span class="toolbar-item text-slate-600 dark:text-slate-300">
               <LucideIcon name="bot" class="w-4 h-4" />
               <span>{{ t('assistant.toolbar.title') }}</span>
             </span>
           </div>
-          <span
-            class="toolbar-item text-slate-500 dark:text-slate-400 font-medium truncate"
-            :title="t('assistant.context_full', { name: contextName })"
-          >
-            {{ t('assistant.context_full', { name: contextName }) }}
-          </span>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex min-w-0 shrink-0 items-center justify-end gap-2">
           <button
             type="button"
-            class="toolbar-item border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 hover:text-red-600 dark:hover:text-red-300"
+            class="toolbar-item px-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 hover:text-red-600 dark:hover:text-red-300"
             :aria-label="t('assistant.clear')"
             :title="t('assistant.clear')"
             @click="clearHistory"
@@ -237,9 +231,6 @@ const handleTextareaKeydown = (event: KeyboardEvent) => {
           </div>
           <div class="min-w-0">
             <h3 class="font-bold text-slate-800 dark:text-white truncate">{{ t('assistant.title') }}</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
-              {{ t('assistant.context_full', { name: contextName }) }}
-            </p>
           </div>
         </div>
 

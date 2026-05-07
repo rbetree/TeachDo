@@ -27,6 +27,7 @@ export type IconName =
   | 'moon'
   | 'sun'
   | 'menu'
+  | 'ellipsis'
   | 'wifi'
   | 'wifi-off'
   | 'refresh-cw'
@@ -154,6 +155,11 @@ const ICONS: Record<IconName, IconNode[]> = {
     { tag: 'path', attrs: { d: 'M4 5h16' } },
     { tag: 'path', attrs: { d: 'M4 12h16' } },
     { tag: 'path', attrs: { d: 'M4 19h16' } },
+  ],
+  ellipsis: [
+    { tag: 'circle', attrs: { cx: '12', cy: '12', r: '1' } },
+    { tag: 'circle', attrs: { cx: '19', cy: '12', r: '1' } },
+    { tag: 'circle', attrs: { cx: '5', cy: '12', r: '1' } },
   ],
   wifi: [
     { tag: 'path', attrs: { d: 'M12 20h.01' } },

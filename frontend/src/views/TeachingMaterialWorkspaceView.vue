@@ -218,7 +218,7 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
           </div>
 
           <div class="flex flex-col xl:flex-row xl:items-center gap-3">
-            <div class="toolbar-shell gap-1 w-fit max-w-full">
+            <div class="toolbar-shell shrink-0 gap-1 w-fit max-w-full">
               <button
                 v-for="tab in tabConfig"
                 :key="tab.id"
@@ -273,7 +273,7 @@ const handleDeleteConfirm = async (payload: { deleteKbFiles: boolean }) => {
                     {{ selectedFullCount }}
                   </span>
                 </button>
-                <div ref="workspaceActionHost" class="flex-1 min-w-0 flex items-center h-full"></div>
+                <div ref="workspaceActionHost" class="flex-1 min-w-0 flex items-center"></div>
               </div>
             </div>
           </div>
